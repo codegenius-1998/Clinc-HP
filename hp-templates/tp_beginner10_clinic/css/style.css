@@ -1,0 +1,696 @@
+@charset "utf-8";
+
+
+
+/*Font Awesomeの読み込み
+---------------------------------------------------------------------------*/
+@import url("https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css");
+
+
+/*Google Fontsの読み込み
+---------------------------------------------------------------------------*/
+@import url('https://fonts.googleapis.com/css2?family=LINE+Seed+JP:wght@400;700&display=swap');
+
+
+/*cssファイルの読み込み
+---------------------------------------------------------------------------*/
+@import url("slide.css");
+@import url("inview.css");
+
+
+/*CSSカスタムプロパティ（サイト全体を一括管理する為の設定）
+---------------------------------------------------------------------------*/
+:root {
+
+	--bg-color: #fff;			/*主にテンプレートの背景色*/
+	--bg-inverse-color: #333;	/*上のbg-colorの対として使う色*/
+	
+	--primary-color: #0063af;		/*テーマカラー*/
+	--primary-inverse-color: #fff;	/*上のprimary-colorの対として使う色*/
+
+	--content-space: 5vw;	/*色々な余白管理用。画面幅100% = 100vwです。*/
+
+}
+
+
+/*animation11のキーフレーム設定（汎用的）
+---------------------------------------------------------------------------*/
+@keyframes animation1 {
+	0% {left: -200px;}
+	100% {left: 0px;}
+}
+
+
+/*opa1のキーフレーム設定（汎用的）
+---------------------------------------------------------------------------*/
+@keyframes opa1 {
+	0% {opacity: 0;}
+	100% {opacity: 1;}
+}
+
+
+/*全体の設定
+---------------------------------------------------------------------------*/
+body * {box-sizing: border-box;}
+html,body {
+	font-size: 13px;	/*基準となるフォントサイズ。*/
+}
+
+	/*画面幅900px以上の追加指定*/
+	@media screen and (min-width:900px) {
+
+	html, body {
+		font-size: 15px;	/*基準となるフォントサイズ。*/
+	}
+
+	}/*追加指定ここまで*/
+
+
+body {
+	margin: 0;padding:0;
+	font-family: "LINE Seed JP", "ヒラギノ角ゴ Pro W3", Meiryo, "メイリオ", "Osaka", "MS PGothic", "ＭＳ Ｐゴシック", sans-serif;	/*フォント種類（ゴシック）*/
+	font-weight: 400;
+	-webkit-text-size-adjust: none;
+	background: var(--bg-color);	/*背景色*/
+	color: var(--bg-inverse-color);		/*文字色*/
+	line-height: 2;		/*行間*/
+	overflow-x: hidden;
+}
+
+/*リセット*/
+figure {margin: 0;}
+dd {margin: 0;}
+nav,ul,li,ol {margin: 0;padding: 0;}
+nav ul {list-style: none;}
+
+/*table全般の設定*/
+table {border-collapse:collapse;}
+
+/*画像全般の設定*/
+img {border: none;max-width: 100%;height: auto;vertical-align: middle;}
+
+/*videoタグ*/
+video {max-width: 100%;}
+
+/*iframeタグ*/
+iframe {width: 100%;}
+
+/*他*/
+input {font-size: 1rem;}
+section > ol,section > ul {margin-left: 2rem;}
+
+
+/*sectionの設定
+---------------------------------------------------------------------------*/
+section {
+	margin: var(--content-space) 0;
+}
+
+
+/*リンクテキスト全般の設定
+---------------------------------------------------------------------------*/
+a {
+	color: inherit;
+	transition: 0.3s;	/*hoverまでにかける時間。0.3秒。*/
+}
+
+/*マウスオン時*/
+a:hover {
+	opacity: 0.7;	/*色を70%だけ出す*/
+}
+
+
+/*conatiner（サイト全体を囲むブロック）
+---------------------------------------------------------------------------*/
+#container {
+	animation: opa1 0.2s 0.4s both;  /*0.4秒待機後、0.2秒かけてフェードイン*/
+	display: grid;
+	grid-template-rows: auto auto 1fr;
+	min-height: 100vh;
+	min-height: 100dvh;
+	padding: var(--content-space) var(--content-space) 0;
+}
+body:not(.home) #container {
+	grid-template-rows: auto 1fr;
+}
+
+
+/*header（ロゴが入ったブロック）
+---------------------------------------------------------------------------*/
+header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+body.home header {
+	margin-bottom: var(--content-space);
+}
+
+/*ロゴ画像*/
+#logo {margin: 0;}
+#logo img {
+	display: block;
+	width: 200px;	/*ロゴの幅*/
+}
+
+/*ロゴ（※テキストで使う場合）*/
+#logo a {
+	text-decoration: none;
+	display: block;
+	font-size: 1.2rem;	/*文字サイズ120%*/
+}
+
+
+/*ヘッダー内メニュー（大きな端末で見える横並びメニュー設定）
+---------------------------------------------------------------------------*/
+.large-screen #menubar ul {
+	display: flex;
+	gap: 1.5rem;	/*メニュー同士の間にとる余白。1.5文字分。*/
+	align-items: center;
+}
+.large-screen #menubar ul a {
+	display: block;text-decoration: none;
+}
+
+
+/*開閉メニュー（小さな端末用のメニュー設定）
+---------------------------------------------------------------------------*/
+/*メニューブロック共通*/
+.small-screen #menubar {
+	animation: animation1 0.2s both;
+	position: fixed;overflow: auto;z-index: 100;
+	right: 0px;top: 0px;
+	width: 100%;
+	height: 100%;
+	padding: 100px var(--content-space) 50px;		/*ブロック内の余白*/
+	background: var(--bg-color);	/*背景色。冒頭のbg-colorを読み込みます。*/
+	color: var(--bg-inverse-color);	/*文字色。冒頭のbg-inverse-colorを読み込みます。*/
+}
+
+.small-screen #menubar {display: none;}
+
+/*メニュー１個あたり*/
+.small-screen #menubar a {
+	display: block;text-decoration: none;
+	color: inherit;
+	border: 1px solid #ccc;	/*枠線の幅、線種、色*/
+	border-radius: 5px;		/*角を少し丸くする*/
+	margin-bottom: 1rem;	/*下に１文字分のスペースを空ける。メニュー同士の間隔です。*/
+	padding: 1rem 2rem;		/*メニュー内の余白。上下に１文字分、左右に２文字分。*/
+}
+
+
+/*３本バー（ハンバーガー）アイコン設定
+---------------------------------------------------------------------------*/
+#menubar_hdr {
+	display: none; /* デフォルトは非表示 */
+	animation: opa1 0s 0.2s both;
+	position: fixed;
+	z-index: 101;
+	cursor: pointer;
+	right: 0px;	/*右からの配置場所*/
+	top: 0px;	/*上からの配置場所*/
+	width: 70px;	/*ボタンの幅*/
+	height: 70px;	/*ボタンの高さ*/
+}
+
+/*ハンバーガーアイコンの線*/
+#menubar_hdr span {
+	display: block;
+	position: absolute;
+	left: 18px;
+	width: 35px;
+	height: 2px;		/*線の高さ*/
+	background: var(--bg-inverse-color);	/*背景色ですが、ここでは線の色になります。冒頭のbg-inverse-colorを読み込みます。*/
+	transition: 0.3s;
+}
+
+#menubar_hdr span:nth-of-type(1) {
+	top: 24px;
+}
+#menubar_hdr span:nth-of-type(2) {
+	top: 34px;
+}
+#menubar_hdr span:nth-of-type(3) {
+	top: 44px;
+}
+
+/* ハンバーガーメニュー展開時 */
+#menubar_hdr.ham span:nth-of-type(1) {
+	transform: translateY(10px) rotate(-45deg);
+}
+#menubar_hdr.ham span:nth-of-type(2) {
+	opacity: 0;
+}
+#menubar_hdr.ham span:nth-of-type(3) {
+	transform: translateY(-10px) rotate(45deg);
+}
+
+/*小さな画面での設定*/
+.small-screen #menubar_hdr {
+	display: flex;
+}
+
+
+/*list-grid（３列に並んだリストブロック）
+---------------------------------------------------------------------------*/
+.list-grid .list * {margin: 0;padding: 0;}
+
+/*ブロック全体を囲むブロック*/
+.list-grid {
+	display: grid;
+    grid-template-columns: repeat(3, 1fr);	/*3列にする指定。4列にしたければrepeat(4, 1fr)とする。*/
+	gap: 5vw;	/*ブロックの間に空けるスペース*/
+	text-align: center;	/*ブロック内をセンタリング*/
+}
+
+/*ボックス内のfigure画像*/
+.list-grid .list figure {
+	margin-bottom: 0.5rem;
+}
+
+/*ボックス内のp（文章）*/
+.list-grid p {
+	font-weight: normal;
+	font-size: 0.85rem;	/*文字サイズ85%*/
+	text-align: left;	/*文章は左寄せで。センタリングがよければこの１行を削除。*/
+}
+
+
+/*2カラムブロック（※900px未満では１カラム）スタッフ紹介ページで使用。
+---------------------------------------------------------------------------*/
+/*２カラムを囲むブロック*/
+.list-half .list {
+	display: flex;
+	flex-direction: column;	/*子要素を縦並びにする*/
+	margin-bottom: 2rem;	/*ボックスの下に2文字分のスペースを空ける*/
+}
+
+/*ブロック内のh4見出し*/
+.list-half .list h4 {
+	font-size: 1.4rem;	/*文字サイズを1.4倍*/
+}
+
+/*画像ブロック共通*/
+.list-half .image-l img, .list-half .image-r img {
+	border-radius: 50px;	/*角を丸くする指定。*/
+	box-shadow: 10px 10px rgba(0,0,0,0.1);	/*ボックスの影。右へ、下へ、0,0,0は黒の事で0.1は色が10%出た状態。*/
+}
+
+	/*画面幅900px以上の追加指定*/
+	@media screen and (min-width:900px) {
+
+		/*２カラムを囲むブロック*/
+		.list-half .list {
+			gap: 2rem;
+			flex-direction: row;			/*子要素を横並びにする*/
+			justify-content: space-between;	/*並びかたの種類の指定*/
+			align-items: center;			/*垂直揃えの指定。天地中央に配置されるように。*/
+		}
+		
+		/*画像ブロック共通*/
+		.list-half .image-l, .list-half .image-r {
+			width: 50%;			/*画像の幅*/
+		}
+		
+		/*画像を左に配置する場合*/
+		.list-half .image-l {
+			order: -1;
+		}
+
+		/*テキストブロック*/
+		.list-half .text {
+			flex: 1;
+		}
+
+	}/*追加指定ここまで*/
+
+
+/*お知らせページ（new.html）
+---------------------------------------------------------------------------*/
+	/*画面幅700px以上の追加指定*/
+	@media screen and (min-width:700px) {
+
+	/*ブロック全体*/
+	.new {
+		display: grid;
+		gap: 1rem;  /*日付や文章の間にとるスペース。１文字分。*/
+		grid-template-columns: auto 1fr;	/* 日付の幅は自動で、内容が入るブロックは残り幅一杯とる。 */
+	}
+
+	}/*追加指定ここまで*/
+
+
+/*btn（ボタン）
+---------------------------------------------------------------------------*/
+/*ボタン共通*/
+.btn a {
+	display: block;text-decoration: none;
+	background: var(--primary-color) !important;		/*背景色。冒頭のprimary-colorを読み込みます。*/
+	color: var(--primary-inverse-color) !important;	/*文字色。冒頭のprimary-inverse-colorを読み込みます。*/
+	border-radius: 5px;	/*角を少し丸くする*/
+	width: fit-content;
+	margin: 0 auto;
+	padding: 0.5rem 2rem;	/*上下、左右への余白。*/
+	margin-top: 2rem;		/*上にスペースをとる*/
+	font-size: 1.2rem;		/*文字サイズ120%*/
+	letter-spacing: 0.1em;	/*文字間隔を少しだけ広く*/
+}
+
+/*マウスオン時*/
+.btn a:hover {
+	opacity: 1;
+	background: #000;	/*背景色*/
+	color: #fff;		/*文字色*/
+}
+
+/*大きな端末で出るヘッダーのメニュー*/
+.large-screen #menubar .btn a {
+	margin-top: 0;		/*上のスペースのリセット*/
+	font-size: 1rem;	/*文字サイズを通常に戻す*/
+	letter-spacing: normal;	/*文字間隔を通常に戻す*/
+}
+
+/*小さな端末のメニュー*/
+.small-screen #menubar .btn a {
+	margin-top: 0;		/*上のスペースのリセット*/
+	width: auto;
+	border: none;
+}
+
+
+/*テーブル（ta1）
+---------------------------------------------------------------------------*/
+/*テーブル１行目に入った見出し部分（※caption）*/
+.ta1 caption {
+	font-weight: bold;		/*太字に*/
+	padding: 0.2rem 1rem;	/*ボックス内の余白*/
+	background: rgba(0,0,0,0.1);	/*背景色*/
+	color: #333;	/*文字色*/
+	margin-bottom: 1rem;	/*下に空けるスペース*/
+	border-radius: 5px;		/*角を丸くする指定*/
+}
+
+/*ta1テーブルブロック設定*/
+.ta1 {
+	table-layout: fixed;
+	border-top: 1px solid rgba(0,0,0,0.3);	/*テーブルの上の線。幅、線種、0,0,0は黒のことで0.3は色が30%出た状態。*/
+	width: 100%;				/*幅*/
+	margin-bottom: 2rem;		/*テーブルの下に空けるスペース。２文字分。*/
+}
+
+/*tr（１行分）タグ設定*/
+.ta1 tr {
+	border-bottom: 1px solid rgba(0,0,0,0.3);	/*テーブルの下の線。幅、線種、0,0,0は黒のことで0.3は色が30%出た状態。*/
+}
+
+/*th（左側）、td（右側）の共通設定*/
+.ta1 th, .ta1 td {
+	padding: 1rem;		/*ボックス内の余白*/
+	word-break: break-all;	/*英語などのテキストを改行で自動的に折り返す設定。これがないと、テーブルを突き抜けて表示される場合があります。*/
+}
+
+/*th（左側）のみの設定*/
+.ta1 th {
+	width: 30%;			/*幅*/
+	text-align: left;	/*左よせにする*/
+}
+
+	/*画面幅900px以上の追加指定*/
+	@media screen and (min-width:900px) {
+
+		/*th（左側）のみの設定*/
+		.ta1 th {
+			width: 20%;		/*幅*/
+		}
+
+	}/*追加指定ここまで*/
+
+
+/*フッター
+---------------------------------------------------------------------------*/
+footer * {margin: 0;padding: 0;}
+
+/*ブロック全体*/
+footer {
+	margin-left: calc(-1 * var(--content-space));
+	margin-right: calc(-1 * var(--content-space));
+	text-align: center;
+}
+
+/*Copyright部分*/
+footer small {
+	display: block;
+}
+
+
+/*Google Map用
+---------------------------------------------------------------------------*/
+.iframe-box1 {
+	width: 100%;
+	aspect-ratio: 16 / 9;	/*マップのアスペクト比。お好みで。*/
+	position: relative;
+	overflow: hidden;
+}
+.iframe-box1 iframe {
+	position: absolute;
+	left: 0px;
+	top: 0px;
+	width: 100%;
+	height: 100%;
+}
+
+
+/*SNSアイコン
+---------------------------------------------------------------------------*/
+.icons {
+	list-style: none;
+	margin: 0;padding: 0;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	gap: 10px;	/*アイコン同士に空けるスペース*/
+}
+.icons i {
+	font-size: 30px;	/*アイコンサイズ*/
+}
+
+
+/*著作部分（※意図的に見えなくしたりしないで下さい。規約違反になります。）
+---------------------------------------------------------------------------*/
+.pr {
+	margin-left: calc(-1 * var(--content-space));
+	margin-right: calc(-1 * var(--content-space));
+}
+.pr a {
+	text-decoration: none;display: block;
+	text-align: right;
+	padding: 0.5rem 1rem;
+	font-size: 0.8rem;
+	background: #555;
+	color: #ccc;
+}
+.pr a::before {
+	font-family: "Font Awesome 6 Free";
+	content: "\e2ca";
+	font-weight: bold;
+	margin-right: 0.5em;
+}
+
+
+/*お知らせブロック
+---------------------------------------------------------------------------*/
+
+	/*画面幅700px以上の追加指定*/
+	@media screen and (min-width:700px) {
+
+	/*ブロック全体*/
+	.new {
+		display: grid;
+		grid-template-columns: auto 1fr;
+	}
+	
+	/*日付の右側にスペースを作る*/
+	.new dt {
+		margin-right: 2rem;
+	}
+
+	}/*追加指定ここまで*/
+
+
+/*bg1背景
+---------------------------------------------------------------------------*/
+.bg1 {
+	background: #d8e8f4;	/*背景色*/
+	margin-left: calc(-1 * var(--content-space));
+	margin-right: calc(-1 * var(--content-space));
+}
+.bg1 section {
+	margin-left: var(--content-space);
+	margin-right: var(--content-space);
+	padding-top: var(--content-space);
+	padding-bottom: var(--content-space);
+}
+.bg1 section h2:first-child {
+	margin-top: 0;
+}
+
+
+/*PAGE TOP（↑）設定
+---------------------------------------------------------------------------*/
+.pagetop-show {display: block;}
+
+/*ボタンの設定*/
+.pagetop a {
+	display: block;text-decoration: none;text-align: center;z-index: 99;
+	animation: opa1 1s 0.4s both;
+	position: fixed;	/*スクロールに追従しない(固定で表示)為の設定*/
+	right: 20px;		/*右からの配置場所指定*/
+	bottom: 20px;		/*下からの配置場所指定*/
+	color: #fff;		/*文字色*/
+	font-size: 1.5rem;	/*文字サイズ*/
+	background: rgba(0,0,0,0.2);	/*背景色。0,0,0は黒の事で0.2は色が20%出た状態。*/
+	width: 60px;		/*幅*/
+	line-height: 60px;	/*高さ*/
+	border-radius: 50%;	/*円形にする*/
+}
+
+
+/*テーブル
+---------------------------------------------------------------------------*/
+.week2 {
+	width: 100%;
+	border-collapse: separate;
+	border-spacing: 0;
+	overflow: hidden;
+	border-radius: 10px;	/*角を丸くする指定*/
+	border: 1px solid #ccc;	/*テーブル外側の線の幅、線種、色*/
+	table-layout: fixed;	/*幅を均等に*/
+	background: #fff;		/*テーブル全体の背景色*/
+	color: #555;			/*テーブル全体の文字色*/
+}
+
+/*受付時間の幅*/
+.week2 th:first-child,
+.week2 td:first-child {
+	width: 25%;
+}
+
+/*各曜日の幅*/
+.week2 th:not(:first-child),
+.week2 td:not(:first-child) {
+	width: calc(75% / 7);	/*受付時間で25%とっているので残りの75%を7で割る*/
+}
+
+/*th(曜日)とtd(時間)*/
+.week2 th,
+.week2 td {
+	padding: 1rem 0;	/*ボックス内の余白。上下に１文字分、左右は0。*/
+	text-align: center;	/*テキストをセンタリング*/
+	border-bottom: 1px solid #ccc;	/*下の線の幅、線種、色*/
+	border-right: 1px solid #ccc;	/*右の線の幅、線種、色*/
+}
+
+/*th(曜日)とtd(時間)のそれぞれ最後の右側の線を消す*/
+.week2 th:last-child,
+.week2 td:last-child {
+	border-right: none;
+}
+
+/*最後の行の下線を消す*/
+.week2 tr:last-child td {
+	border-bottom: none;
+}
+
+/*th(曜日)の追加指定*/
+.week2 th {
+	background: #eee;	/*背景色*/
+}
+.week2 td {
+	border-bottom: 1px solid #ccc;	/*下の線の幅、線種、色*/
+}
+
+
+/*お問い合わせボタン（電話・LINE）
+---------------------------------------------------------------------------*/
+#contact {
+	text-align: center;
+}
+
+.contact-buttons {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 1.5rem;
+	margin-top: 2rem;
+}
+
+.btn-tel, .btn-line {
+	display: block;
+	width: 100%;
+	max-width: 380px;
+	text-decoration: none;
+	text-align: center;
+	border-radius: 5px;
+	padding: 1rem 2rem;
+	font-size: 1.1rem;
+	font-weight: 700;
+	letter-spacing: 0.05em;
+}
+
+.btn-tel i, .btn-line i {
+	margin-right: 0.5em;
+}
+
+/*電話ボタン（塗りつぶし）*/
+.btn-tel {
+	background: var(--primary-color);
+	color: var(--primary-inverse-color);
+}
+.btn-tel span {
+	display: block;
+	margin-top: 0.3rem;
+	font-size: 1.4rem;
+	letter-spacing: 0.05em;
+}
+
+/*LINEボタン（アウトライン）*/
+.btn-line {
+	background: var(--primary-inverse-color);
+	color: var(--primary-color);
+	border: 2px solid var(--primary-color);
+}
+
+.btn-tel:hover, .btn-line:hover {
+	opacity: 0.7;
+}
+
+	/*画面幅600px以上の追加指定*/
+	@media screen and (min-width:600px) {
+
+	.contact-buttons {
+		flex-direction: row;
+		justify-content: center;
+	}
+
+	}/*追加指定ここまで*/
+
+
+/*その他
+---------------------------------------------------------------------------*/
+.clearfix::after {content: "";display: block;clear: both;}
+.color-check, .color-check a {color: #c02340 !important;}
+.l {text-align: left !important;}
+.c {text-align: center !important;}
+.r {text-align: right !important;}
+.ws {width: 95%;display: block;}
+.wl {width: 95%;display: block;}
+.padding0 {padding: 0 !important;}
+.mb0 {margin-bottom: 0px !important;}
+.mb3rem {margin-bottom: 3rem !important;}
+.mb30 {margin-bottom: 30px !important;}
+.look {display: inline-block;padding: 0px 10px;background: rgba(0,0,0,0.7); color: #fff; border-radius: 3px;margin: 5px 0; word-break: break-all;}
+.look .color-check {color: yellow !important;}
+.small {font-size: 0.75em;}
+.large {font-size: 2em; letter-spacing: 0.1em;}
+.block {display: block !important;}

@@ -1,0 +1,130 @@
+@charset "utf-8";
+
+
+/*※文字サイズを「大」にした場合のスタイル
+------------------------------------------------------------------------------------------------------------------------------------------------------*/
+
+/*文字サイズ変更ボタン
+---------------------------------------------------------------------------*/
+/*「大」ボタンを押した時の文字サイズ*/
+body {
+	font-size: 30px;	/*文字サイズ*/
+}
+/*「小」ボタン設定*/
+#fsize ul li#small a::before {
+	background: #ccc;	/*背景色*/
+}
+/*マウスオン時の「小」ボタン設定*/
+#fsize ul li#small a:hover::before {
+	background: #ff9999;	/*背景色*/
+}
+/*「大」ボタン設定*/
+#fsize ul li#large a::before {
+	background: #ff9999;	/*背景色*/
+}
+
+/*ヘッダー（ロゴが入った最上段のブロック）
+---------------------------------------------------------------------------*/
+/*TELブロック*/
+header address {
+	bottom: 0%;
+}
+/*TELブロックの電話番号部分*/
+header address .tel {
+	font-size: 150%;	/*文字サイズ*/
+	background: url(../images/icon_tel.png) no-repeat left center / 30px;	/*電話アイコンの読み込み。左(left)に、上下中央(center)に配置。画像幅30px。*/
+	padding-left: 40px;	/*電話アイコン部分の余白をここで作る*/
+}
+
+/*メインメニュー
+---------------------------------------------------------------------------*/
+/*メニューブロックの設定*/
+#menubar {
+	height: auto;
+	padding-bottom: 40px;
+}
+/*メニュー１個あたりの設定*/
+#menubar li {
+	width: 33.33%;
+}
+#menubar li a {
+	height: 80px;
+	padding-top: 10px;
+	border-bottom: 1px solid #fff;
+}
+#menubar li:nth-of-type(4) a {
+	border-left: none;
+}
+/*最初と最後のメニューへの追加設定*/
+#menubar li:first-child a, #menubar li:last-child a {
+	border-radius: 0;
+}
+
+/*メインメニュー（※メニューが画面上部に到達した際の設定）
+---------------------------------------------------------------------------*/
+/*最初と最後のメニューへの追加設定*/
+body.is-fixed #menubar li:first-child a,
+body.is-fixed #menubar li:last-child a {
+	border-radius: 0px;	/*角丸をやめる設定*/
+}
+/*飾り文字を非表示にする*/
+body.is-fixed #menubar li span {
+	display: none;
+}
+/*メニューの高さを狭くする*/
+body.is-fixed #menubar li a {
+	height: 55px;
+	padding-top: 0px;
+}
+
+/*ドロップダウンメニュー用
+----------------------------------------------------------------------------------------------------------------------------------*/
+/*メニューブロック*/
+#menubar ul.ddmenu {
+	width: 33.3%;		/*幅。上の「#menubar li」と合わせる。*/
+}
+/*メニュー１個あたりの設定*/
+#menubar ul.ddmenu li a {
+	height: auto;
+}
+
+/*fixmenu。メインメニューが画面上部に到達した際の設定
+---------------------------------------------------------------------------*/
+/*headerブロック*/
+body.is-fixed header {
+	margin-bottom: 182px;	/*#menubar li aのheight（80）とpadding-top（10）と、border-bottom（1）を合計した数字を２倍（メニューが２段なので）にする。*/
+}
+
+/*listブロック
+---------------------------------------------------------------------------*/
+/*ブロック１個あたりの設定*/
+.list {
+	width: auto;
+	float: none;
+	margin-left: 0;
+}
+/*h4（見出し）とp（段落）タグの設定*/
+.list h4, .list p {
+	height: auto;
+}
+/*画像*/
+.list figure {
+	float: left;	/*左に回りこみ*/
+	width: 30%;		/*が蔵の幅*/
+	margin-right: 2%;	/*画像の右側に空けるスペース*/
+}
+
+/*よく頂く質問
+---------------------------------------------------------------------------*/
+/*質問と回答共通*/
+.faq dt,.faq dd {
+	background-size: 60px;
+	padding-left: 60px;
+}
+
+/*テーブル（ta1）
+---------------------------------------------------------------------------*/
+/*ta1の左側ボックス*/
+.ta1 th {
+	width: 30%;		/*幅*/
+}

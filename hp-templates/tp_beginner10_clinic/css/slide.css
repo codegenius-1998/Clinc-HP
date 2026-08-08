@@ -1,0 +1,92 @@
+@charset "utf-8";
+
+
+
+/*横スライドインタイプのスライドショー（１枚目の画像のアスペクト比が反映されるタイプ）
+---------------------------------------------------------------------------*/
+/*3枚の画像を囲むブロック*/
+.slide {
+	position: relative;
+	overflow: hidden;
+}
+
+/*３枚の画像の共通設定*/
+.slide .slide {
+	position: absolute;right: 0px;top: 0px;
+	width: 100%;
+	height: 100%;
+	transform: translateX(100%);	/*初期状態で画面の右外側に配置*/
+	transition: transform 0.7s ease;	/*スライドのアニメーション。0.7sはスライドにかける時間（0.7秒）。0.7を変更する場合、main.jsのスライドショー用のコードの最後の「700」も変更する。*/
+}
+
+/*アクティブ時*/
+.slide .slide.active {
+	transform: translateX(0);	/*画面内に表示*/
+}
+
+/*左に移動*/
+.slide .slide.left {
+	transform: translateX(-100%);	/*画面の左外側に移動*/
+}
+
+/*非表示*/
+.slide .slide.hidden {
+	opacity: 0;
+}
+
+/*初期表示用*/
+.slide .slide.initial {
+	transform: translateX(0);
+	transition: none;
+}
+
+/*１枚目画像（変更不要）*/
+.slide .img1 {
+	position: relative;width: 100%;height: auto;
+}
+
+/*画像のクリップ*/
+.slide .slide img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	object-position: center;
+}
+
+/*現在表示されているスライドのみをクリック可能にする設定（変更不要）
+---------------------------------------------------------------------------*/
+.slide .slide {
+	pointer-events: none; /* デフォルトでクリックを無効にする */
+}
+
+.slide .slide.active {
+	pointer-events: auto; /* 表示中のスライドのみクリックを有効にする */
+}
+
+/*現在表示中のボタン
+---------------------------------------------------------------------------*/
+/*全体*/
+.slide .slide-indicators {
+    text-align: center;
+	position: absolute;
+	width: 100%;
+	bottom: 10px;	/*ボタンの配置場所。スライドショーの画面下からの距離。*/
+	left: 0px;
+}
+
+/*ボタン１個あたり*/
+.slide .indicator {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    background: #ccc;	/*未アクティブ時のボタン色*/
+	border: 4px solid #fff;	/*枠線の幅、線種、色。*/
+    border-radius: 50%;
+    margin: 0 5px;
+    cursor: pointer;
+}
+
+/*アクティブ時のボタン色*/
+.slide .indicator.active {
+    background: #000;
+}
