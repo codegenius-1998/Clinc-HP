@@ -259,7 +259,7 @@ body.home header {
 /*ブロック全体を囲むブロック*/
 .list-grid {
 	display: grid;
-    grid-template-columns: repeat(3, 1fr);	/*3列にする指定。4列にしたければrepeat(4, 1fr)とする。*/
+    grid-template-columns: repeat(var(--layout-service-columns, 3), 1fr);	/*カラム数は --layout-service-columns */
 	gap: 5vw;	/*ブロックの間に空けるスペース*/
 	text-align: center;	/*ブロック内をセンタリング*/
 }

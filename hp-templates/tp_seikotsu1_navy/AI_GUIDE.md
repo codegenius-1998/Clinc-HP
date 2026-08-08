@@ -1,5 +1,7 @@
 # AI_GUIDE.md — tp_seikotsu1_navy 改修ガイド
 
+> **管理画面変数**: カラースキーム / セクション表示 / カスタムCSS / レイアウトは [`variables.json`](variables.json) が正本。適用手順は親ディレクトリの [`TEMPLATE_VARIABLES.md`](../TEMPLATE_VARIABLES.md) を参照。テキスト・写真の差し替えは本ガイドの該当章＋プレビュー編集機能。
+
 このファイルは、`tp_seikotsu1_navy` テンプレートを実在の整骨院・接骨院の本番ホームページへ改修する際に、AIアシスタント（または非エンジニアのサイト運営者）がコード全体を最初から読み直さなくても作業できるようにするための実務ガイドです。
 
 前提として、このプロジェクトは元々 [Template Party](https://template-party.com/) が無料配布していたテンプレート `tp_seikotsu1` を、サイト所有者が有償ライセンス契約を結んだ上でカスタマイズしたものです。ライセンスにより本来必須だったフッターの著作表示（`Web Design:Template-Party`）は全HTMLファイルから既に削除済みです。また `images/` フォルダ内のサンプル写真・ロゴ画像はすべて削除済み（フォルダ自体は空の状態で残置、`movie.mp4` のみ現存）で、削除された画像の一覧・元サイズ・参照箇所は `tp_seikotsu1_navy/_removed_images_manifest.md` に記録されています。本ガイドはその内容も踏まえて画像復旧作業を具体的に案内します。

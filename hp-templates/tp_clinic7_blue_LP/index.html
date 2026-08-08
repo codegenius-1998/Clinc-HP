@@ -1,11 +1,13 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="ja" data-theme="blue" style="--layout-staff-columns:3;--layout-service-columns:3;--content-space-l:5vw">
 <head>
 <meta charset="UTF-8">
 <title>病院・歯科医院（クリニック）サイト向け 無料ホームページテンプレート tp_clinic7</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="ここにサイト説明を入れます">
 <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/site-controls.css">
+<link rel="stylesheet" href="css/custom.css" id="site-custom-css">
 </head>
 
 <body class="home">
@@ -63,7 +65,7 @@
 
 <main>
 
-<section class="bg-parts grayscale">
+<section class="bg-parts grayscale" id="concerns" data-section="concerns" data-visible="true">
 
 <h2 class="c">こんなお悩みありませんか？<span>Concerns</span></h2>
 
@@ -98,7 +100,7 @@
 
 </section>
 
-<section class="bg-parts bg1-accent-parts">
+<section class="bg-parts bg1-accent-parts" id="strengths" data-section="strengths" data-visible="true">
 
 <h2 class="c">そのお悩み、当院におまかせください<span>Leave It to Us</span></h2>
 
@@ -133,7 +135,7 @@
 
 </section>
 
-<section>
+<section id="menu" data-section="menu" data-visible="true">
 
 <h2>診療メニュー<span>Menu</span></h2>
 <p>このブロックは「.list-cource」のスタイルを使用しています。<br>
@@ -176,7 +178,7 @@ cssフォルダのstyle.cssを開き、「.list-cource」で検索すると該�
 
 </section>
 
-<section class="bg-parts bg1-primary-parts">
+<section class="bg-parts bg1-primary-parts" id="flow" data-section="flow" data-visible="true">
 
 <h2>治療の流れ<span>Flow</span></h2>
 <p>このブロックは「.step」のスタイルを使用しています。<br>
@@ -224,7 +226,7 @@ cssフォルダのstyle.cssを開き、「.step」で検索すると該当ブロ
 
 </section>
 
-<section>
+<section id="staff" data-section="staff" data-visible="true">
 
 <h2 class="c">スタッフ紹介<span>Staff</span></h2>
 <p>このブロックは「.list-staff」のスタイルを使用しています。<br>
@@ -258,7 +260,7 @@ cssフォルダのstyle.cssを開き、「.list-staff」で検索すると該当
 
 </section>
 
-<section class="bg-parts bg1-light-parts">
+<section class="bg-parts bg1-light-parts" id="facility" data-section="facility" data-visible="true">
 
 <h2 class="c">院内・設備紹介<span>Facilities</span></h2>
 
@@ -286,7 +288,7 @@ cssフォルダのstyle.cssを開き、「thumbnail-changer（詳細ページ向
 
 </section>
 
-<section>
+<section id="cases" data-section="cases" data-visible="true">
 
 <h2>ビフォーアフター／症例<span>Case</span></h2>
 
@@ -328,7 +330,7 @@ cssフォルダのstyle.cssを開き、「.list-before-after」で検索する�
 
 </section>
 
-<section class="bg-parts bg1-accent-parts">
+<section class="bg-parts bg1-accent-parts" id="voice" data-section="voice" data-visible="true">
 
 <h2>お客様の声<span>Voice</span></h2>
 
@@ -396,7 +398,7 @@ cssフォルダのstyle.cssを開き、「.list-yoko-scroll」で検索すると
 
 </section>
 
-<section>
+<section id="faq" data-section="faq" data-visible="true">
 
 <h2 class="c">よく頂く質問<span>FAQ</span></h2>
 
@@ -466,7 +468,7 @@ cssフォルダのstyle.cssを開き、「.openclose」で検索すると該当�
 
 </section>
 
-<section class="bg-parts bg1-light-parts">
+<section class="bg-parts bg1-light-parts" id="news" data-section="news" data-visible="true">
 
 <h2>お知らせ<span>News</span></h2>
 
@@ -488,7 +490,7 @@ cssフォルダのstyle.cssを開き、「.news」で検索すると該当ブロ
 
 </section>
 
-<section>
+<section id="contact" data-section="contact" data-visible="true">
 
 <h2 class="c">お問い合わせ<span>Contact</span></h2>
 <p class="c mb3rem">ご予約・ご相談はお気軽にお問い合わせください。初診の方も大歓迎です。</p>

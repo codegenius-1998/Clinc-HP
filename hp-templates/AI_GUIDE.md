@@ -8,7 +8,21 @@
 
 ## 使い方
 
-特定のクリニックサイトを1つ作る場合は、以下のテンプレート一覧から用途に合うものを1つだけ選び、**そのディレクトリの `AI_GUIDE.md` を読んでから**編集を始めてください。他のテンプレートのファイルには触れる必要はありません。各テンプレートは完全に独立しており、共通のCSS変数名やクラス名を持つとは限らない点に注意してください（後述）。
+特定のクリニックサイトを1つ作る場合は、以下のテンプレート一覧から用途に合うものを1つだけ選び、**そのディレクトリの `variables.json` と `AI_GUIDE.md` を読んでから**編集を始めてください。他のテンプレートのファイルには触れる必要はありません。各テンプレートは完全に独立しており、共通のCSS変数名やクラス名を持つとは限らない点に注意してください（後述）。
+
+### 管理画面・プレビュー向け変数（必読）
+
+テキスト修正・写真差し替え以外の次の操作は、テンプレート側で変数化済みです。
+
+| 機能 | 正本 | 適用先 |
+|---|---|---|
+| カラースキーム切替 | `variables.json` → `colorScheme` | `<html data-theme="...">` + `css/site-controls.css` |
+| セクション表示/非表示 | `variables.json` → `sections[]` | `data-section` / `data-visible` |
+| カスタムCSS注入 | `variables.json` → `customCss.content` | `css/custom.css` |
+| レイアウト微調整（カラム数・余白） | `variables.json` → `layout` | `<html style="--layout-...">` |
+
+**AI・管理画面実装者は必ず [`TEMPLATE_VARIABLES.md`](TEMPLATE_VARIABLES.md) を先に読むこと。**  
+JSON Schema は [`schema/template-variables.schema.json`](schema/template-variables.schema.json)。各テンプレ直下の `variables.json` が個別の正本です。
 
 ## テンプレート一覧
 

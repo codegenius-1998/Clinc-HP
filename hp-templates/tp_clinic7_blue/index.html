@@ -1,11 +1,13 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="ja" data-theme="blue" style="--layout-staff-columns:3;--layout-facility-columns:3;--content-space-l:5vw">
 <head>
 <meta charset="UTF-8">
 <title>病院・歯科医院（クリニック）サイト向け 無料ホームページテンプレート tp_clinic7</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="ここにサイト説明を入れます">
 <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/site-controls.css">
+<link rel="stylesheet" href="css/custom.css" id="site-custom-css">
 </head>
 
 <body class="home">
@@ -74,7 +76,7 @@
 
 <main>
 
-<section>
+<section id="news" data-section="news" data-visible="true">
 
 <h2>お知らせ</h2>
 
@@ -96,7 +98,7 @@ cssフォルダのstyle.cssを開き、「.news」で検索すると該当ブロ
 
 </section>
 
-<section id="menu" class="bg-parts bg1-light-parts mb0">
+<section id="menu" class="bg-parts bg1-light-parts mb0" data-section="menu" data-visible="true">
 
 <h2>診療メニュー</h2>
 
@@ -233,7 +235,7 @@ cssフォルダのstyle.cssを開き、「.news」で検索すると該当ブロ
 </section>
 <!--/#menu-->
 
-<section id="feature">
+<section id="feature" data-section="feature" data-visible="true">
 
 <h2>医院の特徴</h2>
 
@@ -262,7 +264,7 @@ cssフォルダのstyle.cssを開き、「.news」で検索すると該当ブロ
 </section>
 <!--/#feature-->
 
-<section id="greeting">
+<section id="greeting" data-section="greeting" data-visible="true">
 
 <h2>院長挨拶</h2>
 <p><img src="images/img-greeting.jpg" alt=""></p>
@@ -285,7 +287,7 @@ cssフォルダのstyle.cssを開き、「.news」で検索すると該当ブロ
 </section>
 <!--/#greeting-->
 
-<section id="staff">
+<section id="staff" data-section="staff" data-visible="true">
 
 <h2>スタッフ紹介<span>Staff</span></h2>
 
@@ -318,7 +320,7 @@ cssフォルダのstyle.cssを開き、「.news」で検索すると該当ブロ
 </section>
 <!--/#staff-->
 
-<section id="facility">
+<section id="facility" data-section="facility" data-visible="true">
 
 <h2>設備紹介</h2>
 
@@ -378,7 +380,7 @@ cssフォルダのstyle.cssを開き、「.news」で検索すると該当ブロ
 </section>
 <!--/#facility-->
 
-<section id="contact">
+<section id="contact" data-section="contact" data-visible="true">
 
 <h2>お問い合わせ</h2>
 <p>お電話またはLINEにてお気軽にご相談・ご予約ください。</p>

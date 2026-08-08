@@ -899,7 +899,7 @@ footer small {
 /*ボックス全体*/
 .list1 {
 	display: grid;
-	grid-template-columns: repeat(3, minmax(0, 1fr));	/*3列*/
+	grid-template-columns: repeat(var(--layout-service-columns, 3), minmax(0, 1fr));	/*カラム数は --layout-service-columns */
 	gap: 1.5rem;		/*ボックス同士の間に空けるスペース。1.5文字分。*/
 }
 

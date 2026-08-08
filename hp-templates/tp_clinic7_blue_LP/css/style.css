@@ -692,7 +692,7 @@ a.ddmenu::before {
 /*ボックス全体*/
 .list-cource {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));	/*ボックス１個あたりの最低幅が260pxで自動改行*/
+	grid-template-columns: repeat(var(--layout-service-columns, 3), minmax(0, 1fr));	/*カラム数は --layout-service-columns */
 	gap: 2rem;	/*ボックス同士の余白。2文字分。*/
 	font-size: 0.9rem;	/*文字サイズ90%*/
 }
@@ -1040,7 +1040,7 @@ footer small {
 /*ボックス全体*/
 .list-staff {
 	display: grid;
-	grid-template-columns: repeat(3, minmax(0, 1fr));	/*3列*/
+	grid-template-columns: repeat(var(--layout-staff-columns, 3), minmax(0, 1fr));	/*カラム数は --layout-staff-columns */
 	gap: 2.5rem;	/*ボックス同士の余白。2.5文字分。*/
 	font-size: 0.9rem;	/*文字サイズ90%*/
 }

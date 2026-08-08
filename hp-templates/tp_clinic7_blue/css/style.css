@@ -792,7 +792,7 @@ dl.news dt span.accent-color {
 /*ボックス全体*/
 .list-cource {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));	/*ボックス１個あたりの最低幅が260pxで自動改行*/
+	grid-template-columns: repeat(var(--layout-service-columns, 3), minmax(0, 1fr));	/*カラム数は --layout-service-columns */
 	gap: 2rem;	/*ボックス同士の余白。2文字分。*/
 	font-size: 0.9rem;	/*文字サイズ90%*/
 }
@@ -1094,7 +1094,7 @@ ul.others-step2 li:last-child::after {
 /*ボックス全体*/
 .list-staff {
 	display: grid;
-	grid-template-columns: repeat(3, minmax(0, 1fr));	/*3列*/
+	grid-template-columns: repeat(var(--layout-staff-columns, 3), minmax(0, 1fr));	/*カラム数は --layout-staff-columns */
 	gap: 2.5rem;	/*ボックス同士の余白。2.5文字分。*/
 	font-size: 0.9rem;	/*文字サイズ90%*/
 }
@@ -1173,7 +1173,7 @@ ul.others-step2 li:last-child::after {
 /*ボックス全体*/
 .list-kadomaru {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));	/*ボックス１個あたりの最低幅が250pxで自動改行*/
+	grid-template-columns: repeat(var(--layout-facility-columns, 3), minmax(0, 1fr));	/*カラム数は --layout-facility-columns */
 	gap: 3rem;		/*ボックス同士の間に空けるスペース。1.5文字分。*/
 	font-size: 0.9rem;	/*文字サイズ90%*/
 }

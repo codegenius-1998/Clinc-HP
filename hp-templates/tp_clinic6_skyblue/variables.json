@@ -1,0 +1,179 @@
+{
+  "$schema": "../schema/template-variables.schema.json",
+  "templateId": "tp_clinic6_skyblue",
+  "version": 1,
+  "meta": {
+    "label": "クリニック（スカイブルー）",
+    "themeFile": "css/style.css",
+    "htmlFile": "index.html",
+    "notes": "AI/管理画面は TEMPLATE_VARIABLES.md の適用手順に従うこと。"
+  },
+  "apply": {
+    "htmlFile": "index.html",
+    "themeAttribute": "html[data-theme]",
+    "controlsCssFile": "css/site-controls.css",
+    "customCssFile": "css/custom.css",
+    "layoutStyleTarget": "html"
+  },
+  "colorScheme": {
+    "active": "skyblue",
+    "options": {
+      "skyblue": {
+        "label": "スカイブルー",
+        "tokens": {
+          "--primary-color": "#4ba3fc",
+          "--primary-inverse-color": "#fff",
+          "--accent-color": "#2d7dd2",
+          "--accent-inverse-color": "#fff",
+          "--light-color": "#e8f4ff",
+          "--light-inverse-color": "#333"
+        }
+      },
+      "blue": {
+        "label": "ブルー",
+        "tokens": {
+          "--primary-color": "#1f6bbe",
+          "--primary-inverse-color": "#fff",
+          "--accent-color": "#2eb8cb",
+          "--accent-inverse-color": "#fff",
+          "--light-color": "#f0f7fb",
+          "--light-inverse-color": "#333"
+        }
+      },
+      "green": {
+        "label": "グリーン",
+        "tokens": {
+          "--primary-color": "#2d8f5f",
+          "--primary-inverse-color": "#fff",
+          "--accent-color": "#5cb88a",
+          "--accent-inverse-color": "#fff",
+          "--light-color": "#eef8f2",
+          "--light-inverse-color": "#333"
+        }
+      },
+      "navy": {
+        "label": "ネイビー",
+        "tokens": {
+          "--primary-color": "#101f3a",
+          "--primary-inverse-color": "#fff",
+          "--accent-color": "#7b8269",
+          "--accent-inverse-color": "#fff",
+          "--light-color": "#f2f5f9",
+          "--light-inverse-color": "#101f3a"
+        }
+      },
+      "pink": {
+        "label": "ピンク",
+        "tokens": {
+          "--primary-color": "#ff9999",
+          "--primary-inverse-color": "#fff",
+          "--accent-color": "#ec6262",
+          "--accent-inverse-color": "#fff",
+          "--light-color": "#fff5f5",
+          "--light-inverse-color": "#333",
+          "--bg-color": "#fff",
+          "--bg-inverse-color": "#333"
+        }
+      }
+    }
+  },
+  "sections": [
+    {
+      "id": "about",
+      "label": "当院について",
+      "selector": "#about",
+      "visible": true,
+      "navHrefs": [
+        "#about"
+      ],
+      "removable": true
+    },
+    {
+      "id": "service",
+      "label": "診療案内",
+      "selector": "#service",
+      "visible": true,
+      "navHrefs": [
+        "#service"
+      ],
+      "removable": true
+    },
+    {
+      "id": "staff",
+      "label": "スタッフ紹介",
+      "selector": "#staff",
+      "visible": true,
+      "navHrefs": [
+        "#staff"
+      ],
+      "removable": true
+    },
+    {
+      "id": "faq",
+      "label": "よくある質問",
+      "selector": "#faq",
+      "visible": true,
+      "navHrefs": [
+        "#faq"
+      ],
+      "removable": true
+    },
+    {
+      "id": "access",
+      "label": "アクセス",
+      "selector": "#access",
+      "visible": true,
+      "navHrefs": [
+        "#access"
+      ],
+      "removable": true
+    },
+    {
+      "id": "contact",
+      "label": "お問い合わせ",
+      "selector": "#contact",
+      "visible": true,
+      "navHrefs": [
+        "#contact"
+      ],
+      "removable": false
+    }
+  ],
+  "layout": {
+    "serviceColumns": {
+      "label": "診療カードのカラム数",
+      "value": 3,
+      "cssVar": "--layout-service-columns",
+      "min": 1,
+      "max": 4,
+      "appliesTo": ".list-grid1"
+    },
+    "contentSpace": {
+      "label": "左右余白",
+      "value": "5vw",
+      "cssVar": "--global-space",
+      "appliesTo": ":root --global-space"
+    }
+  },
+  "customCss": {
+    "file": "css/custom.css",
+    "content": "",
+    "description": "管理画面から注入する追加CSS。このファイル内容を丸ごと置換する。"
+  },
+  "contentSlots": [
+    {
+      "id": "title",
+      "label": "ページタイトル",
+      "selector": "title",
+      "type": "text"
+    }
+  ],
+  "imageSlots": [
+    {
+      "id": "logo",
+      "label": "ロゴ",
+      "path": "images/logo.png",
+      "selector": "img[src*='logo']"
+    }
+  ]
+}

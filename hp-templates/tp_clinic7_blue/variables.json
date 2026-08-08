@@ -1,0 +1,216 @@
+{
+  "$schema": "../schema/template-variables.schema.json",
+  "templateId": "tp_clinic7_blue",
+  "version": 1,
+  "meta": {
+    "label": "クリニック（ブルー・LP統合版）",
+    "themeFile": "css/theme.css",
+    "htmlFile": "index.html",
+    "notes": "AI/管理画面は TEMPLATE_VARIABLES.md の適用手順に従うこと。"
+  },
+  "apply": {
+    "htmlFile": "index.html",
+    "themeAttribute": "html[data-theme]",
+    "controlsCssFile": "css/site-controls.css",
+    "customCssFile": "css/custom.css",
+    "layoutStyleTarget": "html"
+  },
+  "colorScheme": {
+    "active": "blue",
+    "options": {
+      "blue": {
+        "label": "ブルー",
+        "tokens": {
+          "--primary-color": "#1f6bbe",
+          "--primary-inverse-color": "#fff",
+          "--accent-color": "#2eb8cb",
+          "--accent-inverse-color": "#fff",
+          "--light-color": "#f0f7fb",
+          "--light-inverse-color": "#333"
+        }
+      },
+      "skyblue": {
+        "label": "スカイブルー",
+        "tokens": {
+          "--primary-color": "#4ba3fc",
+          "--primary-inverse-color": "#fff",
+          "--accent-color": "#2d7dd2",
+          "--accent-inverse-color": "#fff",
+          "--light-color": "#e8f4ff",
+          "--light-inverse-color": "#333"
+        }
+      },
+      "green": {
+        "label": "グリーン",
+        "tokens": {
+          "--primary-color": "#2d8f5f",
+          "--primary-inverse-color": "#fff",
+          "--accent-color": "#5cb88a",
+          "--accent-inverse-color": "#fff",
+          "--light-color": "#eef8f2",
+          "--light-inverse-color": "#333"
+        }
+      },
+      "navy": {
+        "label": "ネイビー",
+        "tokens": {
+          "--primary-color": "#101f3a",
+          "--primary-inverse-color": "#fff",
+          "--accent-color": "#7b8269",
+          "--accent-inverse-color": "#fff",
+          "--light-color": "#f2f5f9",
+          "--light-inverse-color": "#101f3a"
+        }
+      },
+      "pink": {
+        "label": "ピンク",
+        "tokens": {
+          "--primary-color": "#ff9999",
+          "--primary-inverse-color": "#fff",
+          "--accent-color": "#ec6262",
+          "--accent-inverse-color": "#fff",
+          "--light-color": "#fff5f5",
+          "--light-inverse-color": "#333",
+          "--bg-color": "#fff",
+          "--bg-inverse-color": "#333"
+        }
+      }
+    }
+  },
+  "sections": [
+    {
+      "id": "news",
+      "label": "お知らせ",
+      "selector": "#news",
+      "visible": true,
+      "navHrefs": [],
+      "removable": true
+    },
+    {
+      "id": "menu",
+      "label": "診療メニュー",
+      "selector": "#menu",
+      "visible": true,
+      "navHrefs": [
+        "#menu",
+        "#menu1",
+        "#menu2",
+        "#menu3"
+      ],
+      "removable": true
+    },
+    {
+      "id": "feature",
+      "label": "医院の特徴",
+      "selector": "#feature",
+      "visible": true,
+      "navHrefs": [
+        "#feature"
+      ],
+      "removable": true
+    },
+    {
+      "id": "greeting",
+      "label": "院長挨拶",
+      "selector": "#greeting",
+      "visible": true,
+      "navHrefs": [
+        "#greeting"
+      ],
+      "removable": true
+    },
+    {
+      "id": "staff",
+      "label": "スタッフ紹介",
+      "selector": "#staff",
+      "visible": true,
+      "navHrefs": [
+        "#staff"
+      ],
+      "removable": true
+    },
+    {
+      "id": "facility",
+      "label": "設備紹介",
+      "selector": "#facility",
+      "visible": true,
+      "navHrefs": [
+        "#facility"
+      ],
+      "removable": true
+    },
+    {
+      "id": "contact",
+      "label": "お問い合わせ",
+      "selector": "#contact",
+      "visible": true,
+      "navHrefs": [
+        "#contact"
+      ],
+      "removable": false
+    }
+  ],
+  "layout": {
+    "staffColumns": {
+      "label": "スタッフ紹介のカラム数",
+      "value": 3,
+      "cssVar": "--layout-staff-columns",
+      "min": 1,
+      "max": 4,
+      "appliesTo": ".list-staff"
+    },
+    "facilityColumns": {
+      "label": "設備紹介のカラム数",
+      "value": 3,
+      "cssVar": "--layout-facility-columns",
+      "min": 1,
+      "max": 4,
+      "appliesTo": ".list-kadomaru"
+    },
+    "contentSpace": {
+      "label": "左右余白（大）",
+      "value": "5vw",
+      "cssVar": "--content-space-l",
+      "appliesTo": ":root --content-space-l"
+    }
+  },
+  "customCss": {
+    "file": "css/custom.css",
+    "content": "",
+    "description": "管理画面から注入する追加CSS。このファイル内容を丸ごと置換する。"
+  },
+  "contentSlots": [
+    {
+      "id": "title",
+      "label": "ページタイトル",
+      "selector": "title",
+      "type": "text"
+    },
+    {
+      "id": "h1",
+      "label": "メイン見出し",
+      "selector": "h1",
+      "type": "text"
+    },
+    {
+      "id": "phone",
+      "label": "電話番号",
+      "selector": ".tel strong",
+      "type": "text"
+    }
+  ],
+  "imageSlots": [
+    {
+      "id": "logo",
+      "label": "ロゴ",
+      "path": "images/logo.png",
+      "selector": ".logo img"
+    },
+    {
+      "id": "mainimg",
+      "label": "メインビジュアル",
+      "path": "images/mainimg1.jpg",
+      "selector": ".mainimg img"
+    }
+  ]
+}

@@ -5,6 +5,21 @@
 ------------------------------------------------------------------------------------------------------------------------------------------------------*/
 @import url(slide.css);
 
+/*CSSカスタムプロパティ（管理画面・AI向け変数化）
+---------------------------------------------------------------------------*/
+:root {
+	--primary-color: #f56270;
+	--primary-inverse-color: #fff;
+	--accent-color: #e04858;
+	--accent-inverse-color: #fff;
+	--light-color: #faf9f1;
+	--light-inverse-color: #333;
+	--bg-color: #faf9f1;
+	--bg-inverse-color: #333;
+	--layout-content-space: 20px;
+}
+
+
 
 /*全端末（PC・タブレット・スマホ）共通設定
 ------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -35,7 +50,7 @@ a {
 	transition: 0.5s;	/*マウスオン時の移り変わるまでの時間設定。0.5秒。*/
 }
 a:hover {
-	color: #f56270;			/*マウスオン時の文字色*/
+	color: var(--primary-color);			/*マウスオン時の文字色*/
 	text-decoration: none;	/*マウスオン時に下線を消す設定。残したいならこの１行削除。*/
 }
 
@@ -58,7 +73,7 @@ header {
 /*ロゴ画像ブロック*/
 header #logo {
 	margin-bottom: 50px;	/*画像ブロックの下に空けるスペース*/
-	background: #f56270;	/*背景色*/
+	background: var(--primary-color);	/*背景色*/
 	border-radius: 0px 0px 10px 10px;	/*角丸のサイズ。左上、右上、右下、左下の順番の指定。*/
 }
 
@@ -68,7 +83,7 @@ header #logo {
 .submenu {
 	overflow: hidden;
 	border-radius: 10px;	/*角丸のサイズ*/
-	border: 5px solid #f56270;	/*枠線の幅、線種、色*/
+	border: 5px solid var(--primary-color);	/*枠線の幅、線種、色*/
 	margin-bottom: 20px;	/*ブロックの下に空けるスペース*/
 }
 /*メニュー１個あたりの設定*/
@@ -96,7 +111,7 @@ header #logo {
 	font-size: 11px;		/*文字サイズ*/
 	font-weight: normal;	/*文字を太字でなく標準に戻す設定*/
 	letter-spacing: 0.2em;	/*文字間隔を少しあける設定*/
-	color: #f56270;			/*文字色*/
+	color: var(--primary-color);			/*文字色*/
 }
 
 /*スマホ用メニューを表示させない*/
@@ -128,8 +143,8 @@ header #logo {
 	margin-bottom: 20px;
 	padding: 20px 20px 20px 60px;	/*上、右、下、左への見出し内の余白*/
 	color: #fff;		/*文字色*/
-	background: #f56270;	/*背景色（古いブラウザ用）*/
-	background: #f56270 url(../images/arrow2.png) no-repeat 20px center / 25px;	/*背景色、背景画像の読み込み。左から20pxの場所に配置。画像の幅を25pxに。*/
+	background: var(--primary-color);	/*背景色（古いブラウザ用）*/
+	background: var(--primary-color) url(../images/arrow2.png) no-repeat 20px center / 25px;	/*背景色、背景画像の読み込み。左から20pxの場所に配置。画像の幅を25pxに。*/
 	border-radius: 10px;	/*角丸のサイズ*/
 }
 /*mainコンテンツのh3タグ設定*/
@@ -142,7 +157,7 @@ header #logo {
 	background: #fff;	/*背景色*/
 }
 #main h3::first-letter {
-	border-left: 3px solid #f56270;
+	border-left: 3px solid var(--primary-color);
 	padding-left: 15px;
 }
 /*mainコンテンツの段落タグ設定*/
@@ -174,7 +189,7 @@ header #logo {
 	font-size: 18px;	/*文字サイズ*/
 }
 #sub h2::first-letter {
-	border-left: 3px solid #f56270;
+	border-left: 3px solid var(--primary-color);
 	padding-left: 10px;
 }
 #sub .box h2::first-letter {
@@ -184,7 +199,7 @@ header #logo {
 /*subコンテンツ内のbox
 ---------------------------------------------------------------------------*/
 #sub .box {
-	background: #f56270;	/*背景色*/
+	background: var(--primary-color);	/*背景色*/
 	color: #fff;			/*文字色*/
 	padding: 20px;			/*ボックス内の余白*/
 	border-radius: 10px;	/*角丸の指定*/
@@ -282,7 +297,7 @@ footer .pr {display: block;font-size: 80%;}
 }
 /*h4（見出し）タグの設定*/
 .list h4 {
-	color: #f56270;		/*文字色*/
+	color: var(--primary-color);		/*文字色*/
 	font-size: 120%;	/*文字サイズ*/
 	text-align: center;	/*文字をセンタリング*/
 	height: 2em;		/*高さ*/
@@ -318,7 +333,7 @@ footer .pr {display: block;font-size: 80%;}
 }
 /*質問*/
 .faq dt {
-	color: #f56270;		/*文字色*/
+	color: var(--primary-color);		/*文字色*/
 	font-weight: bold;	/*太字にする設定*/
 	padding-left: 30px;	/*背景アイコンに重ならないよう左に余白を作る*/
 	background: url(../images/faq_q.png) no-repeat left top / 30px;	/*「Q」アイコン*/
@@ -417,7 +432,7 @@ footer .pr {display: block;font-size: 80%;}
 /*box*/
 #main .box {
 	overflow: hidden;
-	border: 3px solid #f56270;	/*枠線の幅、線種、色*/
+	border: 3px solid var(--primary-color);	/*枠線の幅、線種、色*/
 	padding: 20px;				/*ボックス内の余白*/
 	border-radius: 10px;		/*角丸のサイズ。この１行を削除すれば角のとれた長方形になります。*/
 	margin-bottom: 20px;		/*ボックスの下に空けるスペース*/
@@ -425,7 +440,7 @@ footer .pr {display: block;font-size: 80%;}
 }
 /*box内のh4タグ*/
 #main .box h4 {
-	color: #f56270;		/*文字色*/
+	color: var(--primary-color);		/*文字色*/
 	font-size: 130%;	/*文字サイズ*/
 }
 /*box内のpタグ*/
@@ -475,7 +490,7 @@ body.is-fixed-pagetop .nav-fix-pos-pagetop a {
 	animation-duration: 0.5S;	/*アニメーションの実行時間*/
 	animation-fill-mode: forwards;	/*アニメーションの完了後、最後のキーフレームを維持する*/
 	border-radius: 50%;
-	border: 3px solid #f56270;	/*枠線の幅、線種、色*/
+	border: 3px solid var(--primary-color);	/*枠線の幅、線種、色*/
 	background: #fff;	/*背景色（古いブラウザ用）*/
 	background: rgba(255,255,255,0.5);	/*背景色。255,255,255は白のことで0.3は色が30%出た状態のこと。*/
 }
@@ -535,7 +550,7 @@ ol {
 .mb10 {margin-bottom: 10px;}
 .mb30 {margin-bottom: 30px;}
 .clear {clear: both;}
-.color1, .color1 a {color: #f56270;}
+.color1, .color1 a {color: var(--primary-color);}
 .bgcolor1 {background: #f2f2f2 !important;}
 .bgcolor2 {background: #dbebf7 !important;}
 .pr {font-size: 10px;}
@@ -570,10 +585,10 @@ ol {
 	max-width: 320px;
 	margin: 10px 1.5%;
 	padding: 20px 10px;
-	border: 3px solid #f56270;	/*枠線の幅、線種、色*/
+	border: 3px solid var(--primary-color);	/*枠線の幅、線種、色*/
 	border-radius: 10px;		/*角丸のサイズ*/
 	background: #fff;			/*背景色*/
-	color: #f56270;				/*文字色*/
+	color: var(--primary-color);				/*文字色*/
 	font-size: 20px;
 	font-weight: bold;
 	text-align: center;
@@ -588,14 +603,14 @@ ol {
 }
 /*LINEボタンだけ塗りつぶし表示に*/
 .contact-buttons .btn-line {
-	background: #f56270;
+	background: var(--primary-color);
 	color: #fff;
 }
 /*マウスオン時*/
 .contact-buttons .btn-tel:hover,
 .contact-buttons .btn-line:hover {
 	background: #fbf6cc;
-	color: #f56270;
+	color: var(--primary-color);
 }
 /*アイコン*/
 .contact-buttons .btn-tel i,
@@ -711,11 +726,11 @@ header #logo {
 }
 /*三本バーアイコン*/
 #menubar_hdr.close {
-	background: #f56270 url(../images/icon_menu.png) no-repeat center top/50px;
+	background: var(--primary-color) url(../images/icon_menu.png) no-repeat center top/50px;
 }
 /*閉じるアイコン*/
 #menubar_hdr.open {
-	background: #f56270 url(../images/icon_menu.png) no-repeat center bottom/50px;
+	background: var(--primary-color) url(../images/icon_menu.png) no-repeat center bottom/50px;
 }
 
 /*header,main,sub
@@ -830,7 +845,7 @@ header #logo {
 }
 /*h4（見出し）タグの設定*/
 .list h4 {
-	color: #f56270;		/*文字色*/
+	color: var(--primary-color);		/*文字色*/
 	font-size: 120%;	/*文字サイズ*/
 	text-align: center;	/*文字をセンタリング*/
 	height: 2em;		/*高さ*/

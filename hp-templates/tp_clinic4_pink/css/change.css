@@ -16,11 +16,11 @@ body {
 }
 /*マウスオン時の「小」ボタン設定*/
 #fsize ul li#small a:hover::before {
-	background: #ff9999;	/*背景色*/
+	background: var(--primary-color);	/*背景色*/
 }
 /*「大」ボタン設定*/
 #fsize ul li#large a::before {
-	background: #ff9999;	/*背景色*/
+	background: var(--primary-color);	/*背景色*/
 }
 
 /*ヘッダー（ロゴが入った最上段のブロック）

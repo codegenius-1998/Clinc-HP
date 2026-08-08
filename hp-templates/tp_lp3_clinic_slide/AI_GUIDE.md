@@ -1,5 +1,7 @@
 # AI_GUIDE.md — tp_lp3_clinic_slide 実装ガイド
 
+> **管理画面変数**: カラースキーム / セクション表示 / カスタムCSS / レイアウトは [`variables.json`](variables.json) が正本。適用手順は親ディレクトリの [`TEMPLATE_VARIABLES.md`](../TEMPLATE_VARIABLES.md) を参照。テキスト・写真の差し替えは本ガイドの該当章＋プレビュー編集機能。
+
 このファイルは、無料テンプレート配布サイト「Template Party」の LP（ランディングページ）系テンプレート `tp_lp3` のクリニック（医療機関）向けスライドショー版 `tp_lp3_clinic_slide` を、実在するクリニックの本番サイトに仕上げるための作業ガイドです。
 
 このテンプレートには通常の単一マニュアルファイルではなく、`_manual/` フォルダ内に **13個のHTMLページ**に分かれたマニュアルが同梱されています（`manual.html` が総合案内、`manual1_header.html`〜`manual12_new.html` が各セクション別解説）。本ガイドはそれら13ページ全て、実際の `index.html` / `new.html`、`css/style.css`、`css/mainimg.css`、`js/main.js`、`_removed_images_manifest.md` を実際に読み込んだ上でまとめた要約です。`_manual/` を開かなくても、このファイル1つで編集作業ができることを目指しています。
