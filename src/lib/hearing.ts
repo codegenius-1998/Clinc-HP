@@ -17,6 +17,10 @@ export type HearingSheet = {
   hours: string;
   features: string;
   request: string;
+  /** Real staff members to render as #staff cards — count drives how many card blocks are rendered. */
+  staffMembers?: { name: string; comment: string; role?: string; photoUrl?: string }[];
+  /** Real FAQ entries — if provided, used verbatim instead of the AI inventing general Q&A. */
+  faqs?: { question: string; answer: string }[];
   createdAt: string;
   previewUrl?: string;
   generationError?: string;

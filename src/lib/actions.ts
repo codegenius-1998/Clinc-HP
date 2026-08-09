@@ -54,6 +54,25 @@ export async function createHearingAction(
     }
   }
 
+  const staffNames = formData.getAll("staffName").map((v) => (typeof v === "string" ? v.trim() : ""));
+  const staffComments = formData.getAll("staffComment").map((v) => (typeof v === "string" ? v.trim() : ""));
+  const staffRoles = formData.getAll("staffRole").map((v) => (typeof v === "string" ? v.trim() : ""));
+  const staffPhotoUrls = formData.getAll("staffPhotoUrl").map((v) => (typeof v === "string" ? v.trim() : ""));
+  const staffMembers = staffNames
+    .map((name, i) => ({
+      name,
+      comment: staffComments[i] ?? "",
+      role: staffRoles[i] ?? "",
+      photoUrl: staffPhotoUrls[i] || undefined,
+    }))
+    .filter((member) => member.name.length > 0);
+
+  const faqQuestions = formData.getAll("faqQuestion").map((v) => (typeof v === "string" ? v.trim() : ""));
+  const faqAnswers = formData.getAll("faqAnswer").map((v) => (typeof v === "string" ? v.trim() : ""));
+  const faqs = faqQuestions
+    .map((question, i) => ({ question, answer: faqAnswers[i] ?? "" }))
+    .filter((faq) => faq.question.length > 0 && faq.answer.length > 0);
+
   const hearing = await saveHearing({
     slug,
     templateId: template.id,
@@ -70,6 +89,8 @@ export async function createHearingAction(
     features: requiredField(formData, "features"),
     request: requiredField(formData, "request"),
     uploadedImages,
+    staffMembers: staffMembers.length > 0 ? staffMembers : undefined,
+    faqs: faqs.length > 0 ? faqs : undefined,
   });
 
   try {

@@ -18,15 +18,10 @@
 
 <header>
 
-<h1 id="logo"><a href="#container"><img src="images/logo.png" alt="東京横浜サンプル医院"></a></h1>
-
-<div class="banner">
-<a href="#"><img src="images/banner1.jpg" alt=""></a>
-</div>
+<h1 id="logo"><a href="#container"><img src="images/logo.png" alt="東京横浜サンプル医院"><span class="clinic-name">東京横浜サンプル医院</span></a></h1>
 
 <address>
 <div class="tel">03-0000-0000</div>
-<span class="small">受付時間：AM9:00〜PM7:00</span>
 </address>
 
 <!--文字サイズ変更ボタン-->
@@ -83,7 +78,7 @@
 </div>
 
 <ul class="mainimg-btn">
-<li><a href="#"><i class="fa-solid fa-mobile-screen-button"></i>WEB予約はこちら</a></li>
+<li><a href="https://line.me/R/ti/p/xxxxxxxx"><i class="fa-brands fa-line"></i>LINE予約はこちら</a></li>
 <li><a href="tel:0300000000"><i class="fa-solid fa-phone"></i>電話予約はこちら</a></li>
 </ul>
 
@@ -94,27 +89,6 @@
 <main class="column">
 
 <div class="main-contents">
-
-<section class="blur">
-
-<h2><span class="uline">お知らせ</span><span class="small">News</span></h2>
-
-<dl class="new">
-<dt>2025/10/31</dt>
-<dd>メニューが画面上部に到達した際、数ピクセルの範囲で止めるとバウンドを繰り返すのを修正。js/main.jsのみ更新。</dd>
-<dt>2024/07/09<span>お知らせ</span></dt>
-<dd>病院・歯科医院（クリニック）サイト向け 無料ホームページテンプレート tp_clinic6公開。</dd>
-<dt>20XX/00/00<span>お知らせ</span></dt>
-<dd>サンプルテキスト。サンプルテキスト。サンプルテキスト。</dd>
-<dt>20XX/00/00<span class="icon-bg1">重要</span></dt>
-<dd>サンプルテキスト。サンプルテキスト。サンプルテキスト。</dd>
-<dt>20XX/00/00<span class="icon-bg1">重要</span></dt>
-<dd>サンプルテキスト。サンプルテキスト。サンプルテキスト。</dd>
-<dt>20XX/00/00<span class="icon-bg1">重要</span></dt>
-<dd>サンプルテキスト。サンプルテキスト。サンプルテキスト。サンプルテキスト。サンプルテキスト。サンプルテキスト。サンプルテキスト。サンプルテキスト。サンプルテキスト。サンプルテキスト。サンプルテキスト。サンプルテキスト。</dd>
-</dl>
-
-</section>
 
 <section id="about" data-section="about" data-visible="true">
 
@@ -176,49 +150,6 @@
 </div>
 
 </div>
-<!--/.list-grid1-->
-
-<h3>医師出勤表</h3>
-
-<div class="ta-box">
-<table class="ta2">
-<caption>医師出勤表</caption>
-<tr>
-<th>&nbsp;</th>
-<th>月</th>
-<th>火</th>
-<th>水</th>
-<th>木</th>
-<th>金</th>
-<th>土</th>
-</tr>
-<tr>
-<th>午前</th>
-<td><a href="#okinawa">沖縄次郎</a><br>
-<a href="#tokyo">東京花子</a><br>
-<a href="#nihon">日本太郎</a></td>
-<td><a href="#tokyo">東京花子</a></td>
-<td><a href="#nihon">日本太郎</a></td>
-<td><a href="#tokyo">東京花子</a></td>
-<td><a href="#okinawa">沖縄次郎</a><br>
-<a href="#nihon">日本太郎</a></td>
-<td>※</td>
-</tr>
-<tr>
-<th>午後</th>
-<td><a href="#tokyo">東京花子</a><br>
-<a href="#okinawa">沖縄次郎</a></td>
-<td><a href="#tokyo">東京花子</a></td>
-<td><a href="#nihon">日本太郎</a><br>
-<a href="#tokyo">東京花子</a></td>
-<td><a href="#okinawa">沖縄次郎</a></td>
-<td><a href="#tokyo">東京花子</a></td>
-<td>※</td>
-</tr>
-</table>
-</div>
-
-<p>※土曜日は担当医は決まっておりません。</p>
 
 </section>
 <!--/#service-->
@@ -231,7 +162,8 @@
 
 <div class="text">
 <h3>日本太郎</h3>
-<p>簡単なコメントを書きます。サンプルテキスト。簡単なコメントを書きます。サンプルテキスト。</p>
+<p class="role" style="display:none"></p>
+<p class="comment">簡単なコメントを書きます。サンプルテキスト。簡単なコメントを書きます。サンプルテキスト。</p>
 </div>
 <div class="image">
 <img src="images/2.jpg" alt="">
@@ -244,7 +176,8 @@
 
 <div class="text">
 <h3>沖縄次郎</h3>
-<p>簡単なコメントを書きます。サンプルテキスト。簡単なコメントを書きます。サンプルテキスト。</p>
+<p class="role" style="display:none"></p>
+<p class="comment">簡単なコメントを書きます。サンプルテキスト。簡単なコメントを書きます。サンプルテキスト。</p>
 </div>
 <div class="image">
 <img src="images/2.jpg" alt="">
@@ -257,7 +190,8 @@
 
 <div class="text">
 <h3>東京花子</h3>
-<p>簡単なコメントを書きます。サンプルテキスト。簡単なコメントを書きます。サンプルテキスト。簡単なコメントを書きます。サンプルテキスト。簡単なコメントを書きます。サンプルテキスト。簡単なコメントを書きます。サンプルテキスト。簡単なコメントを書きます。サンプルテキスト。</p>
+<p class="role" style="display:none"></p>
+<p class="comment">簡単なコメントを書きます。サンプルテキスト。簡単なコメントを書きます。サンプルテキスト。簡単なコメントを書きます。サンプルテキスト。簡単なコメントを書きます。サンプルテキスト。簡単なコメントを書きます。サンプルテキスト。簡単なコメントを書きます。サンプルテキスト。</p>
 </div>
 <div class="image">
 <img src="images/2.jpg" alt="">
@@ -350,6 +284,30 @@
 </div>
 <!--/.main-contents-->
 
+<div class="sub-contents">
+
+<nav>
+<h3>メニュータイトル</h3>
+<ul class="submenu">
+<li><a href="#container">ホーム</a></li>
+<li><a href="#about">当院について</a>
+	<ul>
+	<li><a href="#link1">当院について</a></li>
+	<li><a href="#link2">初診の方へ</a></li>
+	<li><a href="#link3">院長挨拶</a></li>
+	</ul>
+</li>
+<li><a href="#service">診療科目</a></li>
+<li><a href="#staff">スタッフ紹介</a></li>
+<li><a href="#faq">よくある質問</a></li>
+<li><a href="#access">アクセス</a></li>
+<li><a href="#contact">お問い合わせ</a></li>
+</ul>
+</nav>
+
+</div>
+<!--/.sub-contents-->
+
 </main>
 
 </div>
@@ -358,26 +316,11 @@
 </div>
 <!--/#container-->
 
-<section>
-
-<h2 class="dn">ギャラリー</h2>
-
-<div class="thumbnail-slide">
-<a href="#"><img src="images/1.jpg" alt=""></a>
-<a href="#"><img src="images/2.jpg" alt=""></a>
-<a href="#"><img src="images/3.jpg" alt=""></a>
-<a href="#"><img src="images/1.jpg" alt=""></a>
-<a href="#"><img src="images/2.jpg" alt=""></a>
-<a href="#"><img src="images/3.jpg" alt=""></a>
-</div>
-
-</section>
-
 <div id="footer-contents">
 
 <div class="left">
 
-<h3><img src="images/logo_footer.png" alt="東京横浜サンプル医院" class="wl"></h3>
+<h3>東京横浜サンプル医院</h3>
 <p>〒000-0000 東京足立区XXXXXX1丁目1号<br>
 代表電話：000-0000-0000<br>
 受付時間：月曜日から金曜日の8時から18時まで</p>

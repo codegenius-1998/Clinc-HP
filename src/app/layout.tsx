@@ -17,7 +17,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap"
         />
       </head>
-      <body className="flex min-h-full flex-col bg-[var(--background)] text-[var(--foreground)]">
+      <body
+        className="flex min-h-full flex-col bg-[var(--background)] text-[var(--foreground)]"
+        suppressHydrationWarning
+      >
         {children}
       </body>
     </html>
