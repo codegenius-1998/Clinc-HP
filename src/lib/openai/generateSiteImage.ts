@@ -1,9 +1,19 @@
 import { getOpenAIClient } from "./client";
 import type { HearingSheet } from "@/lib/hearing";
 
-export type ImageDescriptor = { label: string; variationHint?: string };
+export type ImageDescriptor = {
+  label: string;
+  variationHint?: string;
+  /** When set (from the generation plan), used verbatim instead of the generic photo prompt below —
+   * lets logo/icon/photo placements each get a style-appropriate prompt. */
+  customPrompt?: string;
+};
 
 function buildPrompt(hearing: HearingSheet, image: ImageDescriptor): string {
+  if (image.customPrompt) {
+    return image.customPrompt;
+  }
+
   const details = [
     `Clinic name (do not render as text in the image): ${hearing.clinicName}`,
     hearing.features && `Notable features: ${hearing.features}`,

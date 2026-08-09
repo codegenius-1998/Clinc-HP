@@ -1,13 +1,14 @@
 import { access, cp, mkdir, readFile, rm, writeFile } from "fs/promises";
 import path from "path";
 import * as cheerio from "cheerio";
-import { getTemplateDefinition, TEMPLATES_DIR } from "./templates";
+import { getTemplateDefinition, getTemplateReferenceDocs, TEMPLATES_DIR } from "./templates";
 import type { HearingSheet } from "./hearing";
 import { collectImageTargets, collectTextTargets, HIDDEN_TEXT_VALUE, isPhoneLikeText, type ImageTarget } from "./htmlContent";
 import type { ImageCategoryKey } from "./imageCategories";
 import { generateSiteCopy } from "./openai/generateSiteCopy";
 import { generateSiteImage } from "./openai/generateSiteImage";
 import { matchImagesToCategories } from "./openai/matchImageCategories";
+import { planGeneration } from "./openai/planGeneration";
 
 const EXCLUDED_FILES = new Set([".DS_Store", "AI_GUIDE.md", "_removed_images_manifest.md"]);
 const GENERATED_ROOT = path.join(process.cwd(), "public", "generated");
@@ -82,13 +83,30 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
     (key) => (uploadedImages[key]?.length ?? 0) > 0
   );
 
-  const categoryAssignment =
+  // --- generation plan: AI_GUIDE.md + the removed-images manifest + variables.json's sections
+  // are the template's own documentation of what each section/image is actually for — use them
+  // to decide which optional sections make sense to show, and to write a role-appropriate image
+  // prompt per placement (a logo needs a flat vector mark, not a photorealistic photo). ---
+  const { guide, imageManifest } = await getTemplateReferenceDocs(template.dirName);
+  const [categoryAssignment, plan] = await Promise.all([
     availableCategories.length > 0
-      ? await matchImagesToCategories(
+      ? matchImagesToCategories(
           imageTargets,
           availableCategories.map((key) => ({ key, sampleUrl: uploadedImages[key]![0] }))
         )
-      : {};
+      : Promise.resolve({} as Record<string, ImageCategoryKey | null>),
+    planGeneration(hearing, template.sections, imageTargets, guide, imageManifest),
+  ]);
+
+  for (const section of template.sections) {
+    if (!section.removable) continue;
+    if (plan.sectionVisibility[section.id] === false) {
+      $(section.selector).attr("data-visible", "false");
+      for (const href of section.navHrefs) {
+        $(`a[href="${href}"]`).closest("li").attr("style", "display:none");
+      }
+    }
+  }
 
   // Each uploaded photo is used at most once per site — once a category runs out, remaining
   // placements fall through to AI generation instead of repeating an already-used photo.
@@ -121,6 +139,7 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
       buffer: await generateSiteImage(hearing, {
         label: image.alt || `${template.label}の画像（${image.path}）`,
         variationHint: `${index + 1}/${aiImageTargets.length}`,
+        customPrompt: plan.imagePlans[image.id]?.prompt,
       }),
     })),
     Promise.all(

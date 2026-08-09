@@ -28,11 +28,21 @@ export type TemplateImageSlot = {
   selector: string;
 };
 
+export type TemplateSection = {
+  id: string;
+  label: string;
+  selector: string;
+  visible: boolean;
+  navHrefs: string[];
+  removable: boolean;
+};
+
 export type TemplateDefinition = TemplateSummary & {
   dirName: string;
   htmlFile: string;
   contentSlots: TemplateContentSlot[];
   imageSlots: TemplateImageSlot[];
+  sections: TemplateSection[];
 };
 
 export const TEMPLATES_DIR = path.join(process.cwd(), "hp-templates");
@@ -46,6 +56,7 @@ type RawVariablesJson = {
   };
   contentSlots?: TemplateContentSlot[];
   imageSlots?: TemplateImageSlot[];
+  sections?: TemplateSection[];
 };
 
 async function listTemplateDirs(): Promise<string[]> {
@@ -76,6 +87,7 @@ async function readTemplateDefinition(dirName: string): Promise<TemplateDefiniti
       defaultColorScheme: data.colorScheme?.active ?? colorSchemes[0]?.id ?? "",
       contentSlots: data.contentSlots ?? [],
       imageSlots: data.imageSlots ?? [],
+      sections: data.sections ?? [],
     };
   } catch {
     return null;
@@ -97,4 +109,28 @@ export async function getTemplateDefinition(templateId: string): Promise<Templat
     }
   }
   return null;
+}
+
+const MAX_REFERENCE_DOC_LENGTH = 20000;
+
+async function readReferenceDoc(dirName: string, fileName: string): Promise<string> {
+  try {
+    const raw = await readFile(path.join(TEMPLATES_DIR, dirName, fileName), "utf-8");
+    return raw.length > MAX_REFERENCE_DOC_LENGTH ? raw.slice(0, MAX_REFERENCE_DOC_LENGTH) : raw;
+  } catch {
+    return "";
+  }
+}
+
+/** The human-authored editing guide and the record of which sample images were removed
+ * (role, original size, where each was used) — both kept out of the generated site itself,
+ * but read here as reference material for the AI generation prompts. */
+export async function getTemplateReferenceDocs(
+  dirName: string
+): Promise<{ guide: string; imageManifest: string }> {
+  const [guide, imageManifest] = await Promise.all([
+    readReferenceDoc(dirName, "AI_GUIDE.md"),
+    readReferenceDoc(dirName, "_removed_images_manifest.md"),
+  ]);
+  return { guide, imageManifest };
 }
