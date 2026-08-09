@@ -26,3 +26,6 @@ next-env.d.ts
 
 # hearing sheet submissions (local file storage)
 /data/
+
+# AI-generated site output
+/public/generated/

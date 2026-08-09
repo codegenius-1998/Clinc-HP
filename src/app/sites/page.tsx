@@ -45,7 +45,20 @@ export default async function SitesPage() {
                   href={`/sites/${hearing.slug}`}
                   className="block rounded-2xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-100 transition-colors hover:border-sky-300 hover:bg-sky-50/40"
                 >
-                  <p className="text-[16px] font-semibold text-slate-900">{hearing.clinicName}</p>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[16px] font-semibold text-slate-900">{hearing.clinicName}</p>
+                    <span
+                      className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                        hearing.previewUrl
+                          ? "bg-emerald-50 text-emerald-700"
+                          : hearing.generationError
+                            ? "bg-red-50 text-red-700"
+                            : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      {hearing.previewUrl ? "生成済み" : hearing.generationError ? "生成失敗" : "未生成"}
+                    </span>
+                  </div>
                   <p className="mt-1 text-[13px] text-slate-500">
                     {hearing.templateLabel} ・ {hearing.colorSchemeLabel}
                   </p>

@@ -16,6 +16,10 @@ export type HearingSheet = {
   features: string;
   request: string;
   createdAt: string;
+  previewUrl?: string;
+  generationError?: string;
+  cloudflareUrl?: string;
+  cloudflareError?: string;
 };
 
 const DATA_DIR = path.join(process.cwd(), "data", "hearings");
@@ -60,4 +64,17 @@ export async function getHearing(slug: string): Promise<HearingSheet | null> {
   } catch {
     return null;
   }
+}
+
+export async function updateHearing(
+  slug: string,
+  patch: Partial<Pick<HearingSheet, "previewUrl" | "generationError" | "cloudflareUrl" | "cloudflareError">>
+): Promise<HearingSheet | null> {
+  const hearing = await getHearing(slug);
+  if (!hearing) {
+    return null;
+  }
+  const updated: HearingSheet = { ...hearing, ...patch };
+  await writeFile(path.join(DATA_DIR, `${slug}.json`), JSON.stringify(updated, null, 2), "utf-8");
+  return updated;
 }

@@ -25,6 +25,12 @@ export function HearingSheetForm({ templates }: { templates: TemplateSummary[] }
         </p>
       )}
 
+      {pending && (
+        <p className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-[13px] text-sky-700">
+          AIがテキストと画像を生成しています。1分ほどかかることがあります…
+        </p>
+      )}
+
       <div className={cardClassName}>
         <p className="text-[13px] font-medium text-slate-700">
           テンプレート
@@ -165,7 +171,7 @@ export function HearingSheetForm({ templates }: { templates: TemplateSummary[] }
         disabled={pending || templates.length === 0}
         className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-sky-600 px-7 py-3.5 text-[13px] font-medium tracking-[0.08em] text-white shadow-sm shadow-sky-200 transition-transform hover:-translate-y-0.5 hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
       >
-        {pending ? "送信中..." : "ヒアリングシートを送信"}
+        {pending ? "生成中..." : "ヒアリングシートを送信"}
         <span aria-hidden>→</span>
       </button>
     </form>
