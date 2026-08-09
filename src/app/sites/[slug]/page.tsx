@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getHearing } from "@/lib/hearing";
 import { regenerateSiteAction, deployToCloudflareAction } from "@/lib/actions";
+import { generatedSiteExists } from "@/lib/siteGenerator";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString("ja-JP", {
@@ -39,6 +40,10 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ slu
     notFound();
   }
 
+  // `previewUrl` alone only means generation once succeeded — the output directory can be gone
+  // (dev server killed mid-write, folder cleaned up by hand) without the record ever being updated.
+  const isGenerated = hearing.previewUrl ? await generatedSiteExists(slug) : false;
+
   return (
     <div className="flex-1 bg-gradient-to-b from-sky-50 via-white to-white px-6 py-24">
       <div className="mx-auto max-w-3xl">
@@ -67,7 +72,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ slu
             </form>
           </div>
 
-          {hearing.previewUrl ? (
+          {isGenerated && hearing.previewUrl ? (
             <>
               <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
                 <iframe src={hearing.previewUrl} className="h-[480px] w-full" title="ホームページのプレビュー" />
@@ -104,7 +109,9 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ slu
             </>
           ) : (
             <p className="mt-4 whitespace-pre-line rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
-              {hearing.generationError ?? "まだ生成されていません。"}
+              {hearing.previewUrl && !isGenerated
+                ? "以前は生成されていましたが、生成ファイルが見つかりません（削除された可能性があります）。「AIで再生成する」を押してください。"
+                : (hearing.generationError ?? "まだ生成されていません。")}
             </p>
           )}
         </div>

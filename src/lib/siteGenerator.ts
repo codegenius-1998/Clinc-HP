@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile, rm, writeFile } from "fs/promises";
+import { access, cp, mkdir, readFile, rm, writeFile } from "fs/promises";
 import path from "path";
 import * as cheerio from "cheerio";
 import { getTemplateDefinition, TEMPLATES_DIR } from "./templates";
@@ -18,6 +18,18 @@ export type GeneratedSite = {
   slug: string;
   previewUrl: string;
 };
+
+/** `hearing.previewUrl` only records that generation once succeeded — it's never cleared if the
+ * output directory is later removed (manual cleanup, a killed dev server mid-write, etc.), so
+ * callers must confirm the files are still actually there before trusting it. */
+export async function generatedSiteExists(slug: string): Promise<boolean> {
+  try {
+    await access(path.join(GENERATED_ROOT, slug));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
   const results: R[] = new Array(items.length);
