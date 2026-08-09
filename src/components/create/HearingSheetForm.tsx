@@ -1,8 +1,11 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useState } from "react";
 import { createHearingAction, type HearingFormState } from "@/lib/actions";
 import type { TemplateDefinition } from "@/lib/templates";
+import { IMAGE_CATEGORIES, type ImageCategoryKey } from "@/lib/imageCategories";
+
+type PickedImage = { file: File; previewUrl: string };
 
 const inputClassName =
   "mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[14px] text-slate-900 placeholder:text-slate-400 focus:border-sky-400 focus:outline-none";
@@ -11,53 +14,82 @@ const cardClassName = "rounded-2xl border border-slate-200 bg-white p-6 shadow-s
 
 const initialState: HearingFormState = { error: null };
 
+function emptyImagesByCategory(): Record<ImageCategoryKey, PickedImage[]> {
+  const entries = IMAGE_CATEGORIES.map((c) => [c.key, [] as PickedImage[]] as const);
+  return Object.fromEntries(entries) as Record<ImageCategoryKey, PickedImage[]>;
+}
+
 export function HearingSheetForm({ templates }: { templates: TemplateDefinition[] }) {
   const [templateId, setTemplateId] = useState(templates[0]?.id ?? "");
   const [state, formAction, pending] = useActionState(createHearingAction, initialState);
-  const [previews, setPreviews] = useState<Record<string, string>>({});
-  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const [imagesByCategory, setImagesByCategory] = useState<Record<ImageCategoryKey, PickedImage[]>>(emptyImagesByCategory);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const selectedTemplate = templates.find((t) => t.id === templateId) ?? templates[0];
+  const busy = uploading || pending;
 
-  function handleTemplateChange(id: string) {
-    setTemplateId(id);
-    setPreviews((prev) => {
-      Object.values(prev).forEach((url) => URL.revokeObjectURL(url));
-      return {};
+  function handleImagesSelected(category: ImageCategoryKey, fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return;
+    const picked = Array.from(fileList).map((file) => ({ file, previewUrl: URL.createObjectURL(file) }));
+    setImagesByCategory((prev) => ({ ...prev, [category]: [...prev[category], ...picked] }));
+  }
+
+  function removeImage(category: ImageCategoryKey, index: number) {
+    setImagesByCategory((prev) => {
+      URL.revokeObjectURL(prev[category][index].previewUrl);
+      return { ...prev, [category]: prev[category].filter((_, i) => i !== index) };
     });
   }
 
-  function handleImageSelected(slotId: string, fileList: FileList | null) {
-    const file = fileList?.[0];
-    if (!file) return;
-    setPreviews((prev) => {
-      if (prev[slotId]) URL.revokeObjectURL(prev[slotId]);
-      return { ...prev, [slotId]: URL.createObjectURL(file) };
-    });
-  }
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    setUploadError(null);
 
-  function removeImage(slotId: string) {
-    const input = fileInputRefs.current[slotId];
-    if (input) input.value = "";
-    setPreviews((prev) => {
-      if (prev[slotId]) URL.revokeObjectURL(prev[slotId]);
-      const next = { ...prev };
-      delete next[slotId];
-      return next;
-    });
+    const categoriesWithImages = IMAGE_CATEGORIES.filter((c) => imagesByCategory[c.key].length > 0);
+    if (categoriesWithImages.length > 0) {
+      setUploading(true);
+      try {
+        for (const category of categoriesWithImages) {
+          const uploadForm = new FormData();
+          uploadForm.append("category", category.key);
+          imagesByCategory[category.key].forEach(({ file }) => uploadForm.append("files", file));
+
+          const res = await fetch("/api/uploads", { method: "POST", body: uploadForm });
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.error ?? "画像のアップロードに失敗しました。");
+          }
+          (data.urls as string[]).forEach((url) => formData.append(`imageUrls_${category.key}`, url));
+        }
+      } catch (err) {
+        setUploadError(err instanceof Error ? err.message : "画像のアップロードに失敗しました。");
+        setUploading(false);
+        return;
+      }
+      setUploading(false);
+    }
+
+    formAction(formData);
   }
 
   return (
-    <form action={formAction} className="space-y-6">
-      {state.error && (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      {(uploadError || state.error) && (
         <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
-          {state.error}
+          {uploadError ?? state.error}
         </p>
       )}
 
+      {uploading && (
+        <p className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-[13px] text-sky-700">
+          写真をアップロードしています…
+        </p>
+      )}
       {pending && (
         <p className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-[13px] text-sky-700">
-          AIがテキストと画像を生成しています。1分ほどかかることがあります…
+          AIがページ内のテキストと画像（10〜20点ほど）を生成しています。数分かかることがあります…
         </p>
       )}
 
@@ -85,7 +117,7 @@ export function HearingSheetForm({ templates }: { templates: TemplateDefinition[
                       name="templateId"
                       value={template.id}
                       checked={templateId === template.id}
-                      onChange={() => handleTemplateChange(template.id)}
+                      onChange={() => setTemplateId(template.id)}
                       className="h-4 w-4 text-sky-600 focus:ring-0"
                       required
                     />
@@ -184,51 +216,54 @@ export function HearingSheetForm({ templates }: { templates: TemplateDefinition[
         </label>
       </div>
 
-      {selectedTemplate && selectedTemplate.imageSlots.length > 0 && (
-        <div className={cardClassName}>
-          <p className="text-[13px] font-medium text-slate-700">画像（任意）</p>
-          <p className="mt-1 text-[12px] leading-relaxed text-slate-400">
-            使いたい実際の画像があればアップロードしてください。未指定の箇所はAIが自動生成します。
-          </p>
+      <div className={cardClassName}>
+        <p className="text-[13px] font-medium text-slate-700">写真（カテゴリ別・任意）</p>
+        <p className="mt-1 text-[12px] leading-relaxed text-slate-400">
+          使いたい実際の写真をカテゴリごとにアップロードしてください。指定の無いカテゴリや不足分はAIが自動生成します。ロゴは常にAIが生成します。
+        </p>
 
-          <div className="mt-5 space-y-5">
-            {selectedTemplate.imageSlots.map((slot) => (
-              <div
-                key={`${templateId}-${slot.id}`}
-                className="flex flex-col gap-3 border-t border-slate-100 pt-5 first:border-t-0 first:pt-0 sm:flex-row sm:items-center"
-              >
-                {previews[slot.id] && (
-                  <div className="group relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-slate-200">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={previews[slot.id]} alt="" className="h-full w-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => removeImage(slot.id)}
-                      className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-[11px] text-white opacity-0 transition-opacity group-hover:opacity-100"
-                      aria-label="削除"
+        <div className="mt-5 space-y-5">
+          {IMAGE_CATEGORIES.map((category) => (
+            <div key={category.key} className="border-t border-slate-100 pt-5 first:border-t-0 first:pt-0">
+              <label className="block">
+                <span className="text-[13px] font-medium text-slate-700">{category.label}</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => {
+                    handleImagesSelected(category.key, e.target.files);
+                    e.target.value = "";
+                  }}
+                  className="mt-2 block w-full text-[13px] text-slate-700 file:mr-3 file:rounded-full file:border-0 file:bg-sky-600 file:px-4 file:py-2 file:text-[13px] file:text-white"
+                />
+              </label>
+
+              {imagesByCategory[category.key].length > 0 && (
+                <ul className="mt-3 grid grid-cols-4 gap-3 sm:grid-cols-6">
+                  {imagesByCategory[category.key].map((img, i) => (
+                    <li
+                      key={img.previewUrl}
+                      className="group relative aspect-square overflow-hidden rounded-lg border border-slate-200"
                     >
-                      ×
-                    </button>
-                  </div>
-                )}
-                <label className="block flex-1">
-                  <span className="text-[13px] font-medium text-slate-700">{slot.label}</span>
-                  <input
-                    type="file"
-                    name={`image_${slot.id}`}
-                    accept="image/*"
-                    ref={(el) => {
-                      fileInputRefs.current[slot.id] = el;
-                    }}
-                    onChange={(e) => handleImageSelected(slot.id, e.target.files)}
-                    className="mt-2 block w-full text-[13px] text-slate-700 file:mr-3 file:rounded-full file:border-0 file:bg-sky-600 file:px-4 file:py-2 file:text-[13px] file:text-white"
-                  />
-                </label>
-              </div>
-            ))}
-          </div>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={img.previewUrl} alt="" className="h-full w-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => removeImage(category.key, i)}
+                        className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-[11px] text-white opacity-0 transition-opacity group-hover:opacity-100"
+                        aria-label="削除"
+                      >
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
         </div>
-      )}
+      </div>
 
       <div className={cardClassName}>
         <label className="block">
@@ -244,10 +279,10 @@ export function HearingSheetForm({ templates }: { templates: TemplateDefinition[
 
       <button
         type="submit"
-        disabled={pending || templates.length === 0}
+        disabled={busy || templates.length === 0}
         className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-sky-600 px-7 py-3.5 text-[13px] font-medium tracking-[0.08em] text-white shadow-sm shadow-sky-200 transition-transform hover:-translate-y-0.5 hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
       >
-        {pending ? "生成中..." : "ヒアリングシートを送信"}
+        {uploading ? "アップロード中..." : pending ? "生成中..." : "ヒアリングシートを送信"}
         <span aria-hidden>→</span>
       </button>
     </form>

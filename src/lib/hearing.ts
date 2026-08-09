@@ -1,5 +1,6 @@
 import { mkdir, readFile, readdir, writeFile } from "fs/promises";
 import path from "path";
+import type { ImageCategoryKey } from "./imageCategories";
 
 export type HearingSheet = {
   slug: string;
@@ -20,12 +21,11 @@ export type HearingSheet = {
   generationError?: string;
   cloudflareUrl?: string;
   cloudflareError?: string;
-  /** slot id -> file name (under data/hearings/uploads/<slug>/) of a user-uploaded image for that slot. */
-  uploadedImages?: Record<string, string>;
+  /** category -> public Supabase Storage URLs of user-uploaded photos. */
+  uploadedImages?: Partial<Record<ImageCategoryKey, string[]>>;
 };
 
 const DATA_DIR = path.join(process.cwd(), "data", "hearings");
-const UPLOADS_DIR = path.join(DATA_DIR, "uploads");
 
 /** ASCII-only slug: URLs, file paths, and Cloudflare Pages project names all reject non-ASCII, so
  * Japanese clinic names (the common case) always fall back to the `clinic-<suffix>` form. */
@@ -37,21 +37,6 @@ export function generateSlug(clinicName: string): string {
     .replace(/^-+|-+$/g, "");
   const suffix = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   return base ? `${base}-${suffix}` : `clinic-${suffix}`;
-}
-
-/** Persists an uploaded image for a given hearing/slot and returns the stored file name. */
-export async function saveUploadedImage(slug: string, slotId: string, file: File): Promise<string> {
-  const dir = path.join(UPLOADS_DIR, slug);
-  await mkdir(dir, { recursive: true });
-  const ext = path.extname(file.name) || ".jpg";
-  const fileName = `${slotId}${ext}`;
-  const buffer = Buffer.from(await file.arrayBuffer());
-  await writeFile(path.join(dir, fileName), buffer);
-  return fileName;
-}
-
-export function resolveUploadedImagePath(slug: string, fileName: string): string {
-  return path.join(UPLOADS_DIR, slug, fileName);
 }
 
 export async function saveHearing(input: Omit<HearingSheet, "createdAt">): Promise<HearingSheet> {

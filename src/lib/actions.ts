@@ -3,9 +3,10 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { listTemplates } from "./templates";
-import { generateSlug, getHearing, saveHearing, saveUploadedImage, updateHearing } from "./hearing";
+import { generateSlug, getHearing, saveHearing, updateHearing, type HearingSheet } from "./hearing";
 import { generateSite } from "./siteGenerator";
 import { deployGeneratedSiteToCloudflare } from "./cloudflareDeploy";
+import { IMAGE_CATEGORIES } from "./imageCategories";
 
 export type HearingFormState = {
   error: string | null;
@@ -43,11 +44,13 @@ export async function createHearingAction(
   const colorSchemeOption = template.colorSchemes.find((c) => c.id === colorScheme);
   const slug = generateSlug(clinicName);
 
-  const uploadedImages: Record<string, string> = {};
-  for (const slot of template.imageSlots) {
-    const file = formData.get(`image_${slot.id}`);
-    if (file instanceof File && file.size > 0) {
-      uploadedImages[slot.id] = await saveUploadedImage(slug, slot.id, file);
+  // Photos are uploaded to Supabase Storage client-side before this action runs (Server Actions
+  // cap request bodies at 1MB, far too small for real photos) — only their URLs arrive here.
+  const uploadedImages: NonNullable<HearingSheet["uploadedImages"]> = {};
+  for (const category of IMAGE_CATEGORIES) {
+    const urls = formData.getAll(`imageUrls_${category.key}`).filter((v): v is string => typeof v === "string" && v.length > 0);
+    if (urls.length > 0) {
+      uploadedImages[category.key] = urls;
     }
   }
 
