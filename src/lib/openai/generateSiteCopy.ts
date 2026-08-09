@@ -29,6 +29,7 @@ function buildUserPrompt(hearing: HearingSheet, targets: TextTarget[]): string {
     hearing.address && `住所: ${hearing.address}`,
     hearing.phone && `電話番号: ${hearing.phone}`,
     hearing.line && `LINE: ${hearing.line}`,
+    hearing.department && `診療科: ${hearing.department}`,
     hearing.hours && `診療時間（受付時間）: ${hearing.hours}`,
     hearing.features && `医院の特徴: ${hearing.features}`,
     hearing.request && `ご要望: ${hearing.request}`,

@@ -13,11 +13,15 @@ function formatDate(iso: string): string {
   });
 }
 
-const rows: { key: "directorName" | "address" | "phone" | "line" | "hours" | "features" | "request"; label: string }[] = [
+const rows: {
+  key: "directorName" | "address" | "phone" | "line" | "department" | "hours" | "features" | "request";
+  label: string;
+}[] = [
   { key: "directorName", label: "院長名" },
   { key: "address", label: "住所" },
   { key: "phone", label: "電話番号" },
   { key: "line", label: "LINE" },
+  { key: "department", label: "診療科" },
   { key: "hours", label: "診療時間" },
   { key: "features", label: "医院の特徴" },
   { key: "request", label: "ご要望" },

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { startTransition, useActionState, useState } from "react";
 import { createHearingAction, type HearingFormState } from "@/lib/actions";
 import type { TemplateDefinition } from "@/lib/templates";
 import { IMAGE_CATEGORIES, type ImageCategoryKey } from "@/lib/imageCategories";
@@ -13,6 +13,37 @@ const inputClassName =
 const cardClassName = "rounded-2xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-100 sm:p-8";
 
 const initialState: HearingFormState = { error: null };
+
+const DEFAULT_CLINIC_NAME = "西にっぽり内科消化器クリニック";
+const DEFAULT_DIRECTOR_NAME = "森川 麗（もりかわ れい）";
+const DEFAULT_ADDRESS = "〒116-0013 東京都荒川区西日暮里5-11-8 三共セントラルプラザビル7F";
+const DEFAULT_PHONE = "03-3805-8181";
+const DEFAULT_LINE = "@abcabc";
+const DEFAULT_DEPARTMENT = "内科・内視鏡内科・消化器内科・肝臓内科";
+const DEFAULT_HOURS = [
+  "月・火・木・金：9:30〜12:30 / 14:30〜18:30",
+  "水：9:30〜12:30",
+  "土：9:30〜12:30 / 14:00〜17:00",
+  "日・祝：休診",
+].join("\n");
+const DEFAULT_FEATURES = [
+  "一般内科・生活習慣病から消化器疾患、肝臓疾患まで幅広く診療",
+  "胃・大腸内視鏡検査に対応",
+  "土曜日・日曜日も内視鏡検査に対応",
+  "西日暮里駅から徒歩2〜3分程度でアクセスしやすい",
+  "Web予約・LINE予約に対応",
+  "女性院長による診療で、特にお腹の症状や排便の悩みなど、相談しづらい症状にも配慮",
+  "健康診断・がん検診、人間ドック、予防接種、禁煙外来などにも対応",
+  "「患者様一人ひとりの不安に寄り添い、安心して通えるクリニック」を目指している",
+].join("\n");
+const DEFAULT_REQUEST = [
+  "内視鏡検査に強いクリニック",
+  "女性院長による安心・丁寧な診療",
+  "土曜日・日曜日にも検査可能",
+  "西日暮里駅から徒歩圏内",
+  "LINE・Webから簡単に予約可能",
+  "一般内科から消化器・肝臓まで幅広く対応",
+].join("\n");
 
 function emptyImagesByCategory(): Record<ImageCategoryKey, PickedImage[]> {
   const entries = IMAGE_CATEGORIES.map((c) => [c.key, [] as PickedImage[]] as const);
@@ -71,7 +102,9 @@ export function HearingSheetForm({ templates }: { templates: TemplateDefinition[
       setUploading(false);
     }
 
-    formAction(formData);
+    startTransition(() => {
+      formAction(formData);
+    });
   }
 
   return (
@@ -171,27 +204,69 @@ export function HearingSheetForm({ templates }: { templates: TemplateDefinition[
               クリニック名
               <span className="ml-1 text-sky-500">*</span>
             </span>
-            <input type="text" name="clinicName" placeholder="〇〇クリニック" required className={inputClassName} />
+            <input
+              type="text"
+              name="clinicName"
+              placeholder="〇〇クリニック"
+              defaultValue={DEFAULT_CLINIC_NAME}
+              required
+              className={inputClassName}
+            />
           </label>
 
           <label className="block">
             <span className="text-[13px] font-medium text-slate-700">院長名</span>
-            <input type="text" name="directorName" placeholder="山田 太郎" className={inputClassName} />
+            <input
+              type="text"
+              name="directorName"
+              placeholder="山田 太郎"
+              defaultValue={DEFAULT_DIRECTOR_NAME}
+              className={inputClassName}
+            />
           </label>
 
           <label className="block">
             <span className="text-[13px] font-medium text-slate-700">住所</span>
-            <input type="text" name="address" placeholder="東京都〇〇区〇〇1-2-3" className={inputClassName} />
+            <input
+              type="text"
+              name="address"
+              placeholder="東京都〇〇区〇〇1-2-3"
+              defaultValue={DEFAULT_ADDRESS}
+              className={inputClassName}
+            />
           </label>
 
           <label className="block">
             <span className="text-[13px] font-medium text-slate-700">電話番号</span>
-            <input type="tel" name="phone" placeholder="03-1234-5678" className={inputClassName} />
+            <input
+              type="tel"
+              name="phone"
+              placeholder="03-1234-5678"
+              defaultValue={DEFAULT_PHONE}
+              className={inputClassName}
+            />
           </label>
 
           <label className="block">
             <span className="text-[13px] font-medium text-slate-700">LINE</span>
-            <input type="text" name="line" placeholder="@example" className={inputClassName} />
+            <input
+              type="text"
+              name="line"
+              placeholder="@example"
+              defaultValue={DEFAULT_LINE}
+              className={inputClassName}
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-[13px] font-medium text-slate-700">診療科</span>
+            <input
+              type="text"
+              name="department"
+              placeholder="内科・小児科"
+              defaultValue={DEFAULT_DEPARTMENT}
+              className={inputClassName}
+            />
           </label>
         </div>
 
@@ -200,7 +275,8 @@ export function HearingSheetForm({ templates }: { templates: TemplateDefinition[
           <textarea
             name="hours"
             placeholder={"例:\n月〜金 9:00-13:00 / 15:00-19:00\n土 9:00-13:00\n日・祝 休診"}
-            rows={3}
+            defaultValue={DEFAULT_HOURS}
+            rows={4}
             className={inputClassName}
           />
         </label>
@@ -210,7 +286,8 @@ export function HearingSheetForm({ templates }: { templates: TemplateDefinition[
           <textarea
             name="features"
             placeholder="例: 土日診療、キッズスペース完備、駅から徒歩3分"
-            rows={3}
+            defaultValue={DEFAULT_FEATURES}
+            rows={8}
             className={inputClassName}
           />
         </label>
@@ -271,7 +348,8 @@ export function HearingSheetForm({ templates }: { templates: TemplateDefinition[
           <textarea
             name="request"
             placeholder="デザインや内容についての要望があれば入力してください。"
-            rows={4}
+            defaultValue={DEFAULT_REQUEST}
+            rows={6}
             className={inputClassName}
           />
         </label>

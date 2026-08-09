@@ -65,6 +65,7 @@ export async function createHearingAction(
     address: requiredField(formData, "address"),
     phone: requiredField(formData, "phone"),
     line: requiredField(formData, "line"),
+    department: requiredField(formData, "department"),
     hours: requiredField(formData, "hours"),
     features: requiredField(formData, "features"),
     request: requiredField(formData, "request"),

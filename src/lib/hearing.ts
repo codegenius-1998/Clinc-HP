@@ -13,6 +13,7 @@ export type HearingSheet = {
   address: string;
   phone: string;
   line: string;
+  department: string;
   hours: string;
   features: string;
   request: string;
