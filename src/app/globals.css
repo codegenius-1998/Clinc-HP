@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f6f9fc;
+  --foreground: #1b2433;
+  --font-noto-sans-jp: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-noto-sans-jp);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), sans-serif;
+}
