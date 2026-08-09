@@ -1,8 +1,8 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState } from "react";
 import { createHearingAction, type HearingFormState } from "@/lib/actions";
-import type { TemplateSummary } from "@/lib/templates";
+import type { TemplateDefinition } from "@/lib/templates";
 
 const inputClassName =
   "mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[14px] text-slate-900 placeholder:text-slate-400 focus:border-sky-400 focus:outline-none";
@@ -11,11 +11,41 @@ const cardClassName = "rounded-2xl border border-slate-200 bg-white p-6 shadow-s
 
 const initialState: HearingFormState = { error: null };
 
-export function HearingSheetForm({ templates }: { templates: TemplateSummary[] }) {
+export function HearingSheetForm({ templates }: { templates: TemplateDefinition[] }) {
   const [templateId, setTemplateId] = useState(templates[0]?.id ?? "");
   const [state, formAction, pending] = useActionState(createHearingAction, initialState);
+  const [previews, setPreviews] = useState<Record<string, string>>({});
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const selectedTemplate = templates.find((t) => t.id === templateId) ?? templates[0];
+
+  function handleTemplateChange(id: string) {
+    setTemplateId(id);
+    setPreviews((prev) => {
+      Object.values(prev).forEach((url) => URL.revokeObjectURL(url));
+      return {};
+    });
+  }
+
+  function handleImageSelected(slotId: string, fileList: FileList | null) {
+    const file = fileList?.[0];
+    if (!file) return;
+    setPreviews((prev) => {
+      if (prev[slotId]) URL.revokeObjectURL(prev[slotId]);
+      return { ...prev, [slotId]: URL.createObjectURL(file) };
+    });
+  }
+
+  function removeImage(slotId: string) {
+    const input = fileInputRefs.current[slotId];
+    if (input) input.value = "";
+    setPreviews((prev) => {
+      if (prev[slotId]) URL.revokeObjectURL(prev[slotId]);
+      const next = { ...prev };
+      delete next[slotId];
+      return next;
+    });
+  }
 
   return (
     <form action={formAction} className="space-y-6">
@@ -55,7 +85,7 @@ export function HearingSheetForm({ templates }: { templates: TemplateSummary[] }
                       name="templateId"
                       value={template.id}
                       checked={templateId === template.id}
-                      onChange={() => setTemplateId(template.id)}
+                      onChange={() => handleTemplateChange(template.id)}
                       className="h-4 w-4 text-sky-600 focus:ring-0"
                       required
                     />
@@ -153,6 +183,52 @@ export function HearingSheetForm({ templates }: { templates: TemplateSummary[] }
           />
         </label>
       </div>
+
+      {selectedTemplate && selectedTemplate.imageSlots.length > 0 && (
+        <div className={cardClassName}>
+          <p className="text-[13px] font-medium text-slate-700">画像（任意）</p>
+          <p className="mt-1 text-[12px] leading-relaxed text-slate-400">
+            使いたい実際の画像があればアップロードしてください。未指定の箇所はAIが自動生成します。
+          </p>
+
+          <div className="mt-5 space-y-5">
+            {selectedTemplate.imageSlots.map((slot) => (
+              <div
+                key={`${templateId}-${slot.id}`}
+                className="flex flex-col gap-3 border-t border-slate-100 pt-5 first:border-t-0 first:pt-0 sm:flex-row sm:items-center"
+              >
+                {previews[slot.id] && (
+                  <div className="group relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-slate-200">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={previews[slot.id]} alt="" className="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => removeImage(slot.id)}
+                      className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-[11px] text-white opacity-0 transition-opacity group-hover:opacity-100"
+                      aria-label="削除"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+                <label className="block flex-1">
+                  <span className="text-[13px] font-medium text-slate-700">{slot.label}</span>
+                  <input
+                    type="file"
+                    name={`image_${slot.id}`}
+                    accept="image/*"
+                    ref={(el) => {
+                      fileInputRefs.current[slot.id] = el;
+                    }}
+                    onChange={(e) => handleImageSelected(slot.id, e.target.files)}
+                    className="mt-2 block w-full text-[13px] text-slate-700 file:mr-3 file:rounded-full file:border-0 file:bg-sky-600 file:px-4 file:py-2 file:text-[13px] file:text-white"
+                  />
+                </label>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className={cardClassName}>
         <label className="block">

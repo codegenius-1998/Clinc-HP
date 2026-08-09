@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { listTemplates } from "./templates";
-import { getHearing, saveHearing, updateHearing } from "./hearing";
+import { generateSlug, getHearing, saveHearing, saveUploadedImage, updateHearing } from "./hearing";
 import { generateSite } from "./siteGenerator";
 import { deployGeneratedSiteToCloudflare } from "./cloudflareDeploy";
 
@@ -41,8 +41,18 @@ export async function createHearingAction(
     return { error: "選択されたテンプレートが見つかりません。" };
   }
   const colorSchemeOption = template.colorSchemes.find((c) => c.id === colorScheme);
+  const slug = generateSlug(clinicName);
+
+  const uploadedImages: Record<string, string> = {};
+  for (const slot of template.imageSlots) {
+    const file = formData.get(`image_${slot.id}`);
+    if (file instanceof File && file.size > 0) {
+      uploadedImages[slot.id] = await saveUploadedImage(slug, slot.id, file);
+    }
+  }
 
   const hearing = await saveHearing({
+    slug,
     templateId: template.id,
     templateLabel: template.label,
     colorScheme,
@@ -55,6 +65,7 @@ export async function createHearingAction(
     hours: requiredField(formData, "hours"),
     features: requiredField(formData, "features"),
     request: requiredField(formData, "request"),
+    uploadedImages,
   });
 
   try {

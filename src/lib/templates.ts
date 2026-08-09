@@ -82,7 +82,7 @@ async function readTemplateDefinition(dirName: string): Promise<TemplateDefiniti
   }
 }
 
-export async function listTemplates(): Promise<TemplateSummary[]> {
+export async function listTemplates(): Promise<TemplateDefinition[]> {
   const templateDirs = await listTemplateDirs();
   const templates = await Promise.all(templateDirs.map(readTemplateDefinition));
   return templates.filter((t): t is TemplateDefinition => t !== null);

@@ -1,8 +1,8 @@
 import { cp, mkdir, readFile, rm, writeFile } from "fs/promises";
 import path from "path";
 import * as cheerio from "cheerio";
-import { getTemplateDefinition, TEMPLATES_DIR, type TemplateContentSlot } from "./templates";
-import type { HearingSheet } from "./hearing";
+import { getTemplateDefinition, TEMPLATES_DIR, type TemplateContentSlot, type TemplateImageSlot } from "./templates";
+import { resolveUploadedImagePath, type HearingSheet } from "./hearing";
 import { generateSiteCopy } from "./openai/generateSiteCopy";
 import { generateSiteImage } from "./openai/generateSiteImage";
 
@@ -57,15 +57,27 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
 
   const { direct, aiSlots } = splitSlots(hearing, template.contentSlots);
 
-  const [copyMap, images] = await Promise.all([
+  const uploadedImages = hearing.uploadedImages ?? {};
+  const aiImageSlots = template.imageSlots.filter((slot) => !uploadedImages[slot.id]);
+  const uploadedImageSlots = template.imageSlots.filter((slot) => uploadedImages[slot.id]);
+
+  const [copyMap, aiImages, uploadedImageFiles] = await Promise.all([
     generateSiteCopy(hearing, aiSlots),
     Promise.all(
-      template.imageSlots.map(async (slot) => ({
+      aiImageSlots.map(async (slot) => ({
         slot,
         buffer: await generateSiteImage(hearing, slot),
       }))
     ),
+    Promise.all(
+      uploadedImageSlots.map(async (slot) => ({
+        slot,
+        buffer: await readFile(resolveUploadedImagePath(hearing.slug, uploadedImages[slot.id])),
+      }))
+    ),
   ]);
+
+  const images: { slot: TemplateImageSlot; buffer: Buffer }[] = [...aiImages, ...uploadedImageFiles];
 
   const htmlPath = path.join(outDir, template.htmlFile);
   const html = await readFile(htmlPath, "utf-8");
