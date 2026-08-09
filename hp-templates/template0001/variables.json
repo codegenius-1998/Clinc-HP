@@ -202,11 +202,33 @@
     "generationRules": [
       "アップロード写真は加工せずそのまま掲載する。同一写真の重複利用はしない（カテゴリ内で使い切ったら以降は AI 生成）。",
       "style は配置役割で決める: logo（フラットなベクター調ロゴ）/ icon（装飾アイコン）/ photo（実写風）。",
-      "logo / icon: 読める文字を含めない。医療を連想させるシンプルな図形。",
+      "logo: PNG または SVG で書き出す。背景は必ず透明（Bgなし／transparent）。白・単色の塗り背景や白キャンバスを付けない。読める文字を含めない。医療を連想させるシンプルな図形。",
+      "icon: 読める文字を含めない。医療を連想させるシンプルな図形。",
       "photo: 明るく清潔感のある医療機関らしい実写。顔のクローズアップ・透かし・文字入れ禁止。",
       "どの入力カテゴリにも合わない枠（ロゴ・バナー装飾など）は AI 生成に回す。",
-      "画像生成・差し替え時は size.width / size.height（元ピクセル）を目安にする。厳密一致は不要だが、aspectRatio は崩さない。"
+      "画像生成・差し替え時は size.width / size.height（元ピクセル）を目安にする。厳密一致は不要だが、aspectRatio は崩さない。",
+      "全ての画像で、白い余白・白フチ・パディング状の空白帯を画像内に作らない。被写体または図形がキャンバス端まで届く（edge-to-edge / full-bleed）こと。上下左右に白い枠やレターボックスを入れない。"
     ],
+    "logoFormat": {
+      "formats": ["png", "svg"],
+      "background": "transparent",
+      "rule": "ロゴ（style: logo / images/logo.png / images/logo_footer.png）は PNG または SVG で作成し、背景なし（透明）にする。不透明な白背景・単色背景は禁止。"
+    },
+    "noWhiteMargin": {
+      "required": true,
+      "rule": "全ての画像（logo / icon / photo およびアップロード実写）について、画像ファイル内に白い空白余白を生じさせない。",
+      "do": [
+        "被写体・図形・背景をキャンバスの四辺まで伸ばす（full-bleed）",
+        "アスペクト比は size / display に合わせ、余白で埋めずに構図で合わせる",
+        "ロゴは PNG/SVG・透明背景で書き出し、マーク自体に白キャンバスを付けない"
+      ],
+      "dont": [
+        "上下左右の白い帯・白フチ・パディング",
+        "レターボックス／ピラーボックス（黒帯を含む無地帯）",
+        "小さな被写体を中央に置き周囲を白で埋める構図",
+        "ロゴを不透明な白／単色背景つきで書き出すこと"
+      ]
+    },
     "sizeSource": "元サイズはテンプレート同梱サンプルの実寸。display は index.html + css/style.css / css/slide.css の表示指定。",
     "placementHints": [
       {
@@ -214,6 +236,8 @@
         "role": "ヘッダーロゴ",
         "preferredCategory": null,
         "style": "logo",
+        "format": ["png", "svg"],
+        "background": "transparent",
         "size": { "width": 1100, "height": 120, "aspectRatio": "55:6" },
         "display": { "width": "300px", "maxWidth": "100%", "css": "#logo img" }
       },
@@ -222,6 +246,8 @@
         "role": "フッターロゴ",
         "preferredCategory": null,
         "style": "logo",
+        "format": ["png", "svg"],
+        "background": "transparent",
         "size": { "width": 1100, "height": 120, "aspectRatio": "55:6" },
         "display": { "width": "95%", "css": "img.wl / #footer-contents .left h3 img" }
       },
@@ -300,6 +326,8 @@
       "label": "ロゴ",
       "path": "images/logo.png",
       "selector": "#logo img",
+      "format": ["png", "svg"],
+      "background": "transparent",
       "size": { "width": 1100, "height": 120 },
       "displayWidth": "300px"
     },
@@ -308,6 +336,8 @@
       "label": "フッターロゴ",
       "path": "images/logo_footer.png",
       "selector": "#footer-contents img[src*='logo_footer']",
+      "format": ["png", "svg"],
+      "background": "transparent",
       "size": { "width": 1100, "height": 120 },
       "displayWidth": "95%"
     },

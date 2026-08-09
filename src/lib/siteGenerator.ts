@@ -1,7 +1,7 @@
 import { access, cp, mkdir, readFile, rm, writeFile } from "fs/promises";
 import path from "path";
 import * as cheerio from "cheerio";
-import { getTemplateDefinition, getTemplateReferenceDocs, TEMPLATES_DIR } from "./templates";
+import { getTemplateDefinition, getTemplateImageManifest, TEMPLATES_DIR, type TemplateLinkSlot } from "./templates";
 import type { HearingSheet } from "./hearing";
 import { collectImageTargets, collectTextTargets, HIDDEN_TEXT_VALUE, isPhoneLikeText, type ImageTarget } from "./htmlContent";
 import type { ImageCategoryKey } from "./imageCategories";
@@ -29,6 +29,78 @@ export async function generatedSiteExists(slug: string): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+/** Merges `{cssVar: value}` pairs into an existing `style="--a:1;--b:2"` attribute string,
+ * overwriting any variable already present and preserving the rest. */
+function mergeInlineStyle(existing: string | undefined, updates: Record<string, string>): string {
+  const declarations = new Map<string, string>();
+  for (const decl of (existing ?? "").split(";")) {
+    const [prop, ...rest] = decl.split(":");
+    const name = prop?.trim();
+    if (!name) continue;
+    declarations.set(name, rest.join(":").trim());
+  }
+  for (const [name, value] of Object.entries(updates)) {
+    declarations.set(name, value);
+  }
+  return Array.from(declarations.entries())
+    .map(([name, value]) => `${name}:${value}`)
+    .join(";");
+}
+
+/** Resolves a hearing-sheet field into the exact string a linkSlot's `href` template expects —
+ * digits/plus only for `tel:`, URL-encoded for the LINE ID and the maps query. */
+function resolveHearingFieldValue(field: string, hearing: HearingSheet): string | null {
+  switch (field) {
+    case "phone":
+      return hearing.phone ? hearing.phone.replace(/[^\d+]/g, "") : null;
+    case "line": {
+      if (!hearing.line) return null;
+      const id = hearing.line.trim();
+      return encodeURIComponent(id.startsWith("@") ? id : `@${id}`);
+    }
+    case "address":
+      return hearing.address ? encodeURIComponent(hearing.address) : null;
+    default:
+      return null;
+  }
+}
+
+/** Applies variables.json's `linkSlots`: fills each link/iframe from the matching hearing-sheet
+ * field, or hides it (its `<li>` if it has one) when there's no real value to point it at —
+ * never leaves a link pointed at the template's sample number/map/account. */
+function applyLinkSlots($: cheerio.CheerioAPI, linkSlots: TemplateLinkSlot[], hearing: HearingSheet): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function hide(el: any) {
+    const $el = $(el);
+    const $li = $el.closest("li");
+    ($li.length ? $li : $el).attr("style", "display:none");
+  }
+
+  for (const slot of linkSlots) {
+    const $matches = $(slot.selector);
+    if ($matches.length === 0) continue;
+
+    if (slot.connect === "hide-if-missing") {
+      $matches.each((_, el) => hide(el));
+      continue;
+    }
+    if (!slot.connect.startsWith("hearing.") || !slot.href) continue;
+
+    const field = slot.connect.slice("hearing.".length);
+    const value = resolveHearingFieldValue(field, hearing);
+    if (!value) {
+      $matches.each((_, el) => hide(el));
+      continue;
+    }
+
+    const url = slot.href.replace(`{${field}}`, value);
+    $matches.each((_, el) => {
+      const $el = $(el);
+      $el.attr($el.is("iframe") ? "src" : "href", url);
+    });
   }
 }
 
@@ -83,11 +155,13 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
     (key) => (uploadedImages[key]?.length ?? 0) > 0
   );
 
-  // --- generation plan: AI_GUIDE.md + the removed-images manifest + variables.json's sections
-  // are the template's own documentation of what each section/image is actually for — use them
-  // to decide which optional sections make sense to show, and to write a role-appropriate image
-  // prompt per placement (a logo needs a flat vector mark, not a photorealistic photo). ---
-  const { guide, imageManifest } = await getTemplateReferenceDocs(template.dirName);
+  // --- generation plan: variables.json's own sectionGuide/imageGuide/textGuide/linkGuide (plus the
+  // removed-images manifest) are the template's own documentation of what each section/image is
+  // actually for — use them to decide which optional sections make sense to show, and to write a
+  // role-appropriate image prompt per placement (a logo needs a flat vector mark, not a photo). ---
+  const imageManifest = await getTemplateImageManifest(template.dirName);
+  const customCssPath = path.join(outDir, template.customCssFile);
+  const currentCustomCss = await readFile(customCssPath, "utf-8").catch(() => "");
   const [categoryAssignment, plan] = await Promise.all([
     availableCategories.length > 0
       ? matchImagesToCategories(
@@ -95,7 +169,15 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
           availableCategories.map((key) => ({ key, sampleUrl: uploadedImages[key]![0] }))
         )
       : Promise.resolve({} as Record<string, ImageCategoryKey | null>),
-    planGeneration(hearing, template.sections, imageTargets, guide, imageManifest),
+    planGeneration(
+      hearing,
+      template.sections,
+      imageTargets,
+      template.layout,
+      currentCustomCss,
+      template.guideSummary,
+      imageManifest
+    ),
   ]);
 
   for (const section of template.sections) {
@@ -106,6 +188,26 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
         $(`a[href="${href}"]`).closest("li").attr("style", "display:none");
       }
     }
+  }
+
+  // Layout knobs (column counts, spacing, ...) are declared in variables.json as CSS custom
+  // properties written onto <html style="...">; apply whatever the plan chose, within the
+  // template's own documented bounds.
+  const layoutStyleUpdates: Record<string, string> = {};
+  for (const [key, knob] of Object.entries(template.layout)) {
+    const chosen = plan.layoutValues[key];
+    if (chosen === undefined) continue;
+    if (knob.min !== undefined && knob.max !== undefined) {
+      const numeric = Math.round(Number(chosen));
+      layoutStyleUpdates[knob.cssVar] = Number.isFinite(numeric)
+        ? String(Math.min(knob.max, Math.max(knob.min, numeric)))
+        : String(knob.value);
+    } else {
+      layoutStyleUpdates[knob.cssVar] = chosen;
+    }
+  }
+  if (Object.keys(layoutStyleUpdates).length > 0) {
+    $("html").attr("style", mergeInlineStyle($("html").attr("style"), layoutStyleUpdates));
   }
 
   // Each uploaded photo is used at most once per site — once a category runs out, remaining
@@ -163,23 +265,35 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
   for (const id of phoneTargetIds) {
     applyText(id, hearing.phone || HIDDEN_TEXT_VALUE);
   }
-  if (hearing.phone) {
-    $('a[href^="tel:"]').attr("href", `tel:${hearing.phone.replace(/[^\d+]/g, "")}`);
-  }
 
-  // Embedded Google Maps and LINE links are attributes, not visible text, so the copy pass never
-  // touches them — they'd otherwise stay pointed at the template's sample location/account forever.
-  if (hearing.address) {
-    const mapsSrc = `https://maps.google.com/maps?q=${encodeURIComponent(hearing.address)}&output=embed`;
-    $('iframe[src*="google.com/maps"]').attr("src", mapsSrc);
-  }
-  if (hearing.line) {
-    const lineId = hearing.line.trim();
-    const lineUrl = `https://line.me/R/ti/p/${encodeURIComponent(lineId.startsWith("@") ? lineId : `@${lineId}`)}`;
-    $('a[href*="lin.ee"], a[href*="line.me"]').attr("href", lineUrl);
+  // linkSlots (declared in variables.json) are attributes, not visible text, so the copy pass never
+  // touches them — without this they'd stay pointed at the template's sample number/map/account
+  // forever. Each is either filled from a real hearing-sheet value or, per the template's own
+  // policy, hidden entirely rather than left pointing at fake data.
+  applyLinkSlots($, template.linkSlots, hearing);
+
+  // Sample content the template author flagged as never real (dummy phone/menus, distributor manual
+  // links, a fabricated doctor schedule, ...) — hide unconditionally, or only when the hearing sheet
+  // truly has nothing to replace it with.
+  for (const target of template.virtualMaterialTargets) {
+    const shouldHide =
+      target.action === "hide" ||
+      target.action === "hide-if-no-staff-data" ||
+      (target.action === "hide-if-no-address" && !hearing.address);
+    if (!shouldHide) continue;
+    $(target.selector).each((_, el) => {
+      const $el = $(el);
+      const $li = $el.closest("li");
+      ($li.length ? $li : $el).attr("style", "display:none");
+    });
   }
 
   await writeFile(htmlPath, $.html(), "utf-8");
+
+  if (plan.customCss.trim()) {
+    await mkdir(path.dirname(customCssPath), { recursive: true });
+    await writeFile(customCssPath, plan.customCss, "utf-8");
+  }
 
   for (const { image, buffer } of [...aiImages, ...uploadedImageFiles]) {
     const imagePath = path.join(outDir, image.path);
@@ -190,9 +304,27 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
   const variablesPath = path.join(outDir, "variables.json");
   try {
     const raw = await readFile(variablesPath, "utf-8");
-    const data = JSON.parse(raw) as { colorScheme?: { active?: string } };
+    const data = JSON.parse(raw) as {
+      colorScheme?: { active?: string };
+      sections?: { id: string; visible?: boolean }[];
+      layout?: Record<string, { value?: string | number }>;
+      customCss?: { content?: string };
+    };
     if (data.colorScheme) {
       data.colorScheme.active = hearing.colorScheme;
+    }
+    for (const section of data.sections ?? []) {
+      if (plan.sectionVisibility[section.id] !== undefined) {
+        section.visible = plan.sectionVisibility[section.id];
+      }
+    }
+    for (const [key, knob] of Object.entries(data.layout ?? {})) {
+      if (plan.layoutValues[key] !== undefined) {
+        knob.value = plan.layoutValues[key];
+      }
+    }
+    if (data.customCss && plan.customCss.trim()) {
+      data.customCss.content = plan.customCss;
     }
     await writeFile(variablesPath, JSON.stringify(data, null, 2), "utf-8");
   } catch {
