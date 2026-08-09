@@ -148,6 +148,18 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
     $('a[href^="tel:"]').attr("href", `tel:${hearing.phone.replace(/[^\d+]/g, "")}`);
   }
 
+  // Embedded Google Maps and LINE links are attributes, not visible text, so the copy pass never
+  // touches them — they'd otherwise stay pointed at the template's sample location/account forever.
+  if (hearing.address) {
+    const mapsSrc = `https://maps.google.com/maps?q=${encodeURIComponent(hearing.address)}&output=embed`;
+    $('iframe[src*="google.com/maps"]').attr("src", mapsSrc);
+  }
+  if (hearing.line) {
+    const lineId = hearing.line.trim();
+    const lineUrl = `https://line.me/R/ti/p/${encodeURIComponent(lineId.startsWith("@") ? lineId : `@${lineId}`)}`;
+    $('a[href*="lin.ee"], a[href*="line.me"]').attr("href", lineUrl);
+  }
+
   await writeFile(htmlPath, $.html(), "utf-8");
 
   for (const { image, buffer } of [...aiImages, ...uploadedImageFiles]) {

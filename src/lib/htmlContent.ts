@@ -92,6 +92,17 @@ export function collectTextTargets($: CheerioAPI): { targets: TextTarget[]; appl
   const bodyNode = $("body").get(0);
   if (bodyNode) walk(bodyNode as import("domhandler").Element);
 
+  // `alt` text (e.g. the logo's `alt="東京横浜サンプル医院"`) carries real content but isn't a text
+  // node, so the walk above never sees it — collect it separately as its own rewritable target.
+  $("img[alt]").each((_, el) => {
+    const $el = $(el);
+    const alt = $el.attr("alt") ?? "";
+    if (!alt.trim()) return;
+    addTarget("img[alt]", $el.attr("class") ?? "", alt, (value) => {
+      $el.attr("alt", value.trim() === HIDDEN_TEXT_VALUE ? "" : value);
+    });
+  });
+
   return {
     targets,
     apply(id, value) {
