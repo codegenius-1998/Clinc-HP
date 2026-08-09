@@ -1,10 +1,12 @@
 import { getSupabaseClient } from "@/lib/supabase";
-import { isImageCategoryKey } from "@/lib/imageCategories";
 
 const BUCKET = "site-images";
 const PREFIX = "clinc-hp";
 const MAX_FILES = 10;
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
+// Not limited to the marketing IMAGE_CATEGORIES — this is just a storage path segment, and other
+// upload flows (e.g. a staff member's own photo) use their own category names ("staff").
+const CATEGORY_PATTERN = /^[a-z0-9_-]{1,32}$/i;
 
 export async function POST(request: Request) {
   const supabase = getSupabaseClient();
@@ -20,7 +22,7 @@ export async function POST(request: Request) {
   }
 
   const category = formData.get("category");
-  if (typeof category !== "string" || !isImageCategoryKey(category)) {
+  if (typeof category !== "string" || !CATEGORY_PATTERN.test(category)) {
     return Response.json({ error: "カテゴリが不正です。" }, { status: 400 });
   }
 

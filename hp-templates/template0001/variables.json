@@ -83,20 +83,21 @@
   },
 
   "sectionGuide": {
-    "summary": "単一ページLP。ヘッダー／メインビジュアル／本文セクション／ギャラリー／フッターで構成する。セクションの表示切替は sections[].visible と data-visible で行い、非表示時は navHrefs のナビ項目も連動して隠す。",
+    "summary": "単一ページLP。ヘッダー／メインビジュアル／本文セクション／サイドバー／フッターで構成する。セクションの表示切替は sections[].visible と data-visible で行い、非表示時は navHrefs のナビ項目も連動して隠す。",
     "pageFlow": [
-      "header（ロゴ・バナー・電話・文字サイズ）",
+      "header（ロゴ・電話・文字サイズ）",
       "menubar（ページ内アンカーナビ）",
       "mainimg（ヒーロースライド＋予約CTA）",
-      "about → service → staff → faq → access → contact",
-      "thumbnail-slide（ギャラリー）",
+      "main-contents（about → service → staff → faq → access → contact）",
+      "sub-contents（サイドバー：メニュータイトル + .submenu）",
       "footer-contents / footermenu / footer"
     ],
     "rules": [
       "removable: true のセクションのみ、ヒアリング内容で埋められない場合に非表示にしてよい。",
       "contact は常に表示（removable: false）。",
       "迷ったら表示のままにする。",
-      "セクションを非表示にするときは selector の data-visible=\"false\" と、navHrefs に対応するナビ li を非表示にする。"
+      "セクションを非表示にするときは selector の data-visible=\"false\" と、navHrefs に対応する #menubar / .submenu のナビ li を非表示にする。",
+      ".sub-contents の h3「メニュータイトル」はサイドバー見出し。医院名や「メニュー」など自然な短い見出しに差し替える（プレースホルダーのまま残さない）。"
     ]
   },
   "sections": [
@@ -105,7 +106,7 @@
       "label": "当院について",
       "selector": "#about",
       "visible": true,
-      "navHrefs": ["#about"],
+      "navHrefs": ["#about", "#link1", "#link2", "#link3"],
       "removable": true,
       "description": "医院紹介の中核。内部ブロック #link1（当院について）・#link2（初診の方へ）・#link3（院長挨拶）で構成する。",
       "blocks": [
@@ -172,47 +173,74 @@
         "key": "exterior",
         "label": "外部写真",
         "whatToUpload": "医院の外観・入口・看板・建物まわり。",
-        "usedFor": ["ヒーロー背景の外観表現", "ギャラリーの外観カット", "アクセス周辺の雰囲気"]
+        "usedFor": ["ヒーロー背景の外観表現", "アクセス周辺の雰囲気"]
       },
       {
         "key": "interior",
         "label": "内部写真",
         "whatToUpload": "受付・待合・廊下・診察室など院内の空間。",
-        "usedFor": ["#about の医院紹介写真", "診療科目カードの院内カット", "ギャラリーの内観"]
-      },
-      {
-        "key": "director",
-        "label": "スタッフ写真",
-        "whatToUpload": "院長・医師・スタッフの人物写真（顔がはっきり写る実写を推奨）。",
-        "usedFor": ["#about の院長挨拶写真", "#staff の各スタッフ写真", "出勤表と対応する人物カット"]
+        "usedFor": ["#about の医院紹介写真", "診療科目カードの院内カット"]
       },
       {
         "key": "atmosphere",
         "label": "治療雰囲気写真",
         "whatToUpload": "診療・施術の雰囲気が伝わる写真（手元・機器まわり・患者対応の様子など。顔のクローズアップは避ける）。",
-        "usedFor": ["初診案内の挿絵", "診療科目カード", "ギャラリーの施術雰囲気"]
-      },
-      {
-        "key": "equipment",
-        "label": "治療機器",
-        "whatToUpload": "医療機器・設備の写真。",
-        "usedFor": ["診療科目・設備紹介の挿絵", "ギャラリーの機器カット"]
+        "usedFor": ["初診案内の挿絵", "診療科目カード", "ヒーローの雰囲気カット"]
       }
     ],
     "generationRules": [
       "アップロード写真は加工せずそのまま掲載する。同一写真の重複利用はしない（カテゴリ内で使い切ったら以降は AI 生成）。",
-      "style は配置役割で決める: logo（フラットなベクター調ロゴ）/ icon（装飾アイコン）/ photo（実写風）。",
-      "logo: PNG または SVG で書き出す。背景は必ず透明（Bgなし／transparent）。白・単色の塗り背景や白キャンバスを付けない。読める文字を含めない。医療を連想させるシンプルな図形。",
+      "style は配置役割で決める: logo（医療マーク）/ icon（装飾アイコン）/ photo（実写風）。",
+      "logo: PNG のみ・透明背景。images/logo.png は約 128×128 の正方形の医療系マークのみを生成する。医院名（clinicName）は画像に描き込まず、HTML のテキスト（#logo .clinic-name）で表示する。十字パステル固定デザインは使わない。診療科・特徴・要望から毎回異なる医療モチーフ（聴診器・ハート・十字・葉・盾・波など）を選び、同じ構図の量産を避ける。",
       "icon: 読める文字を含めない。医療を連想させるシンプルな図形。",
       "photo: 明るく清潔感のある医療機関らしい実写。顔のクローズアップ・透かし・文字入れ禁止。",
-      "どの入力カテゴリにも合わない枠（ロゴ・バナー装飾など）は AI 生成に回す。",
+      "どの入力カテゴリにも合わない枠（ロゴなど）は AI 生成に回す。",
       "画像生成・差し替え時は size.width / size.height（元ピクセル）を目安にする。厳密一致は不要だが、aspectRatio は崩さない。",
       "全ての画像で、白い余白・白フチ・パディング状の空白帯を画像内に作らない。被写体または図形がキャンバス端まで届く（edge-to-edge / full-bleed）こと。上下左右に白い枠やレターボックスを入れない。"
     ],
     "logoFormat": {
-      "formats": ["png", "svg"],
+      "formats": ["png"],
       "background": "transparent",
-      "rule": "ロゴ（style: logo / images/logo.png / images/logo_footer.png）は PNG または SVG で作成し、背景なし（透明）にする。不透明な白背景・単色背景は禁止。"
+      "colorType": "RGBA",
+      "rule": "ロゴ画像（images/logo.png）は PNG・透明背景・約128×128。医院名テキストは画像に含めない（HTML側）。フッターにロゴ画像は置かない。"
+    },
+    "logoDesign": {
+      "summary": "ロゴは「医院名テキスト」＋「約128×128の医療系イメージ」の組み合わせ。画像ファイルは医療マークのみ。医院名はHTMLテキスト。",
+      "layout": "mark-plus-clinic-name",
+      "composition": [
+        "画像（images/logo.png）: 約128×128の正方形医療マークのみ（文字なし）",
+        "テキスト（#logo .clinic-name）: hearing.clinicName をそのまま表示",
+        "マークは医院ごとに変える。固定のパステル5色クロスは使わない"
+      ],
+      "mark": {
+        "size": { "width": 128, "height": 128, "aspectRatio": "1:1" },
+        "style": "フラット〜セミフラットの医療ブランドマーク",
+        "motifRule": "診療科・特徴・要望から医療モチーフを1つ選ぶ（例: 十字、聴診器、ハート、葉、盾、波、パルス）。毎回似た十字だけの量産は禁止。",
+        "colors": "配色は固定パレットに縛らない。テンプレートの primary/accent や医院の雰囲気に合わせて変える",
+        "background": "transparent",
+        "noText": true
+      },
+      "clinicName": {
+        "source": "hearing.clinicName",
+        "selector": "#logo .clinic-name",
+        "render": "html-text",
+        "note": "画像内に医院名を描かない。alt も clinicName に合わせる"
+      },
+      "size": { "width": 128, "height": 128, "aspectRatio": "1:1" },
+      "variants": [
+        {
+          "path": "images/logo.png",
+          "role": "ヘッダー医療マーク",
+          "background": "transparent"
+        }
+      ],
+      "generationNotes": [
+        "出力は PNG・透明背景・正方形（目標 128×128）。",
+        "画像内に文字・医院名・ラテン文字を入れない。",
+        "clinicName は HTML の .clinic-name に出し、ロゴ画像とは分離する。",
+        "モチーフはヒアリング内容から毎回変える。同じパステル十字の繰り返しは禁止。",
+        "白キャンバス余白・不透明背景・バッジ土台の塗りつぶしを付けない。"
+      ]
     },
     "noWhiteMargin": {
       "required": true,
@@ -220,78 +248,70 @@
       "do": [
         "被写体・図形・背景をキャンバスの四辺まで伸ばす（full-bleed）",
         "アスペクト比は size / display に合わせ、余白で埋めずに構図で合わせる",
-        "ロゴは PNG/SVG・透明背景で書き出し、マーク自体に白キャンバスを付けない"
+        "ロゴマークは PNG・透明背景・約128×128で、マーク本体以外の余白を最小化"
       ],
       "dont": [
         "上下左右の白い帯・白フチ・パディング",
         "レターボックス／ピラーボックス（黒帯を含む無地帯）",
         "小さな被写体を中央に置き周囲を白で埋める構図",
-        "ロゴを不透明な白／単色背景つきで書き出すこと"
+        "ロゴを不透明な白／単色背景つきで書き出すこと",
+        "ロゴを SVG で書き出すこと",
+        "ロゴ画像に医院名テキストを焼き込むこと"
       ]
     },
-    "sizeSource": "元サイズはテンプレート同梱サンプルの実寸。display は index.html + css/style.css / css/slide.css の表示指定。",
+    "sizeSource": "size.width / size.height は hp-templates/template0001/images/ 内の現行ファイルを実測したピクセル寸法（sips）。ロゴは生成目標 128×128。display は index.html + css/style.css / css/slide.css の表示指定。",
+    "currentImageSizes": [
+      { "path": "images/logo.png", "width": 128, "height": 128, "note": "生成目標サイズ（医療マーク）。実ファイルが異なる場合も目標は128×128" },
+      { "path": "images/1.jpg", "width": 2912, "height": 1456 },
+      { "path": "images/2.jpg", "width": 2912, "height": 1456 },
+      { "path": "images/3.jpg", "width": 2912, "height": 1456 },
+      { "path": "images/sample1.jpg", "width": 2000, "height": 1121 },
+      { "path": "images/sample2.jpg", "width": 2000, "height": 1120 },
+      { "path": "images/sample3.jpg", "width": 2000, "height": 1121 }
+    ],
     "placementHints": [
       {
         "path": "images/logo.png",
-        "role": "ヘッダーロゴ",
+        "role": "ヘッダー医療マーク（医院名は横のテキスト）",
         "preferredCategory": null,
         "style": "logo",
-        "format": ["png", "svg"],
+        "format": "png",
         "background": "transparent",
-        "size": { "width": 1100, "height": 120, "aspectRatio": "55:6" },
-        "display": { "width": "300px", "maxWidth": "100%", "css": "#logo img" }
-      },
-      {
-        "path": "images/logo_footer.png",
-        "role": "フッターロゴ",
-        "preferredCategory": null,
-        "style": "logo",
-        "format": ["png", "svg"],
-        "background": "transparent",
-        "size": { "width": 1100, "height": 120, "aspectRatio": "55:6" },
-        "display": { "width": "95%", "css": "img.wl / #footer-contents .left h3 img" }
-      },
-      {
-        "path": "images/banner1.jpg",
-        "role": "ヘッダー横バナー",
-        "preferredCategory": null,
-        "style": "icon",
-        "size": { "width": 1200, "height": 260, "aspectRatio": "60:13" },
-        "display": { "maxWidth": "500px", "css": "header .banner" }
+        "size": { "width": 128, "height": 128, "aspectRatio": "1:1" },
+        "display": { "width": "128px", "height": "128px", "css": "#logo img" },
+        "design": "logoDesign"
       },
       {
         "path": "images/1.jpg",
-        "role": "ヒーロースライド1枚目背景／当院について／ギャラリー",
+        "role": "ヒーロースライド1枚目背景／当院について",
         "preferredCategory": "interior",
         "style": "photo",
         "size": { "width": 2912, "height": 1456, "aspectRatio": "2:1" },
         "display": {
           "hero": { "width": "100%", "aspectRatio": "2:1", "css": "#mainimg padding-top:50% / .slide1 background-size:cover" },
-          "inline": { "maxWidth": "100%", "height": "auto", "css": "img 共通" },
-          "gallery": { "slidesToShow": 4, "css": ".thumbnail-slide" }
+          "inline": { "maxWidth": "100%", "height": "auto", "css": "#link1 img" }
         }
       },
       {
         "path": "images/2.jpg",
-        "role": "ヒーロースライド2枚目背景／院長挨拶／スタッフ紹介／ギャラリー",
-        "preferredCategory": "director",
+        "role": "ヒーロースライド2枚目背景／院長挨拶／スタッフ紹介",
+        "preferredCategory": null,
         "style": "photo",
         "size": { "width": 2912, "height": 1456, "aspectRatio": "2:1" },
         "display": {
           "hero": { "width": "100%", "aspectRatio": "2:1", "css": ".slide2 background-size:cover" },
           "staff": { "width": "40vw", "css": ".list-half .image（600px以上）" },
-          "inline": { "maxWidth": "100%", "height": "auto" }
+          "inline": { "maxWidth": "100%", "height": "auto", "css": "#link3 img" }
         }
       },
       {
         "path": "images/3.jpg",
-        "role": "ヒーロースライド3枚目背景／ギャラリー",
+        "role": "ヒーロースライド3枚目背景",
         "preferredCategory": "atmosphere",
         "style": "photo",
         "size": { "width": 2912, "height": 1456, "aspectRatio": "2:1" },
         "display": {
-          "hero": { "width": "100%", "aspectRatio": "2:1", "css": ".slide3 background-size:cover" },
-          "gallery": { "slidesToShow": 4, "css": ".thumbnail-slide" }
+          "hero": { "width": "100%", "aspectRatio": "2:1", "css": ".slide3 background-size:cover" }
         }
       },
       {
@@ -299,7 +319,7 @@
         "role": "初診案内・診療科目カード用",
         "preferredCategory": "interior",
         "style": "photo",
-        "size": { "width": 2000, "height": 1121, "aspectRatio": "16:9相当" },
+        "size": { "width": 2000, "height": 1121, "aspectRatio": "2000:1121" },
         "display": { "maxWidth": "100%", "height": "auto", "css": "#link2 img / .list-grid1 figure img" }
       },
       {
@@ -307,15 +327,15 @@
         "role": "診療科目カード用",
         "preferredCategory": "atmosphere",
         "style": "photo",
-        "size": { "width": 2000, "height": 1120, "aspectRatio": "16:9相当" },
+        "size": { "width": 2000, "height": 1120, "aspectRatio": "2000:1120" },
         "display": { "maxWidth": "100%", "height": "auto", "css": ".list-grid1 figure img" }
       },
       {
         "path": "images/sample3.jpg",
         "role": "診療科目カード用",
-        "preferredCategory": "equipment",
+        "preferredCategory": null,
         "style": "photo",
-        "size": { "width": 2000, "height": 1121, "aspectRatio": "16:9相当" },
+        "size": { "width": 2000, "height": 1121, "aspectRatio": "2000:1121" },
         "display": { "maxWidth": "100%", "height": "auto", "css": ".list-grid1 figure img" }
       }
     ]
@@ -323,31 +343,16 @@
   "imageSlots": [
     {
       "id": "logo",
-      "label": "ロゴ",
+      "label": "ロゴ（医療マーク）",
       "path": "images/logo.png",
       "selector": "#logo img",
-      "format": ["png", "svg"],
+      "format": "png",
       "background": "transparent",
-      "size": { "width": 1100, "height": 120 },
-      "displayWidth": "300px"
-    },
-    {
-      "id": "logo_footer",
-      "label": "フッターロゴ",
-      "path": "images/logo_footer.png",
-      "selector": "#footer-contents img[src*='logo_footer']",
-      "format": ["png", "svg"],
-      "background": "transparent",
-      "size": { "width": 1100, "height": 120 },
-      "displayWidth": "95%"
-    },
-    {
-      "id": "banner1",
-      "label": "ヘッダーバナー",
-      "path": "images/banner1.jpg",
-      "selector": "header .banner img",
-      "size": { "width": 1200, "height": 260 },
-      "displayMaxWidth": "500px"
+      "size": { "width": 128, "height": 128 },
+      "displayWidth": "128px",
+      "displayHeight": "128px",
+      "designRef": "logoDesign",
+      "note": "医院名は画像に含めず #logo .clinic-name に出す"
     },
     {
       "id": "hero_slide1",
@@ -428,43 +433,53 @@
       "displayMaxWidth": "100%"
     },
     {
-      "id": "staff_photo",
-      "label": "スタッフ写真",
+      "id": "staff_nihon",
+      "label": "スタッフ写真（日本太郎）",
       "path": "images/2.jpg",
-      "selector": "#staff .list-half img",
+      "selector": "#nihon img",
       "size": { "width": 2912, "height": 1456 },
-      "displayWidth": "40vw",
-      "note": "#staff 内で同一パスを3名分参照。差し替え時は各スタッフ用に別ファイル化してもよい"
+      "displayWidth": "40vw"
     },
     {
-      "id": "gallery",
-      "label": "ギャラリー写真",
-      "path": "images/1.jpg",
-      "selector": ".thumbnail-slide img",
+      "id": "staff_okinawa",
+      "label": "スタッフ写真（沖縄次郎）",
+      "path": "images/2.jpg",
+      "selector": "#okinawa img",
       "size": { "width": 2912, "height": 1456 },
-      "displayMaxWidth": "100%",
-      "note": "1.jpg / 2.jpg / 3.jpg を交互に6枚表示。画面内4枚（899px以下は2枚）"
+      "displayWidth": "40vw"
+    },
+    {
+      "id": "staff_tokyo",
+      "label": "スタッフ写真（東京花子）",
+      "path": "images/2.jpg",
+      "selector": "#tokyo img",
+      "size": { "width": 2912, "height": 1456 },
+      "displayWidth": "40vw",
+      "note": "現状3名とも同一パス images/2.jpg。差し替え時は別ファイル化してよい"
     }
   ],
 
   "textGuide": {
     "summary": "ヒアリングシートの実データを正とし、ページ内テキストを AI が要素単位で書き換える。不明な固有事実は創作せず Hidden（非表示）にする。",
     "hearingInputs": [
-      { "key": "clinicName", "label": "クリニック名", "required": true, "usage": "タイトル・ロゴalt・コピーライト・ヒーロー文言" },
+      { "key": "clinicName", "label": "クリニック名", "required": true, "usage": "タイトル・#logo .clinic-name・ロゴalt・コピーライト・ヒーロー文言" },
       { "key": "directorName", "label": "院長名", "required": false, "usage": "院長挨拶・スタッフ紹介" },
       { "key": "address", "label": "住所", "required": false, "usage": "フッター住所・アクセス表・地図クエリ" },
       { "key": "phone", "label": "電話番号", "required": false, "usage": "ヘッダー・予約CTA・お問い合わせの tel: リンク（システムが直接差し替え）" },
       { "key": "line", "label": "LINE ID", "required": false, "usage": "お問い合わせ／フッターの LINE リンク（システムが直接差し替え）" },
-      { "key": "department", "label": "診療科", "required": false, "usage": "診療科目カードの見出し・説明" },
-      { "key": "hours", "label": "診療時間", "required": false, "usage": "ヘッダー受付時間・フッター診療時間表" },
-      { "key": "features", "label": "医院の特徴", "required": false, "usage": "紹介文・FAQ・ヒーローキャッチの素材" },
+      { "key": "department", "label": "診療科", "required": false, "usage": "診療科目カードの見出し・説明・ロゴ医療モチーフのヒント" },
+      { "key": "hours", "label": "診療時間", "required": false, "usage": "フッター診療時間表のみに使用（ヘッダーには受付時間を表示しない）" },
+      { "key": "features", "label": "医院の特徴", "required": false, "usage": "紹介文・FAQ・ヒーローキャッチ・ロゴモチーフのヒント" },
       { "key": "request", "label": "ご要望", "required": false, "usage": "トーンや強調したい点の反映" }
     ],
     "generationRules": [
       "電話・住所・LINE・診療時間は、ヒアリングにあれば一字一句そのまま使う。無ければ Hidden。",
+      "ヘッダーに受付時間は表示しない（header address .small は撤去済み）。診療時間はフッターの表のみに掲載する。",
       "資格・実績年数・症例数など具体的事実も、記載が無ければ Hidden（創作禁止）。",
       "見出し・紹介文・特徴・案内・ボタン文言など一般コピーは、特徴・要望を踏まえて自然な日本語に書き換えてよい。",
       "ナビラベルや著作権表記は無理に変えず、医院名だけ差し替える程度でよい。",
+      "#logo .clinic-name は hearing.clinicName をそのまま入れる（ロゴ画像とは別）。",
+      "LINEボタン文言は「LINEで相談・予約する」のままにし、LINE ID（@abcabc 等）を括弧付きで付け足さない。",
       "元の役割と文字量バランスを大きく崩さない（見出しは短く、本文は同程度のボリューム）。",
       "電話番号テキストはコピー生成に回さず、システムが hearing.phone または Hidden で確定する。"
     ]
@@ -474,6 +489,13 @@
       "id": "title",
       "label": "ページタイトル",
       "selector": "title",
+      "type": "text",
+      "source": "clinicName"
+    },
+    {
+      "id": "logo_clinic_name",
+      "label": "ヘッダー医院名（ロゴ横）",
+      "selector": "#logo .clinic-name",
       "type": "text",
       "source": "clinicName"
     },
@@ -490,13 +512,6 @@
       "selector": "header .tel",
       "type": "text",
       "source": "phone"
-    },
-    {
-      "id": "header_hours",
-      "label": "ヘッダー受付時間",
-      "selector": "header address .small",
-      "type": "text",
-      "source": "hours"
     },
     {
       "id": "hero_slide1",
@@ -520,6 +535,14 @@
       "source": "directorName+features"
     },
     {
+      "id": "footer_clinic_name",
+      "label": "フッター医院名",
+      "selector": "#footer-contents .left > h3",
+      "type": "text",
+      "source": "clinicName",
+      "note": "旧 logo_footer.png の代替。画像は使わずテキストのみ"
+    },
+    {
       "id": "footer_address",
       "label": "フッター住所・連絡先",
       "selector": "#footer-contents .left > p",
@@ -532,16 +555,26 @@
       "selector": "footer small a",
       "type": "text",
       "source": "clinicName"
+    },
+    {
+      "id": "submenu_title",
+      "label": "サイドバーメニュータイトル",
+      "selector": ".sub-contents nav > h3",
+      "type": "text",
+      "source": "clinicName",
+      "note": "元テンプレートの「メニュータイトル」。医院名または「メニュー」等の短い見出しに差し替える"
     }
   ],
 
   "linkGuide": {
     "summary": "リンクは種別ごとに接続方法が決まっている。ページ内アンカーはセクション id と一致させ、外部連絡手段はヒアリング値で上書きする。仮想の外部リンクは残さない。",
     "connectionRules": [
-      "ナビ（#menubar）の href は対応セクションの #id と一致させる。セクション非表示時は該当 li も非表示。",
+      "ナビ（#menubar および .sub-contents .submenu）の href は対応セクション／ブロックの #id と一致させる。セクション非表示時は両方の該当 li も非表示。",
+      ".submenu の当院について配下（#link1 / #link2 / #link3）は #about 内ブロックへ接続する。",
       "医師出勤表の人名リンク（#nihon 等）は #staff 内の同 id ブロックへ接続する。スタッフ実データが無ければ出勤表ごと Hidden。",
       "tel: リンクは hearing.phone から数字のみ抽出して差し替える。電話が無ければボタン／文言を Hidden。",
-      "LINE リンク（lin.ee / line.me）は hearing.line から https://line.me/R/ti/p/@ID 形式で差し替える。無ければ Hidden。",
+      "LINE リンク（lin.ee / line.me）の href は hearing.line から https://line.me/R/ti/p/@ID 形式で差し替える。無ければ Hidden。",
+      "LINEボタンの表示文言は「LINEで相談・予約する」のみ。LINE ID（例: @abcabc）や（@...）をボタンテキストに付けない。IDは href にのみ使う。",
       "Google Maps iframe は hearing.address があれば maps?q=住所&output=embed に差し替える。無ければ iframe とマニュアル案内リンクを Hidden。",
       "WEB予約・SNS（X / YouTube / Instagram）は実URLが無い限り # のまま残さず Hidden（仮想リンクを見せない）。",
       "ページトップ（.pagetop）とロゴの #container はページ内動作として維持してよい。"
@@ -551,22 +584,46 @@
     {
       "id": "nav_home",
       "label": "ナビ：ホーム",
-      "selector": "#menubar a[href='#container']",
+      "selector": "#menubar a[href='#container'], .submenu a[href='#container']",
       "href": "#container",
       "connect": "page-anchor"
     },
     {
       "id": "nav_about",
       "label": "ナビ：当院について",
-      "selector": "#menubar a[href='#about']",
+      "selector": "#menubar a[href='#about'], .submenu > li > a[href='#about']",
       "href": "#about",
       "connect": "section-anchor",
       "sectionId": "about"
     },
     {
+      "id": "nav_about_link1",
+      "label": "サブメニュー：当院について",
+      "selector": ".submenu a[href='#link1']",
+      "href": "#link1",
+      "connect": "block-anchor",
+      "sectionId": "about"
+    },
+    {
+      "id": "nav_about_link2",
+      "label": "サブメニュー：初診の方へ",
+      "selector": ".submenu a[href='#link2']",
+      "href": "#link2",
+      "connect": "block-anchor",
+      "sectionId": "about"
+    },
+    {
+      "id": "nav_about_link3",
+      "label": "サブメニュー：院長挨拶",
+      "selector": ".submenu a[href='#link3']",
+      "href": "#link3",
+      "connect": "block-anchor",
+      "sectionId": "about"
+    },
+    {
       "id": "nav_service",
       "label": "ナビ：診療科目",
-      "selector": "#menubar a[href='#service']",
+      "selector": "#menubar a[href='#service'], .submenu a[href='#service']",
       "href": "#service",
       "connect": "section-anchor",
       "sectionId": "service"
@@ -574,7 +631,7 @@
     {
       "id": "nav_staff",
       "label": "ナビ：スタッフ紹介",
-      "selector": "#menubar a[href='#staff']",
+      "selector": "#menubar a[href='#staff'], .submenu a[href='#staff']",
       "href": "#staff",
       "connect": "section-anchor",
       "sectionId": "staff"
@@ -582,7 +639,7 @@
     {
       "id": "nav_faq",
       "label": "ナビ：よくある質問",
-      "selector": "#menubar a[href='#faq']",
+      "selector": "#menubar a[href='#faq'], .submenu a[href='#faq']",
       "href": "#faq",
       "connect": "section-anchor",
       "sectionId": "faq"
@@ -590,7 +647,7 @@
     {
       "id": "nav_access",
       "label": "ナビ：アクセス",
-      "selector": "#menubar a[href='#access']",
+      "selector": "#menubar a[href='#access'], .submenu a[href='#access']",
       "href": "#access",
       "connect": "section-anchor",
       "sectionId": "access"
@@ -598,7 +655,7 @@
     {
       "id": "nav_contact",
       "label": "ナビ：お問い合わせ",
-      "selector": "#menubar a[href='#contact']",
+      "selector": "#menubar a[href='#contact'], .submenu a[href='#contact']",
       "href": "#contact",
       "connect": "section-anchor",
       "sectionId": "contact"
@@ -615,15 +672,17 @@
       "label": "LINE相談ボタン",
       "selector": "a[href*='lin.ee'], a[href*='line.me']",
       "href": "https://line.me/R/ti/p/{line}",
-      "connect": "hearing.line"
+      "connect": "hearing.line",
+      "protectText": true,
+      "note": "表示文言はテンプレートの固定文言（「LINE予約はこちら」「LINEで相談・予約する」等）のまま。LINE ID（@abcabc 等）はhrefのみに使い、表示テキストには絶対に出さない。protectText によりAIのコピー生成対象からも除外される。"
     },
     {
       "id": "cta_web_reserve",
       "label": "WEB予約CTA",
-      "selector": ".mainimg-btn a:not([href^='tel:'])",
+      "selector": ".mainimg-btn a[href='#']",
       "href": null,
       "connect": "hide-if-missing",
-      "note": "実予約URLが無い場合は非表示"
+      "note": "実予約URLが無い場合は非表示。href='#' の未設定ダミーリンクだけを対象にする（LINE/TELなど実リンクを巻き込まない）。"
     },
     {
       "id": "maps",
@@ -720,6 +779,38 @@
     ]
   },
 
+  "repeatableGroups": [
+    {
+      "id": "staff",
+      "label": "スタッフ紹介カード",
+      "container": "#staff",
+      "itemSelector": ".list-half",
+      "unitSize": 1,
+      "source": "hearing.staffMembers",
+      "min": 0,
+      "max": 8,
+      "sectionId": "staff",
+      "fields": {
+        "name": "h3",
+        "role": "p.role",
+        "comment": "p.comment",
+        "image": "img"
+      },
+      "note": "ヒアリングのスタッフ人数ぶんだけ .list-half を複製/削除する。0名なら#staffごと非表示。役割（role）は未指定なら p.role ごと非表示。"
+    },
+    {
+      "id": "faq",
+      "label": "よくある質問",
+      "container": "#faq dl.faq",
+      "itemSelector": "dt, dd",
+      "unitSize": 2,
+      "source": "hearing.faqs",
+      "fallback": "ai",
+      "min": 2,
+      "max": 6,
+      "note": "実際の質問・回答が入力されていればその件数・内容をそのまま使う。未入力ならAIが件数と内容を決めて生成する。"
+    }
+  ],
   "layout": {
     "serviceColumns": {
       "label": "診療カードのカラム数",

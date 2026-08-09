@@ -54,6 +54,10 @@ export function collectTextTargets($: CheerioAPI): { targets: TextTarget[]; appl
     if (SKIP_SUBTREE_TAGS.has(tag)) return;
 
     const $node = $(node);
+    // Content the caller has already filled with exact, known-correct data (e.g. a staff member's
+    // real name/comment bound from the hearing sheet) — skip the whole subtree so the copy AI never
+    // gets a chance to paraphrase it.
+    if ($node.attr("data-ai-skip") !== undefined) return;
     const className = $node.attr("class") ?? "";
     const contents = $node.contents().toArray();
     const elementChildren = contents.filter((c) => c.type === "tag") as import("domhandler").Element[];
@@ -96,6 +100,7 @@ export function collectTextTargets($: CheerioAPI): { targets: TextTarget[]; appl
   // node, so the walk above never sees it — collect it separately as its own rewritable target.
   $("img[alt]").each((_, el) => {
     const $el = $(el);
+    if ($el.closest("[data-ai-skip]").length > 0) return;
     const alt = $el.attr("alt") ?? "";
     if (!alt.trim()) return;
     addTarget("img[alt]", $el.attr("class") ?? "", alt, (value) => {

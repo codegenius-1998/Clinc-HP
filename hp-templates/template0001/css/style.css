@@ -143,18 +143,25 @@ header {
 	position: relative;	/*文字サイズブロックを絶対配置する為に必要な指定*/
 }
 
-/*ロゴ画像*/
+/*ロゴ（医療マーク＋医院名）*/
 #logo {margin: 0;padding: 0;}
+#logo a {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	text-decoration: none;
+	color: inherit;
+}
 #logo img {
 	display: block;
-	width: 300px;	/*ロゴ画像の幅*/
+	width: 128px;	/*医療マーク約128×128*/
+	height: 128px;
+	object-fit: contain;
 }
-
-/*ヘッダーの中央バナー*/
-header .banner {
-	max-width: 500px;	/*最大幅。これ以上広くならない。*/
-	flex: 1;
-	margin: 0 3vw;		/*上下、左右へのバナーの外側へとるスペース*/
+#logo .clinic-name {
+	font-size: 1.4rem;
+	font-weight: bold;
+	line-height: 1.3;
 }
 
 /*電話番号ブロック*/
@@ -199,7 +206,8 @@ address.margin-top-reset {margin-top: 0;}
 	
 	/*ロゴ画像*/
 	#logo img {
-		width: 200px;	/*ロゴ画像の幅*/
+		width: 96px;
+		height: 96px;
 	}
 	
 	}/*追加指定ここまで*/
@@ -722,6 +730,10 @@ ul.icons {
 
 /*list-half（左右にわかれたボックス）
 ---------------------------------------------------------------------------*/
+.list-half {
+	padding-left: 16px;
+}
+
 /*画像ブロック*/
 .list-half .image {
     width: 60vw;	/*幅。60%。*/

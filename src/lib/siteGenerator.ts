@@ -1,14 +1,21 @@
 import { access, cp, mkdir, readFile, rm, writeFile } from "fs/promises";
 import path from "path";
 import * as cheerio from "cheerio";
-import { getTemplateDefinition, getTemplateImageManifest, TEMPLATES_DIR, type TemplateLinkSlot } from "./templates";
+import {
+  getTemplateDefinition,
+  getTemplateImageManifest,
+  TEMPLATES_DIR,
+  type TemplateLinkSlot,
+  type TemplateRepeatableGroup,
+  type TemplateSection,
+} from "./templates";
 import type { HearingSheet } from "./hearing";
 import { collectImageTargets, collectTextTargets, HIDDEN_TEXT_VALUE, isPhoneLikeText, type ImageTarget } from "./htmlContent";
 import type { ImageCategoryKey } from "./imageCategories";
 import { generateSiteCopy } from "./openai/generateSiteCopy";
 import { generateSiteImage } from "./openai/generateSiteImage";
 import { matchImagesToCategories } from "./openai/matchImageCategories";
-import { planGeneration } from "./openai/planGeneration";
+import { planGeneration, type RepeatableGroupInfo } from "./openai/planGeneration";
 
 const EXCLUDED_FILES = new Set([".DS_Store", "AI_GUIDE.md", "_removed_images_manifest.md"]);
 const GENERATED_ROOT = path.join(process.cwd(), "public", "generated");
@@ -104,6 +111,177 @@ function applyLinkSlots($: cheerio.CheerioAPI, linkSlots: TemplateLinkSlot[], he
   }
 }
 
+/** Marks every element matched by a `protectText: true` linkSlot with `data-ai-skip` so the copy AI
+ * never sees (and can't rewrite) its visible text — only `applyLinkSlots` touches these afterward, and
+ * only the href/src. Must run before `collectTextTargets` so the walk actually skips them; a fixed CTA
+ * label (e.g. a LINE button) must never be replaced with a raw ID or any AI-authored wording. */
+function protectLinkText($: cheerio.CheerioAPI, linkSlots: TemplateLinkSlot[]): void {
+  for (const slot of linkSlots) {
+    if (!slot.protectText) continue;
+    $(slot.selector).attr("data-ai-skip", "true");
+  }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+/** The real on-page pixel size for an image target, from the template's declared `imageSlots` — used
+ * to ask the image model for a matching aspect ratio instead of always generating a square. Matched by
+ * exact path first; a dynamically-templated staff photo (`images/staff-0.jpg`, ...) has no exact slot
+ * of its own, so it falls back to any declared `staff_*` slot's size (all staff cards share the same
+ * declared photo dimensions in this template, regardless of how many per-person slots exist). */
+function resolveImageTargetSize(
+  template: { imageSlots: { id: string; path: string; size?: { width: number; height: number } }[] },
+  image: ImageTarget
+): { width: number; height: number } | undefined {
+  const exact = template.imageSlots.find((slot) => slot.path === image.path);
+  if (exact?.size) return exact.size;
+  if (/^images\/staff-\d+\.[a-z0-9]+$/i.test(image.path)) {
+    return template.imageSlots.find((slot) => slot.id.startsWith("staff_"))?.size;
+  }
+  return undefined;
+}
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+/** Current number of items rendered in a repeatable group's container (e.g. how many FAQ Q&A pairs
+ * currently exist), used both as AI context and as the fallback when the AI doesn't decide a count. */
+function countRepeatableItems($: cheerio.CheerioAPI, group: TemplateRepeatableGroup): number {
+  const $container = $(group.container);
+  if ($container.length === 0) return 0;
+  return Math.floor($container.children(group.itemSelector).length / group.unitSize);
+}
+
+/** Clones or removes whole items (each item = `unitSize` consecutive matched children, e.g. one
+ * `.list-half` div, or one `dt`+`dd` pair) within a repeatable group's container until it holds exactly
+ * `targetCount` items — the declared, template-agnostic mechanism for sections whose static markup
+ * ships with a fixed item count that must track real (or AI-decided) cardinality instead.
+ * Returns each item's raw elements (length `unitSize`, in final order) — callers wrap whichever
+ * element they need (a single wrapper div, or each sibling of a dt/dd pair) with `$(...)` themselves. */
+function applyRepeatableGroup(
+  $: cheerio.CheerioAPI,
+  group: TemplateRepeatableGroup,
+  targetCount: number
+): import("domhandler").Element[][] {
+  const $container = $(group.container);
+  if ($container.length === 0) return [];
+
+  const items = $container.children(group.itemSelector).toArray();
+  const units = chunk(items, group.unitSize);
+  const currentCount = units.length;
+
+  if (targetCount < currentCount) {
+    for (const unit of units.slice(targetCount)) {
+      unit.forEach((el) => $(el).remove());
+    }
+  } else if (targetCount > currentCount && units.length > 0) {
+    const templateUnit = units[units.length - 1];
+    let lastEls = templateUnit;
+    for (let i = currentCount; i < targetCount; i++) {
+      const clones = templateUnit.map((el) => $(el).clone());
+      let anchor = $(lastEls[lastEls.length - 1]);
+      for (const clone of clones) {
+        anchor.after(clone);
+        anchor = clone;
+      }
+      lastEls = clones.map((c) => c.get(0)!);
+    }
+  }
+
+  const finalItems = $container.children(group.itemSelector).toArray();
+  return chunk(finalItems, group.unitSize);
+}
+
+/** Reads the structured records (if any) a hearing-sourced repeatable group is bound to. */
+function getHearingRecords(group: TemplateRepeatableGroup, hearing: HearingSheet): Record<string, string>[] | null {
+  if (group.source === "hearing.staffMembers") {
+    return (hearing.staffMembers ?? []).map((m) => ({
+      name: m.name,
+      comment: m.comment,
+      role: m.role ?? "",
+      photoUrl: m.photoUrl ?? "",
+    }));
+  }
+  if (group.source === "hearing.faqs") {
+    return (hearing.faqs ?? []).map((f) => ({ question: f.question, answer: f.answer }));
+  }
+  return null;
+}
+
+/** Fills an optional field (e.g. a staff member's role): shown with the given text when present,
+ * hidden (never left showing stale/placeholder text) when the hearing sheet left it blank. */
+function setOptionalField($el: ReturnType<cheerio.CheerioAPI>, value: string): void {
+  if (value) {
+    $el.text(value).removeAttr("style");
+  } else {
+    $el.text("").attr("style", "display:none");
+  }
+}
+
+/** Binds real hearing-sheet records into freshly resized item elements, skipping the copy-AI pass
+ * entirely for this content (`data-ai-skip`) since it's exact, already-known data. Field selectors
+ * (relative to the item's root element) come from the group's own `fields` declaration, falling back
+ * to sensible defaults for templates that don't declare one. Returns a `path -> uploaded URL` map for
+ * any record that supplied its own real photo (e.g. a staff member's uploaded portrait) — the caller
+ * uses this to route that exact placement to the upload instead of AI generation. */
+function bindHearingRecords(
+  $: cheerio.CheerioAPI,
+  group: TemplateRepeatableGroup,
+  units: import("domhandler").Element[][],
+  records: Record<string, string>[]
+): Record<string, string> {
+  const fields = group.fields ?? {};
+  const forcedImageUrls: Record<string, string> = {};
+
+  records.forEach((record, i) => {
+    const unit = units[i];
+    if (!unit) return;
+
+    if (group.source === "hearing.staffMembers") {
+      const $root = $(unit[0]);
+      $root.attr("id", `staff-${i}`);
+      $root.attr("data-ai-skip", "true");
+      $root.find(fields.name ?? "h3").first().text(record.name);
+      $root.find(fields.comment ?? "p").first().text(record.comment);
+      if (fields.role) {
+        setOptionalField($root.find(fields.role).first(), record.role);
+      }
+      const $img = $root.find(fields.image ?? "img").first();
+      if ($img.length > 0) {
+        const path = `images/staff-${i}.jpg`;
+        $img.attr("src", path);
+        $img.attr("alt", record.role ? `${record.name}（${record.role}）` : record.name);
+        if (record.photoUrl) {
+          forcedImageUrls[path] = record.photoUrl;
+        }
+      }
+    } else if (group.source === "hearing.faqs") {
+      const [dt, dd] = unit;
+      if (dt) $(dt).attr("data-ai-skip", "true").text(record.question);
+      if (dd) $(dd).attr("data-ai-skip", "true").text(record.answer);
+    }
+  });
+
+  return forcedImageUrls;
+}
+
+/** Hides a section (and its nav link) the same way the sectionVisibility plan does — shared so the
+ * "no real data at all" case (e.g. zero staff members) can force a section closed deterministically,
+ * without waiting on / second-guessing the AI's judgement call. */
+function hideSection($: cheerio.CheerioAPI, sections: TemplateSection[], sectionId: string): void {
+  const section = sections.find((s) => s.id === sectionId);
+  if (!section) return;
+  $(section.selector).attr("data-visible", "false");
+  for (const href of section.navHrefs) {
+    $(`a[href="${href}"]`).closest("li").attr("style", "display:none");
+  }
+}
+
 async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
   const results: R[] = new Array(items.length);
   let cursor = 0;
@@ -139,12 +317,37 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
 
   $("html").attr("data-theme", hearing.colorScheme);
 
-  // --- text: discover every real piece of copy on the page, not just the handful of
-  // declared contentSlots (those are only a color/section-visibility index, see
-  // TEMPLATE_VARIABLES.md) ---
-  const { targets: textTargets, apply: applyText } = collectTextTargets($);
-  const phoneTargetIds = new Set(textTargets.filter((t) => isPhoneLikeText(t.text)).map((t) => t.id));
-  const copyTargets = textTargets.filter((t) => !phoneTargetIds.has(t.id));
+  // Fixed CTA labels (e.g. a LINE button's "LINE予約はこちら") must never be handed to the copy AI —
+  // must run before any text-target collection below.
+  protectLinkText($, template.linkSlots);
+
+  // --- repeatable groups: for each declared group, real hearing data (if any) wins and is bound
+  // deterministically right away; otherwise it's deferred to the AI — either because the group is
+  // declared "ai"-sourced outright, or because it's hearing-sourced but empty and declares an "ai"
+  // fallback (e.g. FAQ: use real Q&A if given, else let the AI invent some). Must run before
+  // image/text target collection so the AI-facing passes below see the final DOM shape. ---
+  const deferredToAiGroups: TemplateRepeatableGroup[] = [];
+  const forcedImageUrlsByPath: Record<string, string> = {};
+
+  for (const group of template.repeatableGroups) {
+    if (group.source === "ai") {
+      deferredToAiGroups.push(group);
+      continue;
+    }
+    const records = getHearingRecords(group, hearing);
+    if (records && records.length > 0) {
+      const count = clamp(records.length, group.min, group.max);
+      const units = applyRepeatableGroup($, group, count);
+      Object.assign(forcedImageUrlsByPath, bindHearingRecords($, group, units, records));
+    } else if (group.fallback === "ai") {
+      deferredToAiGroups.push(group);
+    } else {
+      applyRepeatableGroup($, group, 0);
+      if (group.sectionId) {
+        hideSection($, template.sections, group.sectionId);
+      }
+    }
+  }
 
   // --- images: every distinct local <img> the page actually references. Logo/decorative images are
   // never sourced from uploads (there's no "logo" category) — only the 5 photo categories are. AI
@@ -162,18 +365,33 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
   const imageManifest = await getTemplateImageManifest(template.dirName);
   const customCssPath = path.join(outDir, template.customCssFile);
   const currentCustomCss = await readFile(customCssPath, "utf-8").catch(() => "");
+  const repeatableGroupInfo: RepeatableGroupInfo[] = deferredToAiGroups.map((group) => ({
+    id: group.id,
+    label: group.label,
+    min: group.min,
+    max: group.max,
+    currentCount: countRepeatableItems($, group),
+  }));
+  const imageSizeHints: Record<string, { width: number; height: number }> = {};
+  for (const image of imageTargets) {
+    const size = resolveImageTargetSize(template, image);
+    if (size) imageSizeHints[image.id] = size;
+  }
   const [categoryAssignment, plan] = await Promise.all([
     availableCategories.length > 0
       ? matchImagesToCategories(
           imageTargets,
-          availableCategories.map((key) => ({ key, sampleUrl: uploadedImages[key]![0] }))
+          availableCategories.map((key) => ({ key, sampleUrl: uploadedImages[key]![0] })),
+          imageSizeHints
         )
       : Promise.resolve({} as Record<string, ImageCategoryKey | null>),
     planGeneration(
       hearing,
       template.sections,
       imageTargets,
+      imageSizeHints,
       template.layout,
+      repeatableGroupInfo,
       currentCustomCss,
       template.guideSummary,
       imageManifest
@@ -183,12 +401,25 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
   for (const section of template.sections) {
     if (!section.removable) continue;
     if (plan.sectionVisibility[section.id] === false) {
-      $(section.selector).attr("data-visible", "false");
-      for (const href of section.navHrefs) {
-        $(`a[href="${href}"]`).closest("li").attr("style", "display:none");
-      }
+      hideSection($, template.sections, section.id);
     }
   }
+
+  // AI-decided repeatable groups (e.g. FAQ entry count) — resolved after the plan, and still before
+  // text-target collection so the copy pass sees (and fills) exactly the right number of items.
+  for (const group of deferredToAiGroups) {
+    const current = countRepeatableItems($, group);
+    const chosen = plan.repeatableCounts[group.id];
+    const count = clamp(chosen ?? current, group.min, group.max);
+    applyRepeatableGroup($, group, count);
+  }
+
+  // --- text: discover every real piece of copy on the page, not just the handful of
+  // declared contentSlots (those are only a color/section-visibility index, see
+  // TEMPLATE_VARIABLES.md) ---
+  const { targets: textTargets, apply: applyText } = collectTextTargets($);
+  const phoneTargetIds = new Set(textTargets.filter((t) => isPhoneLikeText(t.text)).map((t) => t.id));
+  const copyTargets = textTargets.filter((t) => !phoneTargetIds.has(t.id));
 
   // Layout knobs (column counts, spacing, ...) are declared in variables.json as CSS custom
   // properties written onto <html style="...">; apply whatever the plan chose, within the
@@ -225,8 +456,11 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
   const uploadedImageTargets: { image: ImageTarget; url: string }[] = [];
   const aiImageTargets: ImageTarget[] = [];
   for (const image of imageTargets) {
+    // A record-level upload (e.g. a staff member's own uploaded photo) always wins — it's a direct,
+    // unambiguous match, unlike the AI category-classification pass below which is a best guess.
+    const forcedUrl = forcedImageUrlsByPath[image.path];
     const category = categoryAssignment[image.id];
-    const url = category ? nextUploadedUrl(category) : undefined;
+    const url = forcedUrl ?? (category ? nextUploadedUrl(category) : undefined);
     if (url) {
       uploadedImageTargets.push({ image, url });
     } else {
@@ -242,6 +476,8 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
         label: image.alt || `${template.label}の画像（${image.path}）`,
         variationHint: `${index + 1}/${aiImageTargets.length}`,
         customPrompt: plan.imagePlans[image.id]?.prompt,
+        style: plan.imagePlans[image.id]?.style,
+        targetSize: imageSizeHints[image.id],
       }),
     })),
     Promise.all(

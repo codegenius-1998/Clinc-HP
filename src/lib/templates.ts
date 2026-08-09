@@ -27,6 +27,9 @@ export type TemplateImageSlot = {
   label: string;
   path: string;
   selector: string;
+  /** The real on-page pixel dimensions this placement is displayed at — used to request a matching
+   * aspect ratio from the image model instead of always generating a square. */
+  size?: { width: number; height: number };
 };
 
 export type TemplateSection = {
@@ -55,6 +58,10 @@ export type TemplateLinkSlot = {
   href: string | null;
   /** Which hearing field (if any) feeds this link, or a fixed policy like "hide-if-missing". */
   connect: string;
+  /** When true, matched elements' visible text is never handed to the copy-generation AI — it keeps
+   * whatever fixed label the template ships with (e.g. a LINE button's "LINE予約はこちら" must never
+   * be replaced with the raw LINE ID). Only the href/src is touched. */
+  protectText?: boolean;
 };
 
 export type TemplateVirtualMaterialTarget = {
@@ -64,6 +71,29 @@ export type TemplateVirtualMaterialTarget = {
   /** "hide" always; "hide-if-no-address" / "hide-if-no-staff-data" conditional; "replace-or-hide" handled elsewhere. */
   action: string;
   reason?: string;
+};
+
+export type TemplateRepeatableGroup = {
+  id: string;
+  label: string;
+  /** Selector for the element whose direct children are the repeatable items (e.g. "#staff"). */
+  container: string;
+  /** Selector (matched against direct children of `container`) for the elements that make up items. */
+  itemSelector: string;
+  /** How many consecutive matched elements form one item — 1 for a wrapper div, 2 for a dt/dd pair. */
+  unitSize: number;
+  /** "hearing.<field>" — count/content comes from that array field on the hearing sheet; "ai" — planGeneration decides. */
+  source: string;
+  min: number;
+  max: number;
+  /** Section id (from `sections[]`) to force-hide when a hearing-sourced group resolves to 0 items and has no fallback. */
+  sectionId?: string;
+  /** For a "hearing.<field>" group: when that field is empty, defer to AI-decided count + AI-generated
+   * content instead of hiding — e.g. FAQ uses real Q&A if provided, otherwise the AI invents general ones. */
+  fallback?: "ai";
+  /** Selectors (relative to one item's root element) for each bound record property — e.g.
+   * `{ name: "h3", role: "p.role", comment: "p.comment", image: "img" }` for a staff card. */
+  fields?: Record<string, string>;
 };
 
 export type TemplateDefinition = TemplateSummary & {
@@ -76,6 +106,7 @@ export type TemplateDefinition = TemplateSummary & {
   customCssFile: string;
   linkSlots: TemplateLinkSlot[];
   virtualMaterialTargets: TemplateVirtualMaterialTarget[];
+  repeatableGroups: TemplateRepeatableGroup[];
   /** Raw sectionGuide/imageGuide/textGuide/linkGuide objects (if the template declares them) — fed to the
    * AI generation prompts as structured reference material. This is variables.json's own documentation of
    * itself, and takes priority over any separate AI_GUIDE.md (older templates only, and no longer read). */
@@ -98,6 +129,7 @@ type RawVariablesJson = {
   customCss?: { file?: string };
   linkSlots?: TemplateLinkSlot[];
   virtualMaterials?: { targets?: TemplateVirtualMaterialTarget[] };
+  repeatableGroups?: TemplateRepeatableGroup[];
   sectionGuide?: unknown;
   imageGuide?: unknown;
   textGuide?: unknown;
@@ -157,6 +189,7 @@ async function readTemplateDefinition(dirName: string): Promise<TemplateDefiniti
       customCssFile: data.customCss?.file ?? "css/custom.css",
       linkSlots: data.linkSlots ?? [],
       virtualMaterialTargets: data.virtualMaterials?.targets ?? [],
+      repeatableGroups: data.repeatableGroups ?? [],
       guideSummary: buildGuideSummary(data),
     };
   } catch {
