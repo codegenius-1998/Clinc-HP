@@ -1,6 +1,7 @@
 import { getOpenAIClient } from "./client";
 import type { HearingSheet } from "@/lib/hearing";
-import type { ImageStyle } from "./planGeneration";
+
+export type ImageStyle = "logo" | "icon" | "photo";
 
 export type ImageDescriptor = {
   label: string;

@@ -4,8 +4,12 @@ import type { ImageCategoryKey } from "./imageCategories";
 
 export type HearingSheet = {
   slug: string;
+  /** Chosen design preset id (see src/lib/designPresets.ts) — a style/mood brief, not an HTML
+   * skeleton. The actual page content and structure are generated fresh by OpenAI (see
+   * src/lib/siteGenerator.ts) for every clinic. */
   templateId: string;
   templateLabel: string;
+  /** Color theme id within the chosen preset (see DesignPreset.colorThemes). */
   colorScheme: string;
   colorSchemeLabel: string;
   clinicName: string;
@@ -21,6 +25,13 @@ export type HearingSheet = {
   staffMembers?: { name: string; comment: string; role?: string; photoUrl?: string }[];
   /** Real FAQ entries — if provided, used verbatim instead of the AI inventing general Q&A. */
   faqs?: { question: string; answer: string }[];
+  /** Real announcements to render in #news — if empty, the AI invents a plausible general count/content. */
+  news?: { date: string; title: string }[];
+  /** Real price-list rows for #pricing — never AI-invented; the section is hidden entirely when empty. */
+  priceItems?: { name: string; price: string; note?: string }[];
+  /** Explicit per-section show/hide + display order chosen on the hearing screen — when present, this
+   * wins over the AI's own sectionVisibility judgement call (see planGeneration). */
+  sectionPrefs?: { id: string; visible: boolean; order: number }[];
   createdAt: string;
   previewUrl?: string;
   generationError?: string;

@@ -1257,6 +1257,77 @@ ul.icons {
 	margin-top: 0.3rem;
 }
 
+/*料金表（.ta1 内の金額セル）
+---------------------------------------------------------------------------*/
+.ta1 td.price {
+	text-align: right;
+	white-space: nowrap;
+	font-weight: bold;
+}
+
+
+/*施設案内（facility-list）
+---------------------------------------------------------------------------*/
+.facility-list {
+	list-style: none;
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	gap: 1.5rem;
+	margin: 2rem 0 0;
+	padding: 0;
+}
+
+.facility-list li {
+	margin-left: 0;	/*section li の左マージンを打ち消す*/
+	background: var(--light-color, #f5f5f5);
+	border-radius: 8px;
+	padding: 1.5rem;
+}
+
+.facility-list h4 {
+	margin: 0 0 0.5rem;
+	color: var(--primary-color);
+	font-size: 1.05rem;
+}
+
+.facility-list p {
+	margin: 0;
+	font-size: 0.9rem;
+	line-height: 1.7;
+}
+
+
+/*お知らせ（news-list）
+---------------------------------------------------------------------------*/
+.news-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.news-list li {
+	margin-left: 0;	/*section li の左マージンを打ち消す*/
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 1rem;
+	padding: 1rem 0;
+	border-bottom: 1px solid #ddd;
+}
+
+.news-list time {
+	flex-shrink: 0;
+	width: 7rem;
+	color: var(--primary-color);
+	font-weight: bold;
+}
+
+.news-list .news-title {
+	flex: 1;
+	line-height: 1.7;
+}
+
+
 /*LINEボタン（LINE公式のブランドカラー）*/
 .btn-line {
 	background: #06c755;

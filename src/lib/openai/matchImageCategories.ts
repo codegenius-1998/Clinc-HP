@@ -1,27 +1,25 @@
 import { z } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
 import { getOpenAIClient } from "./client";
-import type { ImageTarget } from "@/lib/htmlContent";
 import { IMAGE_CATEGORIES, type ImageCategoryKey } from "@/lib/imageCategories";
+
+/** A single planned image placement (photo/icon role only — logos are always AI-generated and never
+ * routed through this matcher) that needs either a real uploaded photo or an AI-generated one. */
+export type ImageTarget = { id: string; alt: string };
 
 export type CategorySample = { key: ImageCategoryKey; sampleUrl: string };
 
 const SYSTEM_PROMPT = `あなたはクリニックサイトの写真配置を担当するディレクターです。
-ページ内に実際に配置されている画像枠（idごとに alt属性・class・タグ名、および分かる場合は実寸・アスペクト比が分かります）の一覧と、ユーザーが実際にアップロードした写真のカテゴリ（カテゴリごとのサンプル写真つき）が渡されます。
+ページに配置される予定の画像枠（idごとに、その画像の役割を表すalt文）の一覧と、ユーザーが実際にアップロードした写真のカテゴリ（カテゴリごとのサンプル写真つき）が渡されます。
 各画像枠に対して、渡されたカテゴリの中から最も適切なものを1つ選んでください。
 
-- サンプル写真の実際の見た目（外観・内観・機器・人物・施術風景など）を確認し、画像枠のalt属性・class名・周辺のタグ名から推測される役割と照らし合わせて判断すること。
+- サンプル写真の実際の見た目（外観・内観・機器・人物・施術風景など）を確認し、画像枠のalt文から推測される役割と照らし合わせて判断すること。
 - アップロードされた写真は加工・変更（トリミング等）せずそのまま掲載する対象である。写真の内容がその画像枠にふさわしいと判断した場合は、迷わずそのカテゴリを選ぶこと（AI生成に回すのは、ふさわしい写真が無い場合のみでよい）。
-- 画像枠に実寸・アスペクト比が付いている場合、サンプル写真を見てその縦横比（縦長・横長・正方形など）を判断し、画像枠の実寸と極端にかけ離れている場合（例: 横長バナー枠に極端な縦長写真、正方形に近い枠に極端な横長写真など）は、そのカテゴリを避けること。写真はトリミングされずそのまま表示されるため、形が大きく違うとレイアウトが崩れて見える。他に形の合う候補が無ければ、無理に当てはめず "none" を選んでAI生成に回してよい（AI生成側は画像枠の実寸に合わせて生成する）。
-- ロゴ・アイコン・装飾用の小さな画像など、渡されたどのカテゴリの写真も内容的にふさわしくない画像枠には "none" を選ぶこと（この場合のみAIが新規に画像を生成する）。無理に当てはめないこと。
+- 内容的にふさわしい候補が無ければ、無理に当てはめず "none" を選んでAI生成に回してよい。
 - 出力は画像枠のidをキー、選んだカテゴリキー（またはnone）を値とするオブジェクト。`;
 
-function buildTargetListText(imageTargets: ImageTarget[], imageSizeHints: Record<string, { width: number; height: number }>): string {
-  const targetLines = imageTargets.map((t) => {
-    const size = imageSizeHints[t.id];
-    const sizeText = size ? ` / 実寸: ${size.width}x${size.height}（アスペクト比 約${(size.width / size.height).toFixed(2)}:1）` : "";
-    return `- id: ${t.id} / alt: 「${t.alt || "(なし)"}」 / class: ${t.className || "(なし)"}${sizeText}`;
-  });
+function buildTargetListText(imageTargets: ImageTarget[]): string {
+  const targetLines = imageTargets.map((t) => `- id: ${t.id} / 用途: 「${t.alt || "(なし)"}」`);
   return [`# 画像枠一覧`, ...targetLines].join("\n");
 }
 
@@ -29,8 +27,7 @@ function buildTargetListText(imageTargets: ImageTarget[], imageSizeHints: Record
  * by showing the model one representative sample photo per category alongside the placement metadata. */
 export async function matchImagesToCategories(
   imageTargets: ImageTarget[],
-  categorySamples: CategorySample[],
-  imageSizeHints: Record<string, { width: number; height: number }> = {}
+  categorySamples: CategorySample[]
 ): Promise<Record<string, ImageCategoryKey | null>> {
   if (imageTargets.length === 0 || categorySamples.length === 0) {
     return {};
@@ -56,7 +53,7 @@ export async function matchImagesToCategories(
       { role: "system", content: SYSTEM_PROMPT },
       {
         role: "user",
-        content: [{ type: "input_text", text: buildTargetListText(imageTargets, imageSizeHints) }, ...sampleContent],
+        content: [{ type: "input_text", text: buildTargetListText(imageTargets) }, ...sampleContent],
       },
     ],
     text: { format: zodTextFormat(schema, "image_category_match") },

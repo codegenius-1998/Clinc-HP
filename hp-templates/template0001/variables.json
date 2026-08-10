@@ -83,20 +83,22 @@
   },
 
   "sectionGuide": {
-    "summary": "単一ページLP。ヘッダー／メインビジュアル／本文セクション／サイドバー／フッターで構成する。セクションの表示切替は sections[].visible と data-visible で行い、非表示時は navHrefs のナビ項目も連動して隠す。",
+    "summary": "単一ページLP。ヘッダー／メインビジュアル／本文セクション／サイドバー／フッターで構成する。セクションの表示切替・並び順は、ヒアリング画面でユーザーが直接指定する sectionPrefs（各セクションの表示/非表示＋order）が最優先。sectionPrefs が無い場合のみ、AIが sections[].removable なセクションについて表示/非表示を判断する（従来どおり）。いずれの場合も data-visible 属性と navHrefs 連動のナビ非表示で表現する。",
     "pageFlow": [
-      "header（ロゴ・電話・文字サイズ）",
-      "menubar（ページ内アンカーナビ）",
-      "mainimg（ヒーロースライド＋予約CTA）",
-      "main-contents（about → service → staff → faq → access → contact）",
+      "header（ロゴ・電話・文字サイズ）※並び替え対象外・常に先頭",
+      "menubar（ページ内アンカーナビ。#menubar と .sub-contents .submenu の両方が本文セクションの並び順に追従する）",
+      "mainimg（ヒーロースライド＋予約CTA）※並び替え対象外・常に本文の直前",
+      "main-contents（sections[] の order 順。デフォルトは about → service → staff → facility → hours → news → faq → access → pricing → contact）",
       "sub-contents（サイドバー：メニュータイトル + .submenu）",
-      "footer-contents / footermenu / footer"
+      "footer-contents / footermenu / footer ※並び替え対象外・常に末尾"
     ],
     "rules": [
-      "removable: true のセクションのみ、ヒアリング内容で埋められない場合に非表示にしてよい。",
-      "contact は常に表示（removable: false）。",
+      "removable: true のセクションのみ、ヒアリング内容で埋められない場合に非表示にしてよい（AI判断。sectionPrefs が無いときのみ適用）。",
+      "contact は常に表示（removable: false）。表示/非表示チェックボックスは出さないが、並び順の変更対象にはなる。",
       "迷ったら表示のままにする。",
       "セクションを非表示にするときは selector の data-visible=\"false\" と、navHrefs に対応する #menubar / .submenu のナビ li を非表示にする。",
+      "セクションの並び替えは、可視セクションを order 昇順で .main-contents 内に並べ直し、#menubar > nav > ul と .sub-contents .submenu それぞれで対応する最上位 <li>（a[href=\"#{sectionId}\"] を直接の子に持つもの）も同じ順序に並べ替える。「ホーム」の <li> は常に先頭固定。",
+      "hours（診療時間）・news（お知らせ）・pricing（料金表）は、対応する repeatableGroups（hoursLines / news / priceItems）が0件になった時点で自動的に非表示になる（そのケースでは sectionPrefs で表示ONにしていても最終的には非表示のまま）。",
       ".sub-contents の h3「メニュータイトル」はサイドバー見出し。医院名や「メニュー」など自然な短い見出しに差し替える（プレースホルダーのまま残さない）。"
     ]
   },
@@ -106,6 +108,7 @@
       "label": "当院について",
       "selector": "#about",
       "visible": true,
+      "order": 1,
       "navHrefs": ["#about", "#link1", "#link2", "#link3"],
       "removable": true,
       "description": "医院紹介の中核。内部ブロック #link1（当院について）・#link2（初診の方へ）・#link3（院長挨拶）で構成する。",
@@ -120,6 +123,7 @@
       "label": "診療案内",
       "selector": "#service",
       "visible": true,
+      "order": 2,
       "navHrefs": ["#service"],
       "removable": true,
       "description": "診療科目カード（.list-grid1）と医師出勤表（.ta-box）。カード数は layout.serviceColumns で調整する。出勤表の人名リンクは #staff 内の各スタッフ id へ接続する。",
@@ -133,15 +137,47 @@
       "label": "スタッフ紹介",
       "selector": "#staff",
       "visible": true,
+      "order": 3,
       "navHrefs": ["#staff"],
       "removable": true,
       "description": "スタッフ一人あたり .list-half（テキスト＋写真）。各ブロックの id（#nihon / #okinawa / #tokyo など）が出勤表からのアンカー先になる。実在スタッフ情報が無ければセクションごと非表示にしてよい。"
+    },
+    {
+      "id": "facility",
+      "label": "施設案内",
+      "selector": "#facility",
+      "visible": true,
+      "order": 4,
+      "navHrefs": ["#facility"],
+      "removable": true,
+      "description": "院内設備の紹介。見出し＋写真＋本文（#facility 直下の<p>）と、設備ハイライト3件（ul.facility-list）で構成する。ヒアリングの「医院の特徴」等から自然に書ける範囲でAIが生成する。専用のヒアリング項目は無い。"
+    },
+    {
+      "id": "hours",
+      "label": "診療時間",
+      "selector": "#hours",
+      "visible": true,
+      "order": 5,
+      "navHrefs": ["#hours"],
+      "removable": true,
+      "description": "診療時間の一覧表（table.ta1）。行数・内容は hearing.hours（改行区切り）をそのまま1行=1行として機械的に流し込む（repeatableGroups.hoursLines）。AIによる言い換え対象外。hearing.hours が空ならセクションごと非表示。"
+    },
+    {
+      "id": "news",
+      "label": "お知らせ",
+      "selector": "#news",
+      "visible": true,
+      "order": 6,
+      "navHrefs": ["#news"],
+      "removable": true,
+      "description": "お知らせ一覧（ul.news-list）。件数・内容は repeatableGroups.news（hearing.news があればそのまま、無ければAIが一般的なお知らせを件数含めて生成）。"
     },
     {
       "id": "faq",
       "label": "よくある質問",
       "selector": "#faq",
       "visible": true,
+      "order": 7,
       "navHrefs": ["#faq"],
       "removable": true,
       "description": "dl.faq の Q&A。ヒアリングの特徴・要望から一般的な質問を生成してよい。固有の制度・料金など不明な事実は創作せず Hidden にする。"
@@ -151,15 +187,27 @@
       "label": "アクセス",
       "selector": "#access",
       "visible": true,
+      "order": 8,
       "navHrefs": ["#access"],
       "removable": true,
       "description": "Google Maps iframe と住所テーブル。住所がヒアリングにあれば地図クエリを差し替え、無ければ仮想の地図・マニュアルリンクは非表示にする。"
+    },
+    {
+      "id": "pricing",
+      "label": "料金表",
+      "selector": "#pricing",
+      "visible": true,
+      "order": 9,
+      "navHrefs": ["#pricing"],
+      "removable": true,
+      "description": "料金一覧表（table.ta1、td.name/td.price/td.note）。行数・内容は repeatableGroups.priceItems（hearing.priceItems のみ）。金額はAIが創作しない — 未入力ならセクションごと非表示。"
     },
     {
       "id": "contact",
       "label": "お問い合わせ",
       "selector": "#contact",
       "visible": true,
+      "order": 10,
       "navHrefs": ["#contact"],
       "removable": false,
       "description": "電話・LINE の相談／予約ボタン。常に表示。番号・LINE ID が無ければ該当ボタンだけ Hidden で隠す。"
@@ -267,7 +315,8 @@
       { "path": "images/3.jpg", "width": 2912, "height": 1456 },
       { "path": "images/sample1.jpg", "width": 2000, "height": 1121 },
       { "path": "images/sample2.jpg", "width": 2000, "height": 1120 },
-      { "path": "images/sample3.jpg", "width": 2000, "height": 1121 }
+      { "path": "images/sample3.jpg", "width": 2000, "height": 1121 },
+      { "path": "images/4.jpg", "width": 2000, "height": 1121, "note": "施設案内（#facility）用に新規追加。テンプレートのraw状態には実ファイルが無く、生成時にAIが書き出す" }
     ],
     "placementHints": [
       {
@@ -337,6 +386,14 @@
         "style": "photo",
         "size": { "width": 2000, "height": 1121, "aspectRatio": "2000:1121" },
         "display": { "maxWidth": "100%", "height": "auto", "css": ".list-grid1 figure img" }
+      },
+      {
+        "path": "images/4.jpg",
+        "role": "施設案内（#facility）のメイン写真",
+        "preferredCategory": "interior",
+        "style": "photo",
+        "size": { "width": 2000, "height": 1121, "aspectRatio": "2000:1121" },
+        "display": { "maxWidth": "100%", "height": "auto", "css": "#facility img" }
       }
     ]
   },
@@ -456,6 +513,15 @@
       "size": { "width": 2912, "height": 1456 },
       "displayWidth": "40vw",
       "note": "現状3名とも同一パス images/2.jpg。差し替え時は別ファイル化してよい"
+    },
+    {
+      "id": "facility_main",
+      "label": "施設案内メイン写真",
+      "path": "images/4.jpg",
+      "selector": "#facility img",
+      "size": { "width": 2000, "height": 1121 },
+      "displayMaxWidth": "100%",
+      "note": "他の枠（1.jpg〜3.jpg・sample1〜3.jpg）とは別の新規パスを使う。同じsrcを使い回すと同一画像として1回しか生成されないため。"
     }
   ],
 
@@ -469,19 +535,23 @@
       { "key": "line", "label": "LINE ID", "required": false, "usage": "お問い合わせ／フッターの LINE リンク（システムが直接差し替え）" },
       { "key": "department", "label": "診療科", "required": false, "usage": "診療科目カードの見出し・説明・ロゴ医療モチーフのヒント" },
       { "key": "hours", "label": "診療時間", "required": false, "usage": "フッター診療時間表のみに使用（ヘッダーには受付時間を表示しない）" },
-      { "key": "features", "label": "医院の特徴", "required": false, "usage": "紹介文・FAQ・ヒーローキャッチ・ロゴモチーフのヒント" },
-      { "key": "request", "label": "ご要望", "required": false, "usage": "トーンや強調したい点の反映" }
+      { "key": "features", "label": "医院の特徴", "required": false, "usage": "紹介文・FAQ・ヒーローキャッチ・ロゴモチーフのヒント・施設案内（#facility）の下敷き" },
+      { "key": "request", "label": "ご要望", "required": false, "usage": "トーンや強調したい点の反映" },
+      { "key": "news", "label": "お知らせ（日付＋タイトルの配列）", "required": false, "usage": "#news .news-list。未入力ならAIが件数・内容とも自動生成（repeatableGroups.news, fallback: ai）" },
+      { "key": "priceItems", "label": "料金表（項目名＋金額＋備考の配列）", "required": false, "usage": "#pricing のテーブル行。未入力なら#pricingセクションごと非表示（金額はAIが創作しない）" },
+      { "key": "sectionPrefs", "label": "セクション表示/非表示・並び順（ヒアリング画面のUIから送信）", "required": false, "usage": "main-contents内の各セクションの並び順と表示/非表示を直接指定する。指定があればAIのsectionVisibility判断より優先される。" }
     ],
     "generationRules": [
       "電話・住所・LINE・診療時間は、ヒアリングにあれば一字一句そのまま使う。無ければ Hidden。",
-      "ヘッダーに受付時間は表示しない（header address .small は撤去済み）。診療時間はフッターの表のみに掲載する。",
-      "資格・実績年数・症例数など具体的事実も、記載が無ければ Hidden（創作禁止）。",
+      "ヘッダーに受付時間は表示しない（header address .small は撤去済み）。診療時間は #hours セクション（repeatableGroups.hoursLines が hearing.hours を1行ずつ機械的に流し込む。AIのコピー生成対象外）に掲載する。",
+      "資格・実績年数・症例数など具体的事実も、記載が無ければ Hidden（創作禁止）。同様に料金（#pricing）も金額を創作せず、hearing.priceItems が無ければセクションごと非表示にする。",
       "見出し・紹介文・特徴・案内・ボタン文言など一般コピーは、特徴・要望を踏まえて自然な日本語に書き換えてよい。",
       "ナビラベルや著作権表記は無理に変えず、医院名だけ差し替える程度でよい。",
       "#logo .clinic-name は hearing.clinicName をそのまま入れる（ロゴ画像とは別）。",
       "LINEボタン文言は「LINEで相談・予約する」のままにし、LINE ID（@abcabc 等）を括弧付きで付け足さない。",
       "元の役割と文字量バランスを大きく崩さない（見出しは短く、本文は同程度のボリューム）。",
-      "電話番号テキストはコピー生成に回さず、システムが hearing.phone または Hidden で確定する。"
+      "電話番号テキストはコピー生成に回さず、システムが hearing.phone または Hidden で確定する。",
+      "meta description / og:title / og:description / og:site_name は他の一般コピーと同様にAIが書き換える対象（120字前後、医院名・診療科・特徴を要約）。"
     ]
   },
   "contentSlots": [
@@ -563,6 +633,38 @@
       "type": "text",
       "source": "clinicName",
       "note": "元テンプレートの「メニュータイトル」。医院名または「メニュー」等の短い見出しに差し替える"
+    },
+    {
+      "id": "meta_description",
+      "label": "SEO: meta description",
+      "selector": "meta[name='description']",
+      "type": "meta-content",
+      "source": "clinicName+department+features",
+      "note": "120字前後を目安に、医院名・診療科・特徴を検索結果向けに要約する。AIが自動でcontent属性を書き換える（collectTextTargetsのmeta収集ロジック）。"
+    },
+    {
+      "id": "og_title",
+      "label": "SEO: og:title",
+      "selector": "meta[property='og:title']",
+      "type": "meta-content",
+      "source": "clinicName",
+      "note": "SNSシェア時のタイトル。通常は<title>と同内容でよい。"
+    },
+    {
+      "id": "og_description",
+      "label": "SEO: og:description",
+      "selector": "meta[property='og:description']",
+      "type": "meta-content",
+      "source": "clinicName+department+features",
+      "note": "SNSシェア時の説明文。meta_descriptionと同内容でよい。"
+    },
+    {
+      "id": "og_site_name",
+      "label": "SEO: og:site_name",
+      "selector": "meta[property='og:site_name']",
+      "type": "meta-content",
+      "source": "clinicName",
+      "note": "medical og:site_nameはclinicNameそのまま。"
     }
   ],
 
@@ -570,6 +672,7 @@
     "summary": "リンクは種別ごとに接続方法が決まっている。ページ内アンカーはセクション id と一致させ、外部連絡手段はヒアリング値で上書きする。仮想の外部リンクは残さない。",
     "connectionRules": [
       "ナビ（#menubar および .sub-contents .submenu）の href は対応セクション／ブロックの #id と一致させる。セクション非表示時は両方の該当 li も非表示。",
+      "セクションの並び替え（sectionPrefs.order）が指定されている場合、#menubar > nav > ul と .sub-contents .submenu それぞれの最上位 li（a[href='#{sectionId}'] を直接の子に持つもの）も本文セクションと同じ順序に並べ替える。「ホーム」の li は並び替え対象外で常に先頭。",
       ".submenu の当院について配下（#link1 / #link2 / #link3）は #about 内ブロックへ接続する。",
       "医師出勤表の人名リンク（#nihon 等）は #staff 内の同 id ブロックへ接続する。スタッフ実データが無ければ出勤表ごと Hidden。",
       "tel: リンクは hearing.phone から数字のみ抽出して差し替える。電話が無ければボタン／文言を Hidden。",
@@ -637,6 +740,30 @@
       "sectionId": "staff"
     },
     {
+      "id": "nav_facility",
+      "label": "ナビ：施設案内",
+      "selector": "#menubar a[href='#facility'], .submenu a[href='#facility']",
+      "href": "#facility",
+      "connect": "section-anchor",
+      "sectionId": "facility"
+    },
+    {
+      "id": "nav_hours",
+      "label": "ナビ：診療時間",
+      "selector": "#menubar a[href='#hours'], .submenu a[href='#hours']",
+      "href": "#hours",
+      "connect": "section-anchor",
+      "sectionId": "hours"
+    },
+    {
+      "id": "nav_news",
+      "label": "ナビ：お知らせ",
+      "selector": "#menubar a[href='#news'], .submenu a[href='#news']",
+      "href": "#news",
+      "connect": "section-anchor",
+      "sectionId": "news"
+    },
+    {
       "id": "nav_faq",
       "label": "ナビ：よくある質問",
       "selector": "#menubar a[href='#faq'], .submenu a[href='#faq']",
@@ -651,6 +778,14 @@
       "href": "#access",
       "connect": "section-anchor",
       "sectionId": "access"
+    },
+    {
+      "id": "nav_pricing",
+      "label": "ナビ：料金表",
+      "selector": "#menubar a[href='#pricing'], .submenu a[href='#pricing']",
+      "href": "#pricing",
+      "connect": "section-anchor",
+      "sectionId": "pricing"
     },
     {
       "id": "nav_contact",
@@ -809,6 +944,55 @@
       "min": 2,
       "max": 6,
       "note": "実際の質問・回答が入力されていればその件数・内容をそのまま使う。未入力ならAIが件数と内容を決めて生成する。"
+    },
+    {
+      "id": "news",
+      "label": "お知らせ",
+      "container": "#news .news-list",
+      "itemSelector": "li",
+      "unitSize": 1,
+      "source": "hearing.news",
+      "fallback": "ai",
+      "min": 2,
+      "max": 6,
+      "fields": {
+        "date": "time",
+        "title": ".news-title"
+      },
+      "note": "faqと同じ方式。実際のお知らせが入力されていればその件数・内容・日付をそのまま使う。未入力ならAIが件数・内容を決めて一般的なお知らせを生成する（日付は空欄可）。"
+    },
+    {
+      "id": "priceItems",
+      "label": "料金表の行",
+      "container": "#pricing table.ta1 tbody",
+      "itemSelector": "tr",
+      "unitSize": 1,
+      "source": "hearing.priceItems",
+      "min": 0,
+      "max": 20,
+      "sectionId": "pricing",
+      "fields": {
+        "name": "td.name",
+        "price": "td.price",
+        "note": "td.note"
+      },
+      "note": "フォールバックなし。hearing.priceItems が空なら0件にした上で#pricingごと非表示にする（AIが金額を創作することはない）。"
+    },
+    {
+      "id": "hoursLines",
+      "label": "診療時間の行",
+      "container": "#hours table.ta1 tbody",
+      "itemSelector": "tr",
+      "unitSize": 1,
+      "source": "hearing.hoursLines",
+      "min": 0,
+      "max": 12,
+      "sectionId": "hours",
+      "fields": {
+        "label": "th",
+        "value": "td"
+      },
+      "note": "hearing.hoursLines は hearing.hours を改行で分割し「：」/「:」があればラベルと値に分けた派生配列（siteGenerator側で算出、ヒアリングシートに直接の同名項目は無い）。フォールバックなし。hearing.hours が空なら0件にした上で#hoursごと非表示にする。AIによる言い換え対象外。"
     }
   ],
   "layout": {

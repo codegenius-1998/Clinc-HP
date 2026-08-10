@@ -2,8 +2,10 @@
 
 import { startTransition, useActionState, useState } from "react";
 import { createHearingAction, type HearingFormState } from "@/lib/actions";
-import type { TemplateDefinition } from "@/lib/templates";
+import type { DesignPreset } from "@/lib/designPresets";
+import type { SiteSpecSection } from "@/lib/siteSpec";
 import { IMAGE_CATEGORIES, type ImageCategoryKey } from "@/lib/imageCategories";
+import { SectionOrderEditor } from "./SectionOrderEditor";
 
 type PickedImage = { kind: "file"; file: File; previewUrl: string } | { kind: "url"; url: string };
 
@@ -73,6 +75,8 @@ function defaultImagesByCategory(): Record<ImageCategoryKey, PickedImage[]> {
 
 type StaffMemberInput = { name: string; comment: string; role: string; photo: PickedImage | null; photoUrlDraft: string };
 type FaqInput = { question: string; answer: string };
+type NewsInput = { date: string; title: string };
+type PriceItemInput = { name: string; price: string; note: string };
 
 const STAFF_ROLE_OPTIONS = ["院長", "副院長", "医師", "看護師", "薬剤師", "受付・事務", "スタッフ"];
 
@@ -123,19 +127,24 @@ const DEFAULT_FAQS: FaqInput[] = [
   },
 ];
 
-export function HearingSheetForm({ templates }: { templates: TemplateDefinition[] }) {
-  const [templateId, setTemplateId] = useState(templates[0]?.id ?? "");
+const DEFAULT_NEWS: NewsInput[] = [];
+const DEFAULT_PRICE_ITEMS: PriceItemInput[] = [];
+
+export function HearingSheetForm({ presets, sections }: { presets: DesignPreset[]; sections: SiteSpecSection[] }) {
+  const [templateId, setTemplateId] = useState(presets[0]?.id ?? "");
   const [state, formAction, pending] = useActionState(createHearingAction, initialState);
   const [imagesByCategory, setImagesByCategory] = useState<Record<ImageCategoryKey, PickedImage[]>>(defaultImagesByCategory);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [staffMembers, setStaffMembers] = useState<StaffMemberInput[]>(DEFAULT_STAFF_MEMBERS);
   const [faqs, setFaqs] = useState<FaqInput[]>(DEFAULT_FAQS);
+  const [news, setNews] = useState<NewsInput[]>(DEFAULT_NEWS);
+  const [priceItems, setPriceItems] = useState<PriceItemInput[]>(DEFAULT_PRICE_ITEMS);
   const [categoryUrlDraft, setCategoryUrlDraft] = useState<Record<ImageCategoryKey, string>>(
     () => Object.fromEntries(IMAGE_CATEGORIES.map((c) => [c.key, ""])) as Record<ImageCategoryKey, string>
   );
 
-  const selectedTemplate = templates.find((t) => t.id === templateId) ?? templates[0];
+  const selectedPreset = presets.find((p) => p.id === templateId) ?? presets[0];
   const busy = uploading || pending;
 
   function handleImagesSelected(category: ImageCategoryKey, fileList: FileList | null) {
@@ -219,6 +228,30 @@ export function HearingSheetForm({ templates }: { templates: TemplateDefinition[
 
   function removeFaq(index: number) {
     setFaqs((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function addNewsItem() {
+    setNews((prev) => [...prev, { date: "", title: "" }]);
+  }
+
+  function updateNewsItem(index: number, field: keyof NewsInput, value: string) {
+    setNews((prev) => prev.map((n, i) => (i === index ? { ...n, [field]: value } : n)));
+  }
+
+  function removeNewsItem(index: number) {
+    setNews((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function addPriceItem() {
+    setPriceItems((prev) => [...prev, { name: "", price: "", note: "" }]);
+  }
+
+  function updatePriceItem(index: number, field: keyof PriceItemInput, value: string) {
+    setPriceItems((prev) => prev.map((p, i) => (i === index ? { ...p, [field]: value } : p)));
+  }
+
+  function removePriceItem(index: number) {
+    setPriceItems((prev) => prev.filter((_, i) => i !== index));
   }
 
   async function uploadOne(category: string, file: File): Promise<string> {
@@ -318,18 +351,21 @@ export function HearingSheetForm({ templates }: { templates: TemplateDefinition[
 
       <div className={cardClassName}>
         <p className="text-[13px] font-medium text-slate-700">
-          テンプレート
+          デザイン
           <span className="ml-1 text-sky-500">*</span>
         </p>
-        {templates.length === 0 ? (
-          <p className="mt-3 text-[13px] text-slate-400">利用可能なテンプレートがありません。</p>
+        <p className="mt-1 text-[12px] leading-relaxed text-slate-400">
+          配色や雰囲気のプリセットです。ページの構成・文章・画像はこのあとAIが医院ごとに一から作成します。
+        </p>
+        {presets.length === 0 ? (
+          <p className="mt-3 text-[13px] text-slate-400">利用可能なデザインがありません。</p>
         ) : (
           <ul className="mt-4 grid gap-2 sm:grid-cols-2">
-            {templates.map((template) => (
-              <li key={template.id}>
+            {presets.map((preset) => (
+              <li key={preset.id}>
                 <label
                   className={`flex cursor-pointer flex-col gap-1 rounded-lg border px-4 py-3 text-[13px] transition-colors ${
-                    templateId === template.id
+                    templateId === preset.id
                       ? "border-sky-400 bg-sky-50"
                       : "border-slate-200 hover:bg-slate-50"
                   }`}
@@ -338,16 +374,16 @@ export function HearingSheetForm({ templates }: { templates: TemplateDefinition[
                     <input
                       type="radio"
                       name="templateId"
-                      value={template.id}
-                      checked={templateId === template.id}
-                      onChange={() => setTemplateId(template.id)}
+                      value={preset.id}
+                      checked={templateId === preset.id}
+                      onChange={() => setTemplateId(preset.id)}
                       className="h-4 w-4 text-sky-600 focus:ring-0"
                       required
                     />
-                    <span className="font-medium text-slate-900">{template.label}</span>
+                    <span className="font-medium text-slate-900">{preset.label}</span>
                   </span>
-                  {template.notes && (
-                    <span className="pl-6 text-[12px] leading-relaxed text-slate-400">{template.notes}</span>
+                  {preset.notes && (
+                    <span className="pl-6 text-[12px] leading-relaxed text-slate-400">{preset.notes}</span>
                   )}
                 </label>
               </li>
@@ -356,29 +392,35 @@ export function HearingSheetForm({ templates }: { templates: TemplateDefinition[
         )}
       </div>
 
-      {selectedTemplate && selectedTemplate.colorSchemes.length > 0 && (
+      {selectedPreset && selectedPreset.colorThemes.length > 0 && (
         <div className={cardClassName}>
           <p className="text-[13px] font-medium text-slate-700">
             カラー
             <span className="ml-1 text-sky-500">*</span>
           </p>
           <ul className="mt-4 flex flex-wrap gap-2">
-            {selectedTemplate.colorSchemes.map((scheme, i) => (
-              <li key={scheme.id}>
+            {selectedPreset.colorThemes.map((theme, i) => (
+              <li key={theme.id}>
                 <label className="flex cursor-pointer items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-[13px] text-slate-700 transition-colors has-checked:border-sky-400 has-checked:bg-sky-50 has-checked:text-sky-700">
                   <input
                     type="radio"
                     name="colorScheme"
-                    value={scheme.id}
+                    value={theme.id}
                     defaultChecked={i === 0}
                     className="h-3.5 w-3.5 text-sky-600 focus:ring-0"
                     required
                   />
-                  {scheme.label}
+                  {theme.label}
                 </label>
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {sections.length > 0 && (
+        <div className={cardClassName}>
+          <SectionOrderEditor sections={sections} />
         </div>
       )}
 
@@ -673,6 +715,133 @@ export function HearingSheetForm({ templates }: { templates: TemplateDefinition[
       </div>
 
       <div className={cardClassName}>
+        <p className="text-[13px] font-medium text-slate-700">お知らせ（任意）</p>
+        <p className="mt-1 text-[12px] leading-relaxed text-slate-400">
+          実際のお知らせがある場合のみ入力してください。未入力の場合はAIが件数・内容とも自動生成します。
+        </p>
+
+        {news.length > 0 && (
+          <ul className="mt-4 space-y-4">
+            {news.map((item, i) => (
+              <li key={i} className="rounded-lg border border-slate-200 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 space-y-3">
+                    <label className="block">
+                      <span className="text-[12px] font-medium text-slate-700">日付（任意）</span>
+                      <input
+                        type="text"
+                        name="newsDate"
+                        placeholder="例: 2026.01.15"
+                        value={item.date}
+                        onChange={(e) => updateNewsItem(i, "date", e.target.value)}
+                        className={inputClassName}
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-[12px] font-medium text-slate-700">タイトル</span>
+                      <input
+                        type="text"
+                        name="newsTitle"
+                        placeholder="例: 年末年始の診療時間について"
+                        value={item.title}
+                        onChange={(e) => updateNewsItem(i, "title", e.target.value)}
+                        className={inputClassName}
+                      />
+                    </label>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeNewsItem(i)}
+                    className="mt-6 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 text-[13px] text-slate-500 hover:bg-slate-50"
+                    aria-label="このお知らせを削除"
+                  >
+                    ×
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <button
+          type="button"
+          onClick={addNewsItem}
+          className="mt-4 rounded-full border border-sky-200 px-4 py-2 text-[13px] font-medium text-sky-700 hover:bg-sky-50"
+        >
+          + お知らせを追加
+        </button>
+      </div>
+
+      <div className={cardClassName}>
+        <p className="text-[13px] font-medium text-slate-700">料金表（任意）</p>
+        <p className="mt-1 text-[12px] leading-relaxed text-slate-400">
+          金額は創作しないため、実際の料金がある場合のみ入力してください。未入力の場合、料金表セクションは非表示になります。
+        </p>
+
+        {priceItems.length > 0 && (
+          <ul className="mt-4 space-y-4">
+            {priceItems.map((item, i) => (
+              <li key={i} className="rounded-lg border border-slate-200 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="grid flex-1 gap-3 sm:grid-cols-2">
+                    <label className="block">
+                      <span className="text-[12px] font-medium text-slate-700">項目名</span>
+                      <input
+                        type="text"
+                        name="priceName"
+                        placeholder="例: 初診料"
+                        value={item.name}
+                        onChange={(e) => updatePriceItem(i, "name", e.target.value)}
+                        className={inputClassName}
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-[12px] font-medium text-slate-700">金額</span>
+                      <input
+                        type="text"
+                        name="pricePrice"
+                        placeholder="例: ¥3,000（税込）"
+                        value={item.price}
+                        onChange={(e) => updatePriceItem(i, "price", e.target.value)}
+                        className={inputClassName}
+                      />
+                    </label>
+                    <label className="block sm:col-span-2">
+                      <span className="text-[12px] font-medium text-slate-700">備考（任意）</span>
+                      <input
+                        type="text"
+                        name="priceNote"
+                        placeholder="例: 保険適用外"
+                        value={item.note}
+                        onChange={(e) => updatePriceItem(i, "note", e.target.value)}
+                        className={inputClassName}
+                      />
+                    </label>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removePriceItem(i)}
+                    className="mt-6 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 text-[13px] text-slate-500 hover:bg-slate-50"
+                    aria-label="この料金項目を削除"
+                  >
+                    ×
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <button
+          type="button"
+          onClick={addPriceItem}
+          className="mt-4 rounded-full border border-sky-200 px-4 py-2 text-[13px] font-medium text-sky-700 hover:bg-sky-50"
+        >
+          + 料金項目を追加
+        </button>
+      </div>
+
+      <div className={cardClassName}>
         <p className="text-[13px] font-medium text-slate-700">よくある質問（任意）</p>
         <p className="mt-1 text-[12px] leading-relaxed text-slate-400">
           実際の質問と回答がある場合のみ入力してください。入力した内容がそのまま掲載されます。未入力の場合はAIが一般的なQ&amp;Aを自動生成します。
@@ -745,7 +914,7 @@ export function HearingSheetForm({ templates }: { templates: TemplateDefinition[
 
       <button
         type="submit"
-        disabled={busy || templates.length === 0}
+        disabled={busy || presets.length === 0}
         className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-sky-600 px-7 py-3.5 text-[13px] font-medium tracking-[0.08em] text-white shadow-sm shadow-sky-200 transition-transform hover:-translate-y-0.5 hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
       >
         {uploading ? "アップロード中..." : pending ? "生成中..." : "ヒアリングシートを送信"}

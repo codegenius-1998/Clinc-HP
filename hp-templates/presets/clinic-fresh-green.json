@@ -1,0 +1,12 @@
+{
+  "id": "clinic-fresh-green",
+  "label": "ナチュラルグリーン",
+  "notes": "カーキ寄りのグリーンとオレンジのアクセントを組み合わせた、温かく自然体な雰囲気。明朝体との相性がよい。在宅診療・高齢者向け・リハビリ系などに合う。（参考: hp-temp/tp_mix2_home）",
+  "colorThemes": [
+    { "id": "khaki-green", "label": "カーキグリーン", "tokens": { "primary": "#869a4d", "accent": "#e58e3d", "light": "#f6f7ee", "primaryInverse": "#fff", "accentInverse": "#fff" } }
+  ],
+  "defaultColorTheme": "khaki-green",
+  "fontFamily": "serif",
+  "cardStyle": "rounded",
+  "mood": "自然体で温かみのある、ゆったりとしたトーン。急かさず、寄り添うような言葉づかい。"
+}

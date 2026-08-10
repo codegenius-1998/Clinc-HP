@@ -1,0 +1,170 @@
+/* site.css — 生成される全クリニックサイト共通のスタイルシート。
+ * 配色・フォント・角丸はCSSカスタムプロパティ経由でデザインプリセットごとに変わる
+ * （:root の値は各サイトのHTML先頭で個別に上書きされる）。
+ */
+
+:root {
+  --primary: #4ba3fc;
+  --accent: #2d7dd2;
+  --light: #e8f4ff;
+  --primary-inverse: #fff;
+  --accent-inverse: #fff;
+  --radius: 12px;
+  --font: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", "Segoe UI", sans-serif;
+  --space: 5vw;
+  --max-width: 1080px;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: var(--font);
+  color: #2b2b2b;
+  line-height: 1.8;
+  background: #fff;
+  -webkit-font-smoothing: antialiased;
+}
+img { max-width: 100%; height: auto; display: block; }
+a { color: inherit; text-decoration: none; }
+ul { list-style: none; margin: 0; padding: 0; }
+h1, h2, h3, h4 { margin: 0; font-weight: 700; }
+
+.container { max-width: var(--max-width); margin: 0 auto; padding: 0 var(--space); }
+
+/* ヘッダー
+---------------------------------------------------------------------------*/
+header.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem var(--space);
+  background: #fff;
+  border-bottom: 1px solid #eee;
+  position: relative;
+}
+.brand { display: flex; align-items: center; gap: 0.7rem; }
+.brand img { width: 44px; height: 44px; object-fit: contain; }
+.brand .clinic-name { font-size: 1.05rem; font-weight: 700; letter-spacing: 0.02em; }
+.header-tel { font-size: 1.15rem; font-weight: 700; color: var(--primary); white-space: nowrap; }
+
+/* ハンバーガー（CSSのみ・JS不要） */
+.nav-toggle { display: none; }
+.nav-toggle-label {
+  display: none;
+  width: 32px; height: 24px; position: relative; cursor: pointer;
+}
+.nav-toggle-label span, .nav-toggle-label span::before, .nav-toggle-label span::after {
+  content: ""; position: absolute; left: 0; width: 100%; height: 2px; background: #333; transition: 0.2s;
+}
+.nav-toggle-label span { top: 11px; }
+.nav-toggle-label span::before { top: -9px; }
+.nav-toggle-label span::after { top: 9px; }
+
+nav.site-nav { background: var(--primary); }
+nav.site-nav ul { display: flex; flex-wrap: wrap; justify-content: center; }
+nav.site-nav a {
+  display: block; padding: 0.85rem 1.1rem; color: var(--primary-inverse); font-size: 0.9rem; white-space: nowrap;
+}
+nav.site-nav a:hover { background: var(--accent); }
+
+@media (max-width: 760px) {
+  .nav-toggle-label { display: block; }
+  nav.site-nav {
+    position: absolute; top: 100%; left: 0; right: 0; max-height: 0; overflow: hidden; transition: max-height 0.25s ease;
+    z-index: 20;
+  }
+  nav.site-nav ul { flex-direction: column; }
+  .nav-toggle:checked ~ nav.site-nav { max-height: 80vh; overflow-y: auto; }
+}
+
+/* ヒーロー
+---------------------------------------------------------------------------*/
+.hero { position: relative; }
+.hero img { width: 100%; aspect-ratio: 2 / 1; object-fit: cover; }
+.hero-copy {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; gap: 0.6rem; padding: 1rem; background: rgba(0,0,0,0.28); color: #fff;
+}
+.hero-copy h1 { font-size: 1.6rem; line-height: 1.5; text-shadow: 0 1px 4px rgba(0,0,0,0.4); }
+.hero-copy p { font-size: 1rem; opacity: 0.95; }
+@media (min-width: 760px) { .hero-copy h1 { font-size: 2.2rem; } }
+
+.cta-buttons { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.8rem; margin-top: 0.6rem; }
+.btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.8rem 1.6rem; border-radius: var(--radius); font-weight: 700; font-size: 0.95rem; }
+.btn-tel { background: var(--primary); color: var(--primary-inverse); }
+.btn-line { background: #06c755; color: #fff; }
+
+/* セクション共通
+---------------------------------------------------------------------------*/
+.section { padding: 4rem var(--space); }
+.section:nth-of-type(even) { background: var(--light); }
+.section-inner { max-width: var(--max-width); margin: 0 auto; }
+.section h2 { font-size: 1.5rem; margin-bottom: 0.5rem; border-bottom: 3px solid #ddd; padding-bottom: 0.7rem; position: relative; }
+.section h2::after { content: ""; position: absolute; left: 0; bottom: -3px; width: 4.5rem; height: 3px; background: var(--primary); }
+.section .lead { color: #666; margin: 1.2rem 0 1.6rem; white-space: pre-line; }
+
+.cards { display: grid; grid-template-columns: 1fr; gap: 1.2rem; margin-top: 1.5rem; }
+@media (min-width: 640px) { .cards { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); } }
+.card { background: #fff; border-radius: var(--radius); overflow: hidden; box-shadow: 0 1px 6px rgba(0,0,0,0.06); }
+.card img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
+.card-body { padding: 1.1rem; }
+.card-body h3, .card-body h4 { font-size: 1rem; margin-bottom: 0.4rem; color: var(--accent); }
+.card-body p { font-size: 0.9rem; color: #555; margin: 0; white-space: pre-line; }
+
+.split { display: grid; gap: 1.5rem; align-items: center; }
+@media (min-width: 760px) { .split { grid-template-columns: 40% 1fr; } }
+.split img { border-radius: var(--radius); aspect-ratio: 1 / 1; object-fit: cover; }
+.split .text { white-space: pre-line; }
+
+/* 表（診療時間・料金表・アクセス）
+---------------------------------------------------------------------------*/
+table.info-table { width: 100%; border-collapse: collapse; margin-top: 1rem; background: #fff; border-radius: var(--radius); overflow: hidden; }
+table.info-table th, table.info-table td { padding: 0.9rem 1rem; border-bottom: 1px solid #e5e5e5; text-align: left; font-size: 0.92rem; }
+table.info-table th { background: var(--light); width: 32%; white-space: pre-line; }
+table.info-table td { white-space: pre-line; }
+table.info-table td.price { text-align: right; font-weight: 700; white-space: nowrap; }
+
+.map-frame { border-radius: var(--radius); overflow: hidden; margin-top: 1.2rem; }
+.map-frame iframe { width: 100%; height: 320px; border: 0; display: block; }
+
+/* お知らせ
+---------------------------------------------------------------------------*/
+.news-list li { display: flex; gap: 1rem; padding: 0.9rem 0; border-bottom: 1px solid #e5e5e5; flex-wrap: wrap; }
+.news-list time { flex-shrink: 0; width: 7rem; color: var(--primary); font-weight: 700; }
+
+/* FAQ（静的展開・JS不要）
+---------------------------------------------------------------------------*/
+.faq-list { margin-top: 1rem; }
+.faq-item { background: #fff; border-radius: var(--radius); padding: 1.1rem 1.3rem; margin-bottom: 0.9rem; box-shadow: 0 1px 6px rgba(0,0,0,0.06); }
+.faq-item .q { font-weight: 700; color: var(--accent); margin-bottom: 0.5rem; }
+.faq-item .q::before { content: "Q. "; }
+.faq-item .a::before { content: "A. "; color: var(--primary); font-weight: 700; }
+.faq-item .a { white-space: pre-line; }
+
+/* スタッフ
+---------------------------------------------------------------------------*/
+.staff-grid { display: grid; gap: 1.5rem; margin-top: 1.5rem; grid-template-columns: 1fr; }
+@media (min-width: 640px) { .staff-grid { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); } }
+.staff-card img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: var(--radius); }
+.staff-card h3 { margin-top: 0.8rem; font-size: 1rem; }
+.staff-card .role { font-size: 0.8rem; color: var(--accent); margin: 0.2rem 0 0.5rem; }
+.staff-card p { font-size: 0.88rem; color: #555; white-space: pre-line; }
+
+/* お問い合わせ
+---------------------------------------------------------------------------*/
+.contact-section .cta-buttons { justify-content: flex-start; }
+.contact-section .btn { min-width: 220px; justify-content: center; font-size: 1.05rem; padding: 1.1rem 1.8rem; }
+
+/* フッター
+---------------------------------------------------------------------------*/
+footer.site-footer { background: #2b2f36; color: #dcdfe4; padding: 3rem var(--space) 1.5rem; }
+.footer-grid { display: grid; gap: 2rem; max-width: var(--max-width); margin: 0 auto; }
+@media (min-width: 760px) { .footer-grid { grid-template-columns: 1.2fr 1fr; } }
+.footer-grid h3 { color: #fff; font-size: 1rem; margin-bottom: 0.8rem; }
+.footer-address { white-space: pre-line; font-size: 0.88rem; line-height: 1.9; }
+.footer-nav a { display: block; padding: 0.35rem 0; font-size: 0.88rem; color: #c3c8ce; }
+.footer-nav a:hover { color: #fff; }
+.footer-sns { display: flex; gap: 0.8rem; margin-top: 1rem; }
+.footer-sns a { width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; }
+.copyright { text-align: center; font-size: 0.75rem; color: #8b9096; margin-top: 2.5rem; }
