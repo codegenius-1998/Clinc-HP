@@ -1,9 +1,11 @@
 import Link from "next/link";
-import { listTemplates } from "@/lib/templates";
+import { listDesignPresets } from "@/lib/designPresets";
+import { getBodySections } from "@/lib/siteSpec";
 import { HearingSheetForm } from "@/components/create/HearingSheetForm";
 
 export default async function CreateSitePage() {
-  const templates = await listTemplates();
+  const presets = listDesignPresets();
+  const sections = getBodySections();
 
   return (
     <div className="flex-1 bg-gradient-to-b from-sky-50 via-white to-white px-6 py-24">
@@ -24,7 +26,7 @@ export default async function CreateSitePage() {
         </p>
 
         <div className="mt-12">
-          <HearingSheetForm templates={templates} />
+          <HearingSheetForm presets={presets} sections={sections} />
         </div>
       </div>
     </div>

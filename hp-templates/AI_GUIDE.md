@@ -1,5 +1,8 @@
 # hp-templates — AIによるクリニックHP制作ガイド（索引）
 
+> **⚠️ 2026年8月改訂: このディレクトリ以下のHTML/CSS/JSは実行時にはもう使われません。**
+> 現在のサイト生成は「OpenAIがページ内容を一から作成し、コードがHTML/CSSに組み立てる」方式に変わりました（詳細は [`TEMPLATE_VARIABLES.md`](TEMPLATE_VARIABLES.md) と、必須セクション構成の正本 [`SITE_SPEC.json`](SITE_SPEC.json) を参照）。以下の9テンプレートと `template0001` は、配色・雰囲気を抽出した「デザインプリセット」（[`presets/`](presets/)）の元ネタとして保存してあるだけの参考資料です。本文中の「`variables.json` を読んでから編集する」といった手順はもう有効ではありません。
+
 このリポジトリには、無料HTMLテンプレート配布サイト「[Template Party](https://template-party.com/)」（テンプレートパーティ）由来の、医療・クリニック系ホームページテンプレートが9種類収録されています。サイト運営者は Template Party の**有償ライセンス契約を締結済み**で、これを根拠に以下の前処理を全テンプレートに対して実施済みです。
 
 1. **クレジット表記の削除** — 各HTMLファイル末尾にあった `<!--以下の行はテンプレートの著作。削除しないで下さい。-->` というコメントと、それに続く `<span class="pr"><a href="https://template-party.com/">《Web Design:Template-Party》</a></span>` のクレジットリンクを全ページから削除済みです。あわせて、`index.html`（テンプレートによっては `_readme.html`）に埋め込まれていた「テンプレートのご利用前に必ずお読み下さい」「無料CMS（Template Party CMS）のご案内」「無料素材サイト（haconana）のご案内」「このテンプレートはフレーム＆パーツを使用しています」といった、Template Party自身の販促・注意書きセクションも、実サイトのコンテンツではないため削除済みです。

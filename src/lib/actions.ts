@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { listTemplates } from "./templates";
+import { listDesignPresets } from "./designPresets";
 import { generateSlug, getHearing, saveHearing, updateHearing, type HearingSheet } from "./hearing";
 import { generateSite } from "./siteGenerator";
 import { deployGeneratedSiteToCloudflare } from "./cloudflareDeploy";
@@ -36,12 +36,12 @@ export async function createHearingAction(
     return { error: "テンプレートとカラーを選択してください。" };
   }
 
-  const templates = await listTemplates();
-  const template = templates.find((t) => t.id === templateId);
-  if (!template) {
-    return { error: "選択されたテンプレートが見つかりません。" };
+  const presets = listDesignPresets();
+  const preset = presets.find((p) => p.id === templateId);
+  if (!preset) {
+    return { error: "選択されたデザインが見つかりません。" };
   }
-  const colorSchemeOption = template.colorSchemes.find((c) => c.id === colorScheme);
+  const colorSchemeOption = preset.colorThemes.find((c) => c.id === colorScheme);
   const slug = generateSlug(clinicName);
 
   // Photos are uploaded to Supabase Storage client-side before this action runs (Server Actions
@@ -73,10 +73,33 @@ export async function createHearingAction(
     .map((question, i) => ({ question, answer: faqAnswers[i] ?? "" }))
     .filter((faq) => faq.question.length > 0 && faq.answer.length > 0);
 
+  const newsDates = formData.getAll("newsDate").map((v) => (typeof v === "string" ? v.trim() : ""));
+  const newsTitles = formData.getAll("newsTitle").map((v) => (typeof v === "string" ? v.trim() : ""));
+  const news = newsTitles
+    .map((title, i) => ({ date: newsDates[i] ?? "", title }))
+    .filter((item) => item.title.length > 0);
+
+  const priceNames = formData.getAll("priceName").map((v) => (typeof v === "string" ? v.trim() : ""));
+  const pricePrices = formData.getAll("pricePrice").map((v) => (typeof v === "string" ? v.trim() : ""));
+  const priceNotes = formData.getAll("priceNote").map((v) => (typeof v === "string" ? v.trim() : ""));
+  const priceItems = priceNames
+    .map((name, i) => ({ name, price: pricePrices[i] ?? "", note: priceNotes[i] || undefined }))
+    .filter((item) => item.name.length > 0 && item.price.length > 0);
+
+  // Emitted by SectionOrderEditor as three parallel hidden-input arrays, one triplet per section in
+  // the selected template — present on every submit (not just when the user touches the control), so
+  // an empty result here only ever means the template had no sections.
+  const sectionIds = formData.getAll("sectionId").map((v) => (typeof v === "string" ? v : ""));
+  const sectionVisibles = formData.getAll("sectionVisible").map((v) => v === "true");
+  const sectionOrders = formData.getAll("sectionOrder").map((v) => Number(v));
+  const sectionPrefs = sectionIds
+    .map((id, i) => ({ id, visible: sectionVisibles[i] ?? true, order: sectionOrders[i] ?? i }))
+    .filter((pref) => pref.id.length > 0);
+
   const hearing = await saveHearing({
     slug,
-    templateId: template.id,
-    templateLabel: template.label,
+    templateId: preset.id,
+    templateLabel: preset.label,
     colorScheme,
     colorSchemeLabel: colorSchemeOption?.label ?? colorScheme,
     clinicName,
@@ -91,6 +114,9 @@ export async function createHearingAction(
     uploadedImages,
     staffMembers: staffMembers.length > 0 ? staffMembers : undefined,
     faqs: faqs.length > 0 ? faqs : undefined,
+    news: news.length > 0 ? news : undefined,
+    priceItems: priceItems.length > 0 ? priceItems : undefined,
+    sectionPrefs: sectionPrefs.length > 0 ? sectionPrefs : undefined,
   });
 
   try {

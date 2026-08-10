@@ -1,0 +1,13 @@
+{
+  "id": "clinic-pink-warm",
+  "label": "やさしいピンク",
+  "notes": "淡いピンクを基調にした、やわらかく親しみやすい雰囲気。小児科・女性向け診療科・歯科などに合う。（参考: hp-temp/tp_clinic4_pink）",
+  "colorThemes": [
+    { "id": "pink", "label": "ピンク", "tokens": { "primary": "#ff9999", "accent": "#ec6262", "light": "#fff5f5", "primaryInverse": "#fff", "accentInverse": "#fff" } },
+    { "id": "coral", "label": "コーラル", "tokens": { "primary": "#ff8577", "accent": "#e2574c", "light": "#fff2ef", "primaryInverse": "#fff", "accentInverse": "#fff" } }
+  ],
+  "defaultColorTheme": "pink",
+  "fontFamily": "sans",
+  "cardStyle": "rounded",
+  "mood": "やさしく親しみやすい、女性やお子さまも安心できる温かみのあるトーン。硬すぎない、柔らかい言葉づかい。"
+}
