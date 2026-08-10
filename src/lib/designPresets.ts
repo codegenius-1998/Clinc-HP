@@ -24,6 +24,18 @@ const designPresetSchema = z.object({
   notes: z.string(),
   fontFamily: z.enum(["sans", "serif"]),
   cardStyle: z.enum(["rounded", "sharp"]),
+  /** "full-bleed": hero image fills the width with centered overlay text (the original look).
+   * "split": image and headline sit side-by-side on a plain background — a distinctly different,
+   * more editorial page structure, not just a color/font tweak. */
+  heroLayout: z.enum(["full-bleed", "split"]),
+  /** How department/features/facility cards are laid out — the biggest structural lever a preset has.
+   * "grid": photo-topped cards in a wrapping grid (the original look).
+   * "list": horizontal rows, photo beside text — editorial, denser.
+   * "minimal": no photos at all, just a numbered accent + heading + text in a bordered box. */
+  blockLayout: z.enum(["grid", "list", "minimal"]),
+  /** Multiplies section vertical padding — "spacious" reads noticeably more airy/premium than
+   * "compact" at the same content length. */
+  spacing: z.enum(["compact", "spacious"]),
   mood: z.string(),
 });
 

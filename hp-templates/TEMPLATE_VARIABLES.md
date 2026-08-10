@@ -113,20 +113,29 @@ type ContentPlan = {
 ```
 
 ```json
-// hp-templates/presets/clinic-standard.json（1ファイル1プリセット、色は持たない）
+// hp-templates/presets/template0009.json（1ファイル1プリセット、色は持たない）
 {
-  "id": "clinic-standard",
-  "label": "スタンダード",
+  "id": "template0009",
+  "label": "整骨院（ネイビー）",
   "notes": "...",
-  "fontFamily": "sans",
-  "cardStyle": "rounded",
+  "fontFamily": "serif",
+  "cardStyle": "sharp",
+  "heroLayout": "split",
+  "blockLayout": "list",
+  "spacing": "compact",
   "mood": "コピー生成AIに渡す文章トーンの指示"
 }
 ```
 
-現在プリセットは4種類（`clinic-standard`／`clinic-pink-warm`／`clinic-navy-premium`／`clinic-fresh-green`）、カラーは7種類。プリセットは `hp-templates/template0001` や `hp-temp/tp_*` の雰囲気を要約したもの（かつては専用の配色も持っていたが、`colors.json` への分離にともない色は共通パレットへ統合済み）。追加する場合はそれぞれ同じ形式のJSONを置くだけでよい（コード変更不要）。
+プリセットは `hp-templates/template0001`〜`template0009`（実在する9つのテンプレート）の`id`・`label`・雰囲気をそのまま取得して作成したもの——`presets/`配下のファイルは架空の名前ではなく、対応する `hp-templates/templateXXXX/` ディレクトリと1:1で紐づく。`fontFamily`/`cardStyle`に加えて、以下の3つがレイアウトの構造そのものを変える:
 
-ヒアリング画面（`/create`）では、Step1で本文セクション構成とカラーを、Step2でセクションごとの入力を1つずつ、Step3でデザイン（雰囲気・フォント）を選ぶ4ステップ構成になっている（`src/components/create/HearingSheetForm.tsx`）。
+- `heroLayout`: `"full-bleed"`（画像を全幅背景にして中央にテキストを重ねる）／`"split"`（画像とテキストを左右に分けたエディトリアル風）
+- `blockLayout`: `"grid"`（写真つきカードの折り返しグリッド）／`"list"`（写真を左に置いた横並びの編集記事風の行）／`"minimal"`（写真を使わず番号つきの見出し＋本文だけ）
+- `spacing`: `"compact"`／`"spacious"`（セクションの余白の広さ）
+
+カラーは `hp-templates/colors.json` に7色（`skyblue`/`blue`/`green`/`navy`/`pink`/`coral`/`olive`）——これも9つのテンプレートが実際に共通して持っている配色候補をそのまま採用したもの。プリセットを追加する場合は、対応する `hp-templates/templateXXXX/` を用意した上で、同じ形式のJSONを `presets/` に置くだけでよい（コード変更不要）。
+
+ヒアリング画面（`/create`）では、Step1で本文セクション構成とカラーを、Step2でセクションごとの入力を1つずつ、Step3でデザイン（テンプレート・雰囲気・フォント・レイアウト構造）を選ぶ4ステップ構成になっている（`src/components/create/HearingSheetForm.tsx`）。
 
 ## レンダリング（`src/lib/render/`）
 

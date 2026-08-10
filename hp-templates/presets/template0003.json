@@ -1,0 +1,11 @@
+{
+  "id": "template0003",
+  "label": "クリニック（旧世代ピンク）",
+  "notes": "写真とテキストを左右に並べたヒーロー、余白広めのカードグリッド。やわらかく親しみやすいレイアウト。病院・歯科医院・整体・整骨院などに合う。（参考: hp-templates/template0003 / 旧tp_clinic4_pink）",
+  "fontFamily": "sans",
+  "cardStyle": "rounded",
+  "heroLayout": "split",
+  "blockLayout": "grid",
+  "spacing": "spacious",
+  "mood": "やさしく親しみやすい、女性やお子さまも安心できる温かみのあるトーン。硬すぎない、柔らかい言葉づかい。"
+}

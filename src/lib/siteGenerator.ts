@@ -12,6 +12,7 @@ import { renderSiteHtml } from "./render/renderSiteHtml";
 
 const GENERATED_ROOT = path.join(process.cwd(), "public", "generated");
 const SITE_CSS_SOURCE = path.join(process.cwd(), "src", "lib", "render", "site.css");
+const SITE_JS_SOURCE = path.join(process.cwd(), "src", "lib", "render", "main.js");
 const IMAGE_CONCURRENCY = 3;
 
 export type GeneratedSite = {
@@ -85,12 +86,20 @@ type ImageJob = {
 /** Turns the AI's `images` plan (sectionId/blockIndex pairs) into concrete, collision-free output
  * file paths, and adds the staff-photo jobs the content plan never sees (staff is never AI-authored —
  * see SITE_SPEC.json — so those slots are synthesized here directly from `hearing.staffMembers`). */
-function buildImageJobs(hearing: HearingSheet, plan: ContentPlan, aiSectionIds: Set<string>): ImageJob[] {
+function buildImageJobs(
+  hearing: HearingSheet,
+  plan: ContentPlan,
+  aiSectionIds: Set<string>,
+  blockLayout: DesignPreset["blockLayout"]
+): ImageJob[] {
   const jobs: ImageJob[] = [];
   const seenKeys = new Set<string>();
 
   for (const img of plan.images) {
     if (img.sectionId !== "header" && img.sectionId !== "hero" && !aiSectionIds.has(img.sectionId)) continue;
+    // "minimal" block layout never renders a per-card image (see AiSection in components.tsx) — skip
+    // generating one so a real API call isn't spent on a file the page will never reference.
+    if (img.blockIndex !== undefined && blockLayout === "minimal") continue;
     const key = img.blockIndex !== undefined ? `${img.sectionId}-${img.blockIndex}` : img.sectionId;
     if (seenKeys.has(key)) continue;
     seenKeys.add(key);
@@ -191,6 +200,9 @@ function buildViewModel(
     theme: colorTheme,
     fontFamily: preset.fontFamily,
     cardStyle: preset.cardStyle,
+    heroLayout: preset.heroLayout,
+    blockLayout: preset.blockLayout,
+    spacing: preset.spacing,
     seo: plan.seo,
     navItems,
     aiSections,
@@ -238,11 +250,12 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
   await rm(outDir, { recursive: true, force: true });
   await mkdir(path.join(outDir, "images"), { recursive: true });
   await mkdir(path.join(outDir, "css"), { recursive: true });
+  await mkdir(path.join(outDir, "js"), { recursive: true });
 
   // --- images: AI-planned placements (logo/hero/section/block photos) plus staff photos the content
   // plan never authors. Uploaded photos win over AI generation wherever the category matcher finds a
   // fit; each uploaded photo is used at most once. ---
-  const jobs = buildImageJobs(hearing, plan, aiSectionIds);
+  const jobs = buildImageJobs(hearing, plan, aiSectionIds, preset.blockLayout);
   const uploadedImages = hearing.uploadedImages ?? {};
   const availableCategories = (Object.keys(uploadedImages) as ImageCategoryKey[]).filter((k) => (uploadedImages[k]?.length ?? 0) > 0);
 
@@ -316,6 +329,7 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
   const html = await renderSiteHtml(vm);
   await writeFile(path.join(outDir, "index.html"), html, "utf-8");
   await writeFile(path.join(outDir, "css", "site.css"), await readFile(SITE_CSS_SOURCE, "utf-8"), "utf-8");
+  await writeFile(path.join(outDir, "js", "main.js"), await readFile(SITE_JS_SOURCE, "utf-8"), "utf-8");
 
   return { slug: hearing.slug, previewUrl: `/generated/${hearing.slug}/index.html` };
 }

@@ -37,6 +37,9 @@ export type SiteViewModel = {
   theme: ColorTheme;
   fontFamily: "sans" | "serif";
   cardStyle: "rounded" | "sharp";
+  heroLayout: "full-bleed" | "split";
+  blockLayout: "grid" | "list" | "minimal";
+  spacing: "compact" | "spacious";
   seo: { title: string; metaDescription: string; ogTitle: string; ogDescription: string; ogSiteName: string };
   navItems: NavItem[];
   aiSections: SectionView[];

@@ -1,12 +1,12 @@
 {
-  "$note": "全デザインスタイル（hp-templates/presets/*.json）共通のカラーパレット。色の選択とデザイン（雰囲気・フォント・カード形状）の選択は互いに独立している。",
+  "$note": "全デザインプリセット共通のカラーパレット。値は hp-templates/template0001〜0009 の各 variables.json の colorScheme.options から実際に取得したもの（全テンプレート共通で採用されている7色）。色とデザイン（プリセット）は互いに独立した別々の選択。",
   "colorThemes": [
     { "id": "skyblue", "label": "スカイブルー", "tokens": { "primary": "#4ba3fc", "accent": "#2d7dd2", "light": "#e8f4ff", "primaryInverse": "#fff", "accentInverse": "#fff" } },
     { "id": "blue", "label": "ブルー", "tokens": { "primary": "#1f6bbe", "accent": "#2eb8cb", "light": "#f0f7fb", "primaryInverse": "#fff", "accentInverse": "#fff" } },
     { "id": "green", "label": "グリーン", "tokens": { "primary": "#2d8f5f", "accent": "#5cb88a", "light": "#eef8f2", "primaryInverse": "#fff", "accentInverse": "#fff" } },
     { "id": "navy", "label": "ネイビー", "tokens": { "primary": "#101f3a", "accent": "#7b8269", "light": "#f2f5f9", "primaryInverse": "#fff", "accentInverse": "#fff" } },
     { "id": "pink", "label": "ピンク", "tokens": { "primary": "#ff9999", "accent": "#ec6262", "light": "#fff5f5", "primaryInverse": "#fff", "accentInverse": "#fff" } },
-    { "id": "coral", "label": "コーラル", "tokens": { "primary": "#ff8577", "accent": "#e2574c", "light": "#fff2ef", "primaryInverse": "#fff", "accentInverse": "#fff" } },
-    { "id": "khaki-green", "label": "カーキグリーン", "tokens": { "primary": "#869a4d", "accent": "#e58e3d", "light": "#f6f7ee", "primaryInverse": "#fff", "accentInverse": "#fff" } }
+    { "id": "coral", "label": "コーラル", "tokens": { "primary": "#f56270", "accent": "#e04858", "light": "#faf9f1", "primaryInverse": "#fff", "accentInverse": "#fff" } },
+    { "id": "olive", "label": "オリーブ", "tokens": { "primary": "#869a4d", "accent": "#e58e3d", "light": "#f9f6ef", "primaryInverse": "#fff", "accentInverse": "#fff" } }
   ]
 }

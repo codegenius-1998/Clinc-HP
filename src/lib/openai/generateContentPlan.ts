@@ -49,7 +49,7 @@ const sectionContentSchema = z.object({
 
 function buildSystemPrompt(siteSpec: SiteSpec, preset: DesignPreset): string {
   return `あなたは個人クリニックのホームページを一から作成するAIディレクター件コピーライターです。
-渡された資料をもとに、このクリニックサイトのページ内容プラン（JSON）を1回で作成してください。**HTMLタグは一切出力しません**。出力はテキスト内容と画像の生成指示（プロンプト）だけです。ページの組み立て（HTML/CSS）はこの後コード側が行います。
+渡された資料をもとに、このクリニックサイトのページ内容プラン（JSON）を1回で作成してください。**HTMLタグは一切出力しません**。出力はテキスト内容と画像の生成指示（プロンプト）だけです。ページの組み立て（HTML/CSS）はこの後コード側が行います。改行を入れたい場合でも \`<br>\` のようなタグは絶対に書かず、改行無しの1文として書くこと（見出し・本文とも、タグを含まないプレーンテキストのみ）。
 
 # 絶対に守るルール（正直性）
 ${siteSpec.honestyRules.map((r) => `- ${r}`).join("\n")}
@@ -153,7 +153,26 @@ export async function generateContentPlan(
   }
 
   return {
-    ...parsed,
+    ...(stripStrayTags(parsed) as typeof parsed),
     images: parsed.images.map((img) => ({ ...img, blockIndex: img.blockIndex ?? undefined })),
   };
+}
+
+/** Every string field in the plan is inserted as plain React text (auto-escaped, so this is not an
+ * XSS concern) — but the model occasionally hallucinates a stray HTML tag anyway (seen in practice:
+ * a literal "<br>" inside a hero headline meant as a line-break hint), which then shows up as ugly
+ * literal text on the page instead of being interpreted as markup. Strip anything that looks like an
+ * HTML tag from every string in the parsed plan as a blanket safety net, rather than trying to
+ * enumerate every field it could show up in. */
+function stripStrayTags<T>(value: T): T {
+  if (typeof value === "string") {
+    return value.replace(/<\/?[a-z][a-z0-9]*(?:\s[^<>]*)?\/?>/gi, "") as T;
+  }
+  if (Array.isArray(value)) {
+    return value.map((v) => stripStrayTags(v)) as T;
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, stripStrayTags(v)])) as T;
+  }
+  return value;
 }

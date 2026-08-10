@@ -67,9 +67,9 @@ function CtaButtons({ tel, line }: { tel?: string; line?: string }) {
 
 function Hero({ vm }: { vm: SiteViewModel }) {
   return (
-    <section id="top" className="hero">
+    <section id="top" className={`hero hero-${vm.heroLayout}`}>
       <img src={vm.heroImage} alt="" />
-      <div className="hero-copy">
+      <div className="hero-copy reveal">
         <h1>{vm.heroHeadline}</h1>
         {vm.heroSubheadline && <p>{vm.heroSubheadline}</p>}
         <CtaButtons tel={vm.phone} line={vm.line} />
@@ -79,13 +79,16 @@ function Hero({ vm }: { vm: SiteViewModel }) {
 }
 
 /** Renders one AI-authored body section (department/greeting/features/facility). A section-level
- * `image` renders as a side-by-side split layout; per-block images (department cards) render as a
- * card grid; sections with neither image kind still render fine as plain heading+body+card text. */
-function AiSection({ section }: { section: SectionView }) {
-  const hasBlockImages = section.blocks.some((b) => b.image);
+ * `image` renders as a side-by-side split layout; per-block images (department cards) render in
+ * whichever card layout the design preset chose — `blockLayout` is the biggest structural lever a
+ * preset has, so it's worth branching on explicitly rather than folding into CSS alone: "minimal"
+ * drops photos entirely in favor of a numbered accent, which no CSS-only trick can do cleanly since
+ * the image element itself must not render (an empty broken `<img>` would still take layout space). */
+function AiSection({ section, blockLayout }: { section: SectionView; blockLayout: SiteViewModel["blockLayout"] }) {
+  const hasBlockImages = blockLayout !== "minimal" && section.blocks.some((b) => b.image);
   return (
     <section id={section.id} className="section">
-      <div className="section-inner">
+      <div className="section-inner reveal">
         <h2>{section.label}</h2>
         {section.image ? (
           <div className="split">
@@ -98,10 +101,16 @@ function AiSection({ section }: { section: SectionView }) {
           section.body && <p className="lead">{section.body}</p>
         )}
         {section.blocks.length > 0 && (
-          <div className="cards">
+          <div className={`cards cards-${blockLayout}`}>
             {section.blocks.map((block, i) => (
               <div className="card" key={i}>
-                {hasBlockImages && block.image && <img src={block.image} alt="" />}
+                {blockLayout === "minimal" ? (
+                  <span className="card-index" aria-hidden>
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                ) : (
+                  hasBlockImages && block.image && <img src={block.image} alt="" />
+                )}
                 <div className="card-body">
                   <h3>{block.heading}</h3>
                   <p>{block.body}</p>
@@ -118,7 +127,7 @@ function AiSection({ section }: { section: SectionView }) {
 function HoursSection({ rows }: { rows: HoursRow[] }) {
   return (
     <section id="hours" className="section">
-      <div className="section-inner">
+      <div className="section-inner reveal">
         <h2>診療時間</h2>
         <table className="info-table">
           <tbody>
@@ -138,7 +147,7 @@ function HoursSection({ rows }: { rows: HoursRow[] }) {
 function AccessSection({ address, mapQuery }: { address?: string; mapQuery?: string }) {
   return (
     <section id="access" className="section">
-      <div className="section-inner">
+      <div className="section-inner reveal">
         <h2>アクセス</h2>
         {address && <p className="lead">{address}</p>}
         {mapQuery && (
@@ -154,7 +163,7 @@ function AccessSection({ address, mapQuery }: { address?: string; mapQuery?: str
 function NewsSection({ items }: { items: NewsItem[] }) {
   return (
     <section id="news" className="section">
-      <div className="section-inner">
+      <div className="section-inner reveal">
         <h2>お知らせ</h2>
         <ul className="news-list">
           {items.map((item, i) => (
@@ -172,7 +181,7 @@ function NewsSection({ items }: { items: NewsItem[] }) {
 function StaffSection({ members }: { members: StaffMember[] }) {
   return (
     <section id="staff" className="section">
-      <div className="section-inner">
+      <div className="section-inner reveal">
         <h2>スタッフ紹介</h2>
         <div className="staff-grid">
           {members.map((m, i) => (
@@ -192,15 +201,25 @@ function StaffSection({ members }: { members: StaffMember[] }) {
 function FaqSection({ items }: { items: FaqItem[] }) {
   return (
     <section id="faq" className="section">
-      <div className="section-inner">
+      <div className="section-inner reveal">
         <h2>よくある質問</h2>
         <div className="faq-list">
-          {items.map((item, i) => (
-            <div className="faq-item" key={i}>
-              <p className="q">{item.question}</p>
-              <p className="a">{item.answer}</p>
-            </div>
-          ))}
+          {items.map((item, i) => {
+            const answerId = `faq-answer-${i}`;
+            return (
+              <div className="faq-item" key={i}>
+                <button type="button" className="faq-q" aria-expanded="false" aria-controls={answerId}>
+                  <span>{item.question}</span>
+                  <span className="faq-icon" aria-hidden>
+                    +
+                  </span>
+                </button>
+                <div className="faq-a" id={answerId}>
+                  {item.answer}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </section>
@@ -210,7 +229,7 @@ function FaqSection({ items }: { items: FaqItem[] }) {
 function PricingSection({ items }: { items: PriceItem[] }) {
   return (
     <section id="pricing" className="section">
-      <div className="section-inner">
+      <div className="section-inner reveal">
         <h2>料金表</h2>
         <table className="info-table">
           <tbody>
@@ -231,7 +250,7 @@ function PricingSection({ items }: { items: PriceItem[] }) {
 function ContactSection({ vm }: { vm: SiteViewModel }) {
   return (
     <section id="contact" className="section contact-section">
-      <div className="section-inner">
+      <div className="section-inner reveal">
         <h2>お問い合わせ・ご予約</h2>
         <p className="lead">お電話またはLINEにて、お気軽にご相談・ご予約ください。</p>
         <CtaButtons tel={vm.phone} line={vm.line} />
@@ -315,6 +334,7 @@ export function SitePage({ vm }: { vm: SiteViewModel }) {
       vm.fontFamily === "serif"
         ? '"Hiragino Mincho ProN", "Yu Mincho", serif'
         : '-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", "Segoe UI", sans-serif',
+    "--space-scale": vm.spacing === "spacious" ? "1.5" : "1",
   } as CSSProperties;
   return (
     <html lang="ja" style={themeStyle}>
@@ -334,9 +354,16 @@ export function SitePage({ vm }: { vm: SiteViewModel }) {
         <Nav items={vm.navItems} />
         <Hero vm={vm} />
         <main>
-          {vm.navItems.map((item) => (aiSectionsById.has(item.id) ? <AiSection key={item.id} section={aiSectionsById.get(item.id)!} /> : FIXED_SECTION_IDS.has(item.id) ? renderFixedSection(vm, item.id) : null))}
+          {vm.navItems.map((item) =>
+            aiSectionsById.has(item.id) ? (
+              <AiSection key={item.id} section={aiSectionsById.get(item.id)!} blockLayout={vm.blockLayout} />
+            ) : FIXED_SECTION_IDS.has(item.id) ? (
+              renderFixedSection(vm, item.id)
+            ) : null
+          )}
         </main>
         <Footer vm={vm} />
+        <script src="js/main.js" defer></script>
       </body>
     </html>
   );

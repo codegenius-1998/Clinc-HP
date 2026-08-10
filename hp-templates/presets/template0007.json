@@ -1,0 +1,11 @@
+{
+  "id": "template0007",
+  "label": "クリニックLP（スライド主体）",
+  "notes": "スライドショーを主体としたクリニック向けLPをベースにした構成。フルワイドヒーロー＋写真を使わない番号つきミニマルカードで、写真の印象を活かしたシンプルな見せ方に合う。（参考: hp-templates/template0007 / 旧tp_lp3_clinic_slide）",
+  "fontFamily": "sans",
+  "cardStyle": "rounded",
+  "heroLayout": "full-bleed",
+  "blockLayout": "minimal",
+  "spacing": "spacious",
+  "mood": "写真の印象を大切にした、シンプルで洗練されたトーン。"
+}

@@ -12,11 +12,23 @@
   --radius: 12px;
   --font: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", "Segoe UI", sans-serif;
   --space: 5vw;
+  --space-scale: 1;
   --max-width: 1080px;
 }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* スクロール演出（js/main.js の IntersectionObserver と対）
+ * .js が付いた場合のみ初期状態を隠す — プログレッシブエンハンスメント。
+ * JSが読み込めない/無効な環境でも本文は最初から普通に表示される。 */
+.js .reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.7s ease, transform 0.7s ease; }
+.js .reveal.is-visible { opacity: 1; transform: translateY(0); }
 body {
   font-family: var(--font);
   color: #2b2b2b;
@@ -41,8 +53,12 @@ header.site-header {
   padding: 0.9rem var(--space);
   background: #fff;
   border-bottom: 1px solid #eee;
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  transition: box-shadow 0.2s ease;
 }
+header.site-header.is-scrolled { box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
 .brand { display: flex; align-items: center; gap: 0.7rem; }
 .brand img { width: 44px; height: 44px; object-fit: contain; }
 .brand .clinic-name { font-size: 1.05rem; font-weight: 700; letter-spacing: 0.02em; }
@@ -80,6 +96,7 @@ nav.site-nav a:hover { background: var(--accent); }
 
 /* ヒーロー
 ---------------------------------------------------------------------------*/
+/* "full-bleed"（既定）: 画像を全幅背景にして中央にテキストを重ねる */
 .hero { position: relative; }
 .hero img { width: 100%; aspect-ratio: 2 / 1; object-fit: cover; }
 .hero-copy {
@@ -90,6 +107,40 @@ nav.site-nav a:hover { background: var(--accent); }
 .hero-copy p { font-size: 1rem; opacity: 0.95; }
 @media (min-width: 760px) { .hero-copy h1 { font-size: 2.2rem; } }
 
+/* "split": 画像とテキストを左右（モバイルは上下）に分けた、エディトリアル風レイアウト */
+.hero.hero-split {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  padding: calc(3rem * var(--space-scale)) var(--space);
+  background: var(--light);
+}
+@media (min-width: 760px) {
+  .hero.hero-split { flex-direction: row; align-items: center; }
+  /* min-width/min-height: 0 opt out of flexbox's automatic min-content size floor — without it, the
+   * image's `aspect-ratio` gives it an oversized intrinsic content size that `flex: 1` alone can't
+   * shrink past, and the text column gets squeezed to near-zero width instead of an even 50/50 split. */
+  .hero.hero-split img, .hero.hero-split .hero-copy { flex: 1; min-width: 0; min-height: 0; }
+}
+.hero.hero-split img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--radius);
+  object-fit: cover;
+}
+.hero.hero-split .hero-copy {
+  position: static;
+  background: none;
+  color: #2b2b2b;
+  align-items: flex-start;
+  text-align: left;
+  padding: 0;
+  min-width: 0;
+}
+.hero.hero-split .hero-copy h1 { color: var(--primary); text-shadow: none; }
+.hero.hero-split .hero-copy p { color: #555; opacity: 1; }
+.hero.hero-split .cta-buttons { justify-content: flex-start; }
+
 .cta-buttons { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.8rem; margin-top: 0.6rem; }
 .btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.8rem 1.6rem; border-radius: var(--radius); font-weight: 700; font-size: 0.95rem; }
 .btn-tel { background: var(--primary); color: var(--primary-inverse); }
@@ -97,20 +148,50 @@ nav.site-nav a:hover { background: var(--accent); }
 
 /* セクション共通
 ---------------------------------------------------------------------------*/
-.section { padding: 4rem var(--space); }
+.section { padding: calc(4rem * var(--space-scale)) var(--space); }
 .section:nth-of-type(even) { background: var(--light); }
 .section-inner { max-width: var(--max-width); margin: 0 auto; }
 .section h2 { font-size: 1.5rem; margin-bottom: 0.5rem; border-bottom: 3px solid #ddd; padding-bottom: 0.7rem; position: relative; }
 .section h2::after { content: ""; position: absolute; left: 0; bottom: -3px; width: 4.5rem; height: 3px; background: var(--primary); }
 .section .lead { color: #666; margin: 1.2rem 0 1.6rem; white-space: pre-line; }
 
-.cards { display: grid; grid-template-columns: 1fr; gap: 1.2rem; margin-top: 1.5rem; }
+/* "grid"（既定）: 写真つきカードを折り返しグリッドで並べる */
+.cards { display: grid; grid-template-columns: 1fr; gap: calc(1.2rem * var(--space-scale)); margin-top: 1.5rem; }
 @media (min-width: 640px) { .cards { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); } }
 .card { background: #fff; border-radius: var(--radius); overflow: hidden; box-shadow: 0 1px 6px rgba(0,0,0,0.06); }
 .card img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
 .card-body { padding: 1.1rem; }
 .card-body h3, .card-body h4 { font-size: 1rem; margin-bottom: 0.4rem; color: var(--accent); }
 .card-body p { font-size: 0.9rem; color: #555; margin: 0; white-space: pre-line; }
+
+/* "list": 写真を左に置いた横並びの編集記事風の行を縦に積む */
+.cards-list { display: flex; flex-direction: column; grid-template-columns: none; }
+.cards-list .card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 1.5rem;
+  background: none;
+  box-shadow: none;
+  border-radius: 0;
+  border-bottom: 1px solid #e2e2e2;
+  padding-bottom: calc(1.5rem * var(--space-scale));
+}
+.cards-list .card:last-child { border-bottom: none; }
+.cards-list .card img { width: 140px; height: 140px; flex-shrink: 0; aspect-ratio: 1 / 1; border-radius: var(--radius); }
+.cards-list .card-body { padding: 0; }
+
+/* "minimal": 写真を使わず、番号つきの見出し＋本文だけのシンプルなカード */
+.cards-minimal .card {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  box-shadow: none;
+  padding: 1.2rem;
+}
+.card-index { flex-shrink: 0; font-size: 1.5rem; font-weight: 700; line-height: 1; color: var(--accent); font-family: var(--font); }
 
 .split { display: grid; gap: 1.5rem; align-items: center; }
 @media (min-width: 760px) { .split { grid-template-columns: 40% 1fr; } }
@@ -133,14 +214,25 @@ table.info-table td.price { text-align: right; font-weight: 700; white-space: no
 .news-list li { display: flex; gap: 1rem; padding: 0.9rem 0; border-bottom: 1px solid #e5e5e5; flex-wrap: wrap; }
 .news-list time { flex-shrink: 0; width: 7rem; color: var(--primary); font-weight: 700; }
 
-/* FAQ（静的展開・JS不要）
+/* FAQ（アコーディオン開閉。JS未実行時は全件開いたまま表示されるフォールバック付き）
 ---------------------------------------------------------------------------*/
 .faq-list { margin-top: 1rem; }
-.faq-item { background: #fff; border-radius: var(--radius); padding: 1.1rem 1.3rem; margin-bottom: 0.9rem; box-shadow: 0 1px 6px rgba(0,0,0,0.06); }
-.faq-item .q { font-weight: 700; color: var(--accent); margin-bottom: 0.5rem; }
-.faq-item .q::before { content: "Q. "; }
-.faq-item .a::before { content: "A. "; color: var(--primary); font-weight: 700; }
-.faq-item .a { white-space: pre-line; }
+.faq-item { background: #fff; border-radius: var(--radius); margin-bottom: 0.9rem; box-shadow: 0 1px 6px rgba(0,0,0,0.06); overflow: hidden; }
+.faq-q {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  width: 100%; border: none; background: none; cursor: pointer;
+  padding: 1.1rem 1.3rem; font: inherit; text-align: left;
+  font-weight: 700; color: var(--accent);
+}
+.faq-q::before { content: "Q. "; }
+.faq-icon { flex-shrink: 0; font-size: 1.2rem; line-height: 1; color: var(--primary); transition: transform 0.25s ease; }
+.faq-item.open .faq-icon { transform: rotate(45deg); }
+.faq-a { max-height: 800px; padding: 0 1.3rem 1.1rem 1.3rem; white-space: pre-line; }
+.faq-a::before { content: "A. "; color: var(--primary); font-weight: 700; }
+/* JSが動いている場合のみ閉じた状態を作る（.faq-itemに.openが無ければ隠す）。
+ * JS無効時は .js が付かないため常に全件展開表示のまま — 情報が読めなくなることはない。 */
+.js .faq-a { max-height: 0; padding-top: 0; padding-bottom: 0; overflow: hidden; transition: max-height 0.3s ease, padding 0.3s ease; }
+.js .faq-item.open .faq-a { max-height: 800px; padding-top: 0; padding-bottom: 1.1rem; }
 
 /* スタッフ
 ---------------------------------------------------------------------------*/

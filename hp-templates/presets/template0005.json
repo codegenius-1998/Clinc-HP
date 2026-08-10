@@ -1,0 +1,11 @@
+{
+  "id": "template0005",
+  "label": "クリニック（ブルー・LP統合版）",
+  "notes": "ブルー基調の複数ページ相当の構成をベースにした、フルワイドヒーロー＋写真つきカードグリッド。幅広い診療科に合う。（参考: hp-templates/template0005 / 旧tp_clinic7_blue）",
+  "fontFamily": "sans",
+  "cardStyle": "rounded",
+  "heroLayout": "full-bleed",
+  "blockLayout": "grid",
+  "spacing": "compact",
+  "mood": "誠実で信頼感のある、オーソドックスな医療機関らしいトーン。"
+}
