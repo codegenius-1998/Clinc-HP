@@ -92,30 +92,41 @@ type ContentPlan = {
 ## SEO・カラーテーマ・ヘッダー/フッターのリンク
 
 - **SEO**: `ContentPlan.seo` の5項目（title/meta description/og:title/og:description/og:site_name）を毎回AIが医院名・診療科・特徴から作成し、`<head>` に直接出力する（`src/lib/render/components.tsx` の `SitePage`）。
-- **カラーテーマ**: デザインプリセット（`hp-templates/presets/*.json`）が2〜5色のカラーテーマ候補（`colorThemes`）を持ち、ユーザーがヒアリング画面で1つ選ぶ。選ばれたトークン（primary/accent/light）は生成時に `<html style="--primary:...">` として直接埋め込まれる（実行時の切り替えは無く、1サイト＝1配色で確定生成）。
-- **フォント・角丸**: プリセットの `fontFamily`（sans/serif）・`cardStyle`（rounded/sharp）が `--font`/`--radius` に反映される。
+- **カラーテーマ**: `hp-templates/colors.json` の全プリセット共通・単一のカラーパレット（現在7色）から、ユーザーがヒアリング画面（Step1）で1つ選ぶ。**カラーとデザイン（プリセット）は互いに独立した別々の選択**——プリセットごとに専用の配色は無い。選ばれたトークン（primary/accent/light）は生成時に `<html style="--primary:...">` として直接埋め込まれる（実行時の切り替えは無く、1サイト＝1配色で確定生成）。読み込みは `src/lib/designPresets.ts` の `listColorPalette()`/`getColorTheme(id)`。
+- **フォント・角丸**: デザインプリセット（Step3で選択）の `fontFamily`（sans/serif）・`cardStyle`（rounded/sharp）が `--font`/`--radius` に反映される。プリセットは配色を持たず、雰囲気・フォント・カード形状・文章トーン（`mood`）のみを決める。
 - **ヘッダー**: ロゴ（AI生成）＋医院名（`hearing.clinicName` そのまま）＋電話番号（`hearing.phone` そのまま）。
 - **ナビ・フッターメニュー**: 可視セクション一覧（表示順そのまま）から機械的に生成（前述）。
 - **予約リンク**: 電話（`tel:`）・LINE（`https://line.me/R/ti/p/@ID`）のみ。番号・LINE IDが無い方のボタンだけ非表示。Web予約は実装しない。
 
-## デザインプリセット（`hp-templates/presets/*.json`）
+## カラーパレット（`hp-templates/colors.json`）とデザインプリセット（`hp-templates/presets/*.json`）
 
-読み込みは `src/lib/designPresets.ts`。1ファイル1プリセット。
+読み込みは両方とも `src/lib/designPresets.ts`。**色とデザインは別ファイル・別選択**。
 
 ```json
+// hp-templates/colors.json
+{
+  "colorThemes": [
+    { "id": "skyblue", "label": "スカイブルー", "tokens": { "primary": "#4ba3fc", "accent": "#2d7dd2", "light": "#e8f4ff" } },
+    { "id": "navy", "label": "ネイビー", "tokens": { "primary": "#101f3a", "accent": "#7b8269", "light": "#f2f5f9" } }
+  ]
+}
+```
+
+```json
+// hp-templates/presets/clinic-standard.json（1ファイル1プリセット、色は持たない）
 {
   "id": "clinic-standard",
   "label": "スタンダード",
   "notes": "...",
-  "colorThemes": [{ "id": "skyblue", "label": "スカイブルー", "tokens": { "primary": "#4ba3fc", "accent": "#2d7dd2", "light": "#e8f4ff" } }],
-  "defaultColorTheme": "skyblue",
   "fontFamily": "sans",
   "cardStyle": "rounded",
   "mood": "コピー生成AIに渡す文章トーンの指示"
 }
 ```
 
-現在4種類（`clinic-standard`／`clinic-pink-warm`／`clinic-navy-premium`／`clinic-fresh-green`）。それぞれ `hp-templates/template0001` や `hp-temp/tp_*` の配色・雰囲気を要約したもの。追加する場合は同じ形式のJSONを `hp-templates/presets/` に置くだけでよい（コード変更不要）。
+現在プリセットは4種類（`clinic-standard`／`clinic-pink-warm`／`clinic-navy-premium`／`clinic-fresh-green`）、カラーは7種類。プリセットは `hp-templates/template0001` や `hp-temp/tp_*` の雰囲気を要約したもの（かつては専用の配色も持っていたが、`colors.json` への分離にともない色は共通パレットへ統合済み）。追加する場合はそれぞれ同じ形式のJSONを置くだけでよい（コード変更不要）。
+
+ヒアリング画面（`/create`）では、Step1で本文セクション構成とカラーを、Step2でセクションごとの入力を1つずつ、Step3でデザイン（雰囲気・フォント）を選ぶ4ステップ構成になっている（`src/components/create/HearingSheetForm.tsx`）。
 
 ## レンダリング（`src/lib/render/`）
 

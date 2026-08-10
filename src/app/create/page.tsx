@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { listDesignPresets } from "@/lib/designPresets";
+import { listDesignPresets, listColorPalette } from "@/lib/designPresets";
 import { getBodySections } from "@/lib/siteSpec";
 import { HearingSheetForm } from "@/components/create/HearingSheetForm";
 
 export default async function CreateSitePage() {
   const presets = listDesignPresets();
+  const colors = listColorPalette();
   const sections = getBodySections();
 
   return (
@@ -26,7 +27,7 @@ export default async function CreateSitePage() {
         </p>
 
         <div className="mt-12">
-          <HearingSheetForm presets={presets} sections={sections} />
+          <HearingSheetForm presets={presets} colors={colors} sections={sections} />
         </div>
       </div>
     </div>

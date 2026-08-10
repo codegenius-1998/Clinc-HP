@@ -3,45 +3,43 @@
 import { useState } from "react";
 import type { SiteSpecSection } from "@/lib/siteSpec";
 
-type Row = { id: string; label: string; removable: boolean; visible: boolean };
+export type SectionRow = { id: string; label: string; removable: boolean; visible: boolean };
 
-function initialRows(sections: SiteSpecSection[]): Row[] {
+export function initialSectionRows(sections: SiteSpecSection[]): SectionRow[] {
   return [...sections]
     .sort((a, b) => a.order - b.order)
     .map((s) => ({ id: s.id, label: s.label, removable: s.removable, visible: s.defaultVisible }));
 }
 
 /** Lets the hearing screen operator directly control which body sections appear and in what order,
- * instead of leaving that entirely to the AI's generation-plan judgement call. Emits its current
- * state as parallel hidden inputs (`sectionId` / `sectionVisible` / `sectionOrder`, zipped by index —
- * the same convention `staffName`/`faqQuestion` already use) so it needs no server-side JS parsing
- * beyond what `createHearingAction` already does for those. */
-export function SectionOrderEditor({ sections }: { sections: SiteSpecSection[] }) {
-  const [rows, setRows] = useState<Row[]>(() => initialRows(sections));
+ * instead of leaving that entirely to the AI's generation-plan judgement call. `rows`/`onChange` are
+ * lifted up to `HearingSheetForm` (rather than owned internally) so the wizard's later steps can read
+ * the current show/hide choices and only ask for input relevant to the sections actually turned on —
+ * and can walk them one at a time in the chosen order. Renders its own parallel hidden inputs
+ * (`sectionId` / `sectionVisible` / `sectionOrder`, zipped by index — the same convention
+ * `staffName`/`faqQuestion` already use) so it needs no server-side JS parsing beyond what
+ * `createHearingAction` already does for those. */
+export function SectionOrderEditor({ rows, onChange }: { rows: SectionRow[]; onChange: (rows: SectionRow[]) => void }) {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
 
   function move(index: number, delta: number) {
-    setRows((prev) => {
-      const target = index + delta;
-      if (target < 0 || target >= prev.length) return prev;
-      const next = [...prev];
-      [next[index], next[target]] = [next[target], next[index]];
-      return next;
-    });
+    const target = index + delta;
+    if (target < 0 || target >= rows.length) return;
+    const next = [...rows];
+    [next[index], next[target]] = [next[target], next[index]];
+    onChange(next);
   }
 
   function toggleVisible(index: number) {
-    setRows((prev) => prev.map((row, i) => (i === index ? { ...row, visible: !row.visible } : row)));
+    onChange(rows.map((row, i) => (i === index ? { ...row, visible: !row.visible } : row)));
   }
 
   function reorderTo(from: number, to: number) {
     if (from === to) return;
-    setRows((prev) => {
-      const next = [...prev];
-      const [moved] = next.splice(from, 1);
-      next.splice(to, 0, moved);
-      return next;
-    });
+    const next = [...rows];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    onChange(next);
   }
 
   if (rows.length === 0) return null;
@@ -50,7 +48,7 @@ export function SectionOrderEditor({ sections }: { sections: SiteSpecSection[] }
     <div>
       <p className="text-[13px] font-medium text-slate-700">セクション構成</p>
       <p className="mt-1 text-[12px] leading-relaxed text-slate-400">
-        表示するセクションと並び順を指定できます。ドラッグ、または上下ボタンで並び替えてください。チェックを外すと、そのセクションは生成されるサイトに表示されません。
+        表示するセクションと並び順を指定できます。ドラッグ、または上下ボタンで並び替えてください。チェックを外すと、そのセクションは生成されるサイトに表示されません（次のステップの入力もスキップされます）。
       </p>
 
       <ul className="mt-4 space-y-2">

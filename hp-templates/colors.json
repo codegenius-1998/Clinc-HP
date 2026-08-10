@@ -1,0 +1,12 @@
+{
+  "$note": "全デザインスタイル（hp-templates/presets/*.json）共通のカラーパレット。色の選択とデザイン（雰囲気・フォント・カード形状）の選択は互いに独立している。",
+  "colorThemes": [
+    { "id": "skyblue", "label": "スカイブルー", "tokens": { "primary": "#4ba3fc", "accent": "#2d7dd2", "light": "#e8f4ff", "primaryInverse": "#fff", "accentInverse": "#fff" } },
+    { "id": "blue", "label": "ブルー", "tokens": { "primary": "#1f6bbe", "accent": "#2eb8cb", "light": "#f0f7fb", "primaryInverse": "#fff", "accentInverse": "#fff" } },
+    { "id": "green", "label": "グリーン", "tokens": { "primary": "#2d8f5f", "accent": "#5cb88a", "light": "#eef8f2", "primaryInverse": "#fff", "accentInverse": "#fff" } },
+    { "id": "navy", "label": "ネイビー", "tokens": { "primary": "#101f3a", "accent": "#7b8269", "light": "#f2f5f9", "primaryInverse": "#fff", "accentInverse": "#fff" } },
+    { "id": "pink", "label": "ピンク", "tokens": { "primary": "#ff9999", "accent": "#ec6262", "light": "#fff5f5", "primaryInverse": "#fff", "accentInverse": "#fff" } },
+    { "id": "coral", "label": "コーラル", "tokens": { "primary": "#ff8577", "accent": "#e2574c", "light": "#fff2ef", "primaryInverse": "#fff", "accentInverse": "#fff" } },
+    { "id": "khaki-green", "label": "カーキグリーン", "tokens": { "primary": "#869a4d", "accent": "#e58e3d", "light": "#f6f7ee", "primaryInverse": "#fff", "accentInverse": "#fff" } }
+  ]
+}

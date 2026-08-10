@@ -9,7 +9,8 @@ export type HearingSheet = {
    * src/lib/siteGenerator.ts) for every clinic. */
   templateId: string;
   templateLabel: string;
-  /** Color theme id within the chosen preset (see DesignPreset.colorThemes). */
+  /** Color theme id from the site-wide palette (see src/lib/designPresets.ts's listColorPalette) —
+   * chosen independently of templateId/preset. */
   colorScheme: string;
   colorSchemeLabel: string;
   clinicName: string;

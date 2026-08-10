@@ -1,15 +1,7 @@
 {
   "id": "clinic-standard",
   "label": "スタンダード",
-  "notes": "オーソドックスで信頼感のある構成。角丸カード、明るく親しみやすい配色。幅広い診療科のクリニックに合う無難な選択肢。（参考: hp-templates/template0001）",
-  "colorThemes": [
-    { "id": "skyblue", "label": "スカイブルー", "tokens": { "primary": "#4ba3fc", "accent": "#2d7dd2", "light": "#e8f4ff", "primaryInverse": "#fff", "accentInverse": "#fff" } },
-    { "id": "blue", "label": "ブルー", "tokens": { "primary": "#1f6bbe", "accent": "#2eb8cb", "light": "#f0f7fb", "primaryInverse": "#fff", "accentInverse": "#fff" } },
-    { "id": "green", "label": "グリーン", "tokens": { "primary": "#2d8f5f", "accent": "#5cb88a", "light": "#eef8f2", "primaryInverse": "#fff", "accentInverse": "#fff" } },
-    { "id": "navy", "label": "ネイビー", "tokens": { "primary": "#101f3a", "accent": "#7b8269", "light": "#f2f5f9", "primaryInverse": "#fff", "accentInverse": "#fff" } },
-    { "id": "pink", "label": "ピンク", "tokens": { "primary": "#ff9999", "accent": "#ec6262", "light": "#fff5f5", "primaryInverse": "#fff", "accentInverse": "#fff" } }
-  ],
-  "defaultColorTheme": "skyblue",
+  "notes": "オーソドックスで信頼感のある構成。角丸カードを使った、明るく親しみやすいレイアウト。幅広い診療科のクリニックに合う無難な選択肢。（参考: hp-templates/template0001）",
   "fontFamily": "sans",
   "cardStyle": "rounded",
   "mood": "清潔感があり親しみやすい、オーソドックスなクリニックサイト。専門的すぎず、初めての患者にも安心感を与える柔らかいトーン。"

@@ -223,7 +223,7 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
   if (!preset) {
     throw new Error("選択されたデザインプリセットが見つかりません。");
   }
-  const colorTheme = getColorTheme(preset, hearing.colorScheme);
+  const colorTheme = getColorTheme(hearing.colorScheme);
   const siteSpec = getSiteSpec();
   const resolved = resolveSections(siteSpec, hearing);
   const aiSections = siteSpec.sections.filter((s) => isAiAuthoredSection(s) && resolved.some((r) => r.id === s.id && r.visible));

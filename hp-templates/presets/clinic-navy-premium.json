@@ -1,11 +1,7 @@
 {
   "id": "clinic-navy-premium",
-  "label": "ネイビー・高級感",
-  "notes": "濃紺を基調にした落ち着いた高級感のある配色。明朝体系の見出しで信頼感を演出。整形外科・整骨院・自由診療系などに合う。（参考: hp-temp/tp_seikotsu1_navy）",
-  "colorThemes": [
-    { "id": "navy", "label": "ネイビー", "tokens": { "primary": "#101f3a", "accent": "#7b8269", "light": "#f2f5f9", "primaryInverse": "#fff", "accentInverse": "#fff" } }
-  ],
-  "defaultColorTheme": "navy",
+  "label": "高級感・落ち着き",
+  "notes": "明朝体系の見出しと角のはっきりしたカードで、落ち着いた高級感を演出するレイアウト。整形外科・整骨院・自由診療系などに合う。（参考: hp-temp/tp_seikotsu1_navy）",
   "fontFamily": "serif",
   "cardStyle": "sharp",
   "mood": "落ち着いていて信頼感・高級感のあるトーン。丁寧で簡潔な文体、誇張しすぎない品のある表現。"

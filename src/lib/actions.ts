@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { listDesignPresets } from "./designPresets";
+import { listDesignPresets, listColorPalette } from "./designPresets";
 import { generateSlug, getHearing, saveHearing, updateHearing, type HearingSheet } from "./hearing";
 import { generateSite } from "./siteGenerator";
 import { deployGeneratedSiteToCloudflare } from "./cloudflareDeploy";
@@ -33,7 +33,7 @@ export async function createHearingAction(
     return { error: "クリニック名を入力してください。" };
   }
   if (!templateId || !colorScheme) {
-    return { error: "テンプレートとカラーを選択してください。" };
+    return { error: "デザインとカラーを選択してください。" };
   }
 
   const presets = listDesignPresets();
@@ -41,7 +41,7 @@ export async function createHearingAction(
   if (!preset) {
     return { error: "選択されたデザインが見つかりません。" };
   }
-  const colorSchemeOption = preset.colorThemes.find((c) => c.id === colorScheme);
+  const colorSchemeOption = listColorPalette().find((c) => c.id === colorScheme);
   const slug = generateSlug(clinicName);
 
   // Photos are uploaded to Supabase Storage client-side before this action runs (Server Actions
