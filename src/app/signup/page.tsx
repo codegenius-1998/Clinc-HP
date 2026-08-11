@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import { loginClinicOwnerAction } from "@/lib/authActions";
+import { signupClinicOwnerAction } from "@/lib/authActions";
 import { AuthForm } from "@/components/auth/AuthForm";
 
-export default async function LoginPage() {
+export default async function SignupPage() {
   const session = await getSession();
   if (session?.role === "clinic_owner") {
     redirect("/home");
@@ -11,12 +11,13 @@ export default async function LoginPage() {
 
   return (
     <AuthForm
-      action={loginClinicOwnerAction}
+      action={signupClinicOwnerAction}
       eyebrow="CLINIC HP BUILDER"
-      title="ログイン"
-      submitLabel="ログイン"
+      title="新規登録"
+      submitLabel="登録する"
       accent="sky"
-      footer={{ href: "/signup", label: "アカウントをお持ちでない方はこちら" }}
+      showConfirmPassword
+      footer={{ href: "/", label: "既にアカウントをお持ちの方はこちら" }}
     />
   );
 }

@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, writeFile } from "fs/promises";
+import { mkdir, readFile, readdir, rm, writeFile } from "fs/promises";
 import path from "path";
 import type { ImageCategoryKey } from "./imageCategories";
 
@@ -98,4 +98,10 @@ export async function updateHearing(
   const updated: HearingSheet = { ...hearing, ...patch };
   await writeFile(path.join(DATA_DIR, `${slug}.json`), JSON.stringify(updated, null, 2), "utf-8");
   return updated;
+}
+
+/** Removes a hearing sheet submission (admin request management). Does not touch any already-deployed
+ * generated site or Cloudflare Pages project — this only deletes the request record. */
+export async function deleteHearing(slug: string): Promise<void> {
+  await rm(path.join(DATA_DIR, `${slug}.json`), { force: true });
 }
