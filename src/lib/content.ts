@@ -20,6 +20,10 @@ export async function createSection(name: string): Promise<void> {
   await d1Query("INSERT INTO sections (id, name) VALUES (?, ?)", [randomUUID(), name]);
 }
 
+export async function updateSection(id: string, name: string): Promise<void> {
+  await d1Query("UPDATE sections SET name = ? WHERE id = ?", [name, id]);
+}
+
 export async function deleteSection(id: string): Promise<void> {
   await d1Query("DELETE FROM sections WHERE id = ?", [id]);
 }
@@ -168,6 +172,10 @@ export async function listTargets(): Promise<Target[]> {
 
 export async function createTarget(name: string): Promise<void> {
   await d1Query("INSERT INTO targets (id, name) VALUES (?, ?)", [randomUUID(), name]);
+}
+
+export async function updateTarget(id: string, name: string): Promise<void> {
+  await d1Query("UPDATE targets SET name = ? WHERE id = ?", [name, id]);
 }
 
 export async function deleteTarget(id: string): Promise<void> {

@@ -5,6 +5,7 @@ import { requireAdmin, createUser, deleteUser } from "./auth";
 import { deleteHearing } from "./hearing";
 import {
   createSection,
+  updateSection,
   deleteSection,
   createSite,
   setSiteCanSell,
@@ -21,6 +22,7 @@ import {
   updateFeature,
   deleteFeature,
   createTarget,
+  updateTarget,
   deleteTarget,
 } from "./content";
 
@@ -108,6 +110,22 @@ export async function createSectionAction(_prevState: ActionState, formData: For
     await createSection(name);
   } catch (err) {
     return { error: errorMessage(err, "セクションの作成に失敗しました。") };
+  }
+  revalidatePath("/admin/sections");
+  return { error: null };
+}
+
+export async function updateSectionAction(_prevState: ActionState, formData: FormData): Promise<ActionState> {
+  await requireAdmin();
+  const id = field(formData, "id");
+  const name = field(formData, "name");
+  if (!id || !name) {
+    return { error: "セクション名を入力してください。" };
+  }
+  try {
+    await updateSection(id, name);
+  } catch (err) {
+    return { error: errorMessage(err, "セクションの更新に失敗しました。") };
   }
   revalidatePath("/admin/sections");
   return { error: null };
@@ -281,6 +299,22 @@ export async function createTargetAction(_prevState: ActionState, formData: Form
     await createTarget(name);
   } catch (err) {
     return { error: errorMessage(err, "ターゲットの作成に失敗しました。") };
+  }
+  revalidatePath("/admin/targets");
+  return { error: null };
+}
+
+export async function updateTargetAction(_prevState: ActionState, formData: FormData): Promise<ActionState> {
+  await requireAdmin();
+  const id = field(formData, "id");
+  const name = field(formData, "name");
+  if (!id || !name) {
+    return { error: "ターゲット名を入力してください。" };
+  }
+  try {
+    await updateTarget(id, name);
+  } catch (err) {
+    return { error: errorMessage(err, "ターゲットの更新に失敗しました。") };
   }
   revalidatePath("/admin/targets");
   return { error: null };
