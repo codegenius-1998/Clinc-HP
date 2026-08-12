@@ -11,10 +11,17 @@ import {
   deleteSite,
   addSiteSection,
   deleteSiteSection,
-  createDepartment,
+  createDepartmentWithServices,
+  updateDepartment,
   deleteDepartment,
   createService,
+  updateService,
   deleteService,
+  createFeature,
+  updateFeature,
+  deleteFeature,
+  createTarget,
+  deleteTarget,
 } from "./content";
 
 export type ActionState = { error: string | null };
@@ -102,14 +109,14 @@ export async function createSectionAction(_prevState: ActionState, formData: For
   } catch (err) {
     return { error: errorMessage(err, "セクションの作成に失敗しました。") };
   }
-  revalidatePath("/admin/templates");
+  revalidatePath("/admin/sections");
   return { error: null };
 }
 
 export async function deleteSectionAction(id: string): Promise<void> {
   await requireAdmin();
   await deleteSection(id);
-  revalidatePath("/admin/templates");
+  revalidatePath("/admin/sections");
 }
 
 export async function addSiteSectionAction(_prevState: ActionState, formData: FormData): Promise<ActionState> {
@@ -147,15 +154,36 @@ export async function deleteSiteSectionAction(id: string, siteId: string): Promi
 export async function createDepartmentAction(_prevState: ActionState, formData: FormData): Promise<ActionState> {
   await requireAdmin();
   const name = field(formData, "name");
+  const serviceNames = formData
+    .getAll("serviceName")
+    .map((v) => (typeof v === "string" ? v.trim() : ""))
+    .filter((v) => v.length > 0);
   if (!name) {
     return { error: "部門名を入力してください。" };
   }
   try {
-    await createDepartment(name);
+    await createDepartmentWithServices(name, serviceNames);
   } catch (err) {
     return { error: errorMessage(err, "部門の作成に失敗しました。") };
   }
   revalidatePath("/admin/departments");
+  return { error: null };
+}
+
+export async function updateDepartmentAction(_prevState: ActionState, formData: FormData): Promise<ActionState> {
+  await requireAdmin();
+  const id = field(formData, "id");
+  const name = field(formData, "name");
+  if (!id || !name) {
+    return { error: "部門名を入力してください。" };
+  }
+  try {
+    await updateDepartment(id, name);
+  } catch (err) {
+    return { error: errorMessage(err, "部門の更新に失敗しました。") };
+  }
+  revalidatePath("/admin/departments");
+  revalidatePath(`/admin/departments/${id}`);
   return { error: null };
 }
 
@@ -177,12 +205,89 @@ export async function createServiceAction(_prevState: ActionState, formData: For
   } catch (err) {
     return { error: errorMessage(err, "サービスの作成に失敗しました。") };
   }
-  revalidatePath("/admin/departments");
+  revalidatePath(`/admin/departments/${departmentId}`);
   return { error: null };
 }
 
-export async function deleteServiceAction(id: string): Promise<void> {
+export async function updateServiceAction(_prevState: ActionState, formData: FormData): Promise<ActionState> {
+  await requireAdmin();
+  const id = field(formData, "id");
+  const departmentId = field(formData, "departmentId");
+  const name = field(formData, "name");
+  if (!id || !name) {
+    return { error: "サービス名を入力してください。" };
+  }
+  try {
+    await updateService(id, name);
+  } catch (err) {
+    return { error: errorMessage(err, "サービスの更新に失敗しました。") };
+  }
+  revalidatePath(`/admin/departments/${departmentId}`);
+  return { error: null };
+}
+
+export async function deleteServiceAction(id: string, departmentId: string): Promise<void> {
   await requireAdmin();
   await deleteService(id);
-  revalidatePath("/admin/departments");
+  revalidatePath(`/admin/departments/${departmentId}`);
+}
+
+// --- Features & Targets (flat tag lookups) ---
+
+export async function createFeatureAction(_prevState: ActionState, formData: FormData): Promise<ActionState> {
+  await requireAdmin();
+  const name = field(formData, "name");
+  if (!name) {
+    return { error: "特徴名を入力してください。" };
+  }
+  try {
+    await createFeature(name);
+  } catch (err) {
+    return { error: errorMessage(err, "特徴の作成に失敗しました。") };
+  }
+  revalidatePath("/admin/features");
+  return { error: null };
+}
+
+export async function updateFeatureAction(_prevState: ActionState, formData: FormData): Promise<ActionState> {
+  await requireAdmin();
+  const id = field(formData, "id");
+  const name = field(formData, "name");
+  if (!id || !name) {
+    return { error: "特徴名を入力してください。" };
+  }
+  try {
+    await updateFeature(id, name);
+  } catch (err) {
+    return { error: errorMessage(err, "特徴の更新に失敗しました。") };
+  }
+  revalidatePath("/admin/features");
+  return { error: null };
+}
+
+export async function deleteFeatureAction(id: string): Promise<void> {
+  await requireAdmin();
+  await deleteFeature(id);
+  revalidatePath("/admin/features");
+}
+
+export async function createTargetAction(_prevState: ActionState, formData: FormData): Promise<ActionState> {
+  await requireAdmin();
+  const name = field(formData, "name");
+  if (!name) {
+    return { error: "ターゲット名を入力してください。" };
+  }
+  try {
+    await createTarget(name);
+  } catch (err) {
+    return { error: errorMessage(err, "ターゲットの作成に失敗しました。") };
+  }
+  revalidatePath("/admin/targets");
+  return { error: null };
+}
+
+export async function deleteTargetAction(id: string): Promise<void> {
+  await requireAdmin();
+  await deleteTarget(id);
+  revalidatePath("/admin/targets");
 }

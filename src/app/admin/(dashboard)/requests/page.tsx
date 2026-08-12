@@ -2,6 +2,7 @@ import Link from "next/link";
 import { listHearings } from "@/lib/hearing";
 import { deleteRequestAction } from "@/lib/contentActions";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { ConfirmDeleteButton } from "@/components/admin/ConfirmDeleteButton";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString("ja-JP", {
@@ -27,7 +28,7 @@ export default async function AdminRequestsPage() {
       <AdminPageHeader title="リクエスト管理" description="クリニックオーナーから送信されたホームページ作成リクエスト（ヒアリングシート）の一覧です。" />
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-        <table className="w-full text-left text-[13px]">
+        <table className="w-full text-left text-[15px]">
           <thead className="border-b border-slate-100 bg-slate-50 text-slate-500">
             <tr>
               <th className="px-4 py-3 font-medium">クリニック名</th>
@@ -51,17 +52,16 @@ export default async function AdminRequestsPage() {
                     {hearing.templateLabel} ・ {hearing.colorSchemeLabel}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${status.className}`}>
+                    <span className={`rounded-full px-2.5 py-1 text-[13px] font-medium ${status.className}`}>
                       {status.label}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-slate-400">{formatDate(hearing.createdAt)}</td>
                   <td className="px-4 py-3 text-right">
-                    <form action={deleteRequestAction.bind(null, hearing.slug)}>
-                      <button type="submit" className="text-slate-400 underline underline-offset-4 hover:text-red-600">
-                        削除
-                      </button>
-                    </form>
+                    <ConfirmDeleteButton
+                      action={deleteRequestAction.bind(null, hearing.slug)}
+                      confirmText={`「${hearing.clinicName}」のリクエストを削除しますか？`}
+                    />
                   </td>
                 </tr>
               );

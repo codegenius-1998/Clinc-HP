@@ -118,8 +118,14 @@ export async function requireAdmin(): Promise<SessionUser> {
 
 export type UserSummary = { id: string; email: string; role: UserRole; created_at: string };
 
+/** Lists non-admin (clinic_owner) accounts only — admin management screens intentionally don't
+ * surface other admin accounts here. */
 export async function listUsers(): Promise<UserSummary[]> {
-  return (await d1Query<UserSummary>("SELECT id, email, role, created_at FROM users ORDER BY created_at DESC")).results;
+  return (
+    await d1Query<UserSummary>(
+      "SELECT id, email, role, created_at FROM users WHERE role != 'admin' ORDER BY created_at DESC"
+    )
+  ).results;
 }
 
 export async function deleteUser(id: string): Promise<void> {
