@@ -5,6 +5,7 @@ import { createHearingAction, type HearingFormState } from "@/lib/actions";
 import type { DesignPreset, ColorTheme } from "@/lib/designPresets";
 import type { SiteSpecSection } from "@/lib/siteSpec";
 import { IMAGE_CATEGORIES, type ImageCategoryKey } from "@/lib/imageCategories";
+import type { Department, Service, Feature, Target } from "@/lib/content";
 import { SectionOrderEditor, initialSectionRows, type SectionRow } from "./SectionOrderEditor";
 
 type PickedImage = { kind: "file"; file: File; previewUrl: string } | { kind: "url"; url: string };
@@ -132,10 +133,6 @@ const DEFAULT_PRICE_ITEMS: PriceItemInput[] = [];
 
 const STEP_LABELS = ["セクション構成・カラー", "セクション情報を入力", "デザイン選択", "作成"];
 
-/** section ids whose AI-authored copy draws on the shared "医院の特徴" textarea — asked once (in the
- * step-2 sub-wizard's "features" stop) rather than once per section. Keep in sync with
- * hp-templates/SITE_SPEC.json's `content.drivenBy`. */
-const FEATURES_DRIVEN_SECTIONS = ["department", "greeting", "features", "facility"];
 /** Sections with no input of their own — their content comes entirely from the shared "features" note
  * or from fields already collected in the "basic"/"photos" stops — so they're skipped as their own
  * stop in the step-2 sub-wizard (nothing to ask twice). */
@@ -147,10 +144,18 @@ export function HearingSheetForm({
   presets,
   colors,
   sections,
+  departments,
+  services,
+  features,
+  targets,
 }: {
   presets: DesignPreset[];
   colors: ColorTheme[];
   sections: SiteSpecSection[];
+  departments: Department[];
+  services: Service[];
+  features: Feature[];
+  targets: Target[];
 }) {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [stepError, setStepError] = useState<string | null>(null);
@@ -178,27 +183,32 @@ export function HearingSheetForm({
     return sectionRows.find((r) => r.id === id)?.visible ?? true;
   }
 
-  const showFeaturesField = FEATURES_DRIVEN_SECTIONS.some(isVisible);
   const showPhotosStep = ["department", "greeting", "facility"].some(isVisible);
 
-  // The step-2 sub-wizard: one stop per visible section (in the order chosen in step 1), plus a
-  // handful of fixed stops for information that isn't tied to a single section (basic contact info,
-  // the shared "features" note, photos, and a closing free-text request). Recomputed from
-  // `sectionRows` rather than stored separately, so toggling a section in step 1 can never leave a
-  // stale stop behind.
+  // The step-2 sub-wizard: fixed stops for information that isn't tied to a single section (basic
+  // contact info, department/service picker, features, targets), then one stop per remaining visible
+  // section (in the order chosen in step 1), then photos and a closing free-text request. Recomputed
+  // from `sectionRows` rather than stored separately, so toggling a section in step 1 can never leave
+  // a stale stop behind.
   const contentSteps = useMemo<ContentStep[]>(() => {
-    const steps: ContentStep[] = [{ id: "basic", title: "基本情報" }];
-    if (showFeaturesField) steps.push({ id: "features", title: "医院の特徴" });
+    const steps: ContentStep[] = [
+      { id: "basic", title: "基本情報" },
+      { id: "department", title: "診療科・サービス" },
+      { id: "features", title: "医院の特徴" },
+      { id: "targets", title: "ターゲット" },
+    ];
     for (const row of sectionRows) {
-      if (!row.visible || NO_DEDICATED_INPUT_SECTIONS.has(row.id) || row.id === "features") continue;
-      if (["department", "greeting", "hours", "access", "news", "staff", "faq", "pricing"].includes(row.id)) {
+      if (!row.visible || NO_DEDICATED_INPUT_SECTIONS.has(row.id) || row.id === "features" || row.id === "department") {
+        continue;
+      }
+      if (["greeting", "hours", "access", "news", "staff", "faq", "pricing"].includes(row.id)) {
         steps.push({ id: row.id, title: row.label });
       }
     }
     if (showPhotosStep) steps.push({ id: "photos", title: "写真" });
     steps.push({ id: "request", title: "ご要望" });
     return steps;
-  }, [sectionRows, showFeaturesField, showPhotosStep]);
+  }, [sectionRows, showPhotosStep]);
 
   const currentContentStepIndex = Math.min(contentStepIndex, contentSteps.length - 1);
   const currentContentStep = contentSteps[currentContentStepIndex];
@@ -560,36 +570,93 @@ export function HearingSheetForm({
           </div>
         </div>
 
+        <div style={contentStepStyle("department")} className="space-y-6">
+          <div className={cardClassName}>
+            <p className="text-[13px] font-medium text-slate-700">診療科・サービス</p>
+            <p className="mt-1 text-[12px] leading-relaxed text-slate-400">
+              提供する診療科・サービスを選択してください。診療科案内セクションは、ここで選んだ内容をもとにAIが文章を作成します。
+            </p>
+            <div className="mt-4 space-y-5">
+              {departments.map((department) => {
+                const departmentServices = services.filter((s) => s.department_id === department.id);
+                if (departmentServices.length === 0) return null;
+                return (
+                  <div key={department.id}>
+                    <p className="text-[13px] font-medium text-slate-700">{department.name}</p>
+                    <ul className="mt-2 flex flex-wrap gap-2">
+                      {departmentServices.map((service) => (
+                        <li key={service.id}>
+                          <label className="flex cursor-pointer items-center gap-2 rounded-full border border-slate-200 px-3 py-2 text-[13px] text-slate-700 transition-colors has-checked:border-sky-400 has-checked:bg-sky-50 has-checked:text-sky-700">
+                            <input
+                              type="checkbox"
+                              name="serviceId"
+                              value={service.id}
+                              className="h-3.5 w-3.5 rounded text-sky-600 focus:ring-0"
+                            />
+                            {service.name}
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+              {departments.length === 0 && (
+                <p className="text-[13px] text-slate-400">選択可能な診療科がまだ登録されていません。管理画面から登録してください。</p>
+              )}
+            </div>
+          </div>
+        </div>
+
         <div style={contentStepStyle("features")} className="space-y-6">
           <div className={cardClassName}>
             <p className="text-[13px] font-medium text-slate-700">医院の特徴</p>
             <p className="mt-1 text-[12px] leading-relaxed text-slate-400">
-              診療科案内・ご挨拶・特徴・施設案内のセクションは、この内容をもとにAIが文章を作成します。
+              診療科案内・ご挨拶・特徴・施設案内のセクションは、この内容をもとにAIが文章を作成します。当てはまる特徴を選択してください。
             </p>
-            <textarea
-              name="features"
-              placeholder="例: 土日診療、キッズスペース完備、駅から徒歩3分"
-              defaultValue={DEFAULT_FEATURES}
-              rows={8}
-              className={inputClassName}
-            />
+            <ul className="mt-4 flex flex-wrap gap-2">
+              {features.map((feature) => (
+                <li key={feature.id}>
+                  <label className="flex cursor-pointer items-center gap-2 rounded-full border border-slate-200 px-3 py-2 text-[13px] text-slate-700 transition-colors has-checked:border-sky-400 has-checked:bg-sky-50 has-checked:text-sky-700">
+                    <input
+                      type="checkbox"
+                      name="featureId"
+                      value={feature.id}
+                      className="h-3.5 w-3.5 rounded text-sky-600 focus:ring-0"
+                    />
+                    {feature.name}
+                  </label>
+                </li>
+              ))}
+            </ul>
+            {features.length === 0 && (
+              <p className="mt-2 text-[13px] text-slate-400">選択可能な特徴がまだ登録されていません。管理画面から登録してください。</p>
+            )}
           </div>
         </div>
 
-        <div style={contentStepStyle("department")} className="space-y-6">
+        <div style={contentStepStyle("targets")} className="space-y-6">
           <div className={cardClassName}>
-            <p className="text-[13px] font-medium text-slate-700">診療科案内</p>
-            <p className="mt-1 text-[12px] leading-relaxed text-slate-400">診療科目を入力してください。</p>
-            <label className="mt-4 block">
-              <span className="text-[13px] font-medium text-slate-700">診療科</span>
-              <input
-                type="text"
-                name="department"
-                placeholder="内科・小児科"
-                defaultValue={DEFAULT_DEPARTMENT}
-                className={inputClassName}
-              />
-            </label>
+            <p className="text-[13px] font-medium text-slate-700">ターゲット（任意）</p>
+            <p className="mt-1 text-[12px] leading-relaxed text-slate-400">想定する患者層を選択してください。</p>
+            <ul className="mt-4 flex flex-wrap gap-2">
+              {targets.map((target) => (
+                <li key={target.id}>
+                  <label className="flex cursor-pointer items-center gap-2 rounded-full border border-slate-200 px-3 py-2 text-[13px] text-slate-700 transition-colors has-checked:border-sky-400 has-checked:bg-sky-50 has-checked:text-sky-700">
+                    <input
+                      type="checkbox"
+                      name="targetId"
+                      value={target.id}
+                      className="h-3.5 w-3.5 rounded text-sky-600 focus:ring-0"
+                    />
+                    {target.name}
+                  </label>
+                </li>
+              ))}
+            </ul>
+            {targets.length === 0 && (
+              <p className="mt-2 text-[13px] text-slate-400">選択可能なターゲットがまだ登録されていません。管理画面から登録してください。</p>
+            )}
           </div>
         </div>
 

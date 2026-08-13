@@ -4,11 +4,16 @@ import type { ImageCategoryKey } from "./imageCategories";
 
 export type HearingSheet = {
   slug: string;
+  /** Email of the clinic_owner who submitted this via /mypage/apply. Absent on hearings created
+   * through the older, unauthenticated /create flow. */
+  ownerEmail?: string;
   /** Chosen design preset id (see src/lib/designPresets.ts) — a style/mood brief, not an HTML
    * skeleton. The actual page content and structure are generated fresh by OpenAI (see
-   * src/lib/siteGenerator.ts) for every clinic. */
-  templateId: string;
-  templateLabel: string;
+   * src/lib/siteGenerator.ts) for every clinic. Left unset for applications submitted via
+   * /mypage/apply — an admin assigns it later from /admin/requests, which is what actually
+   * triggers generation (see assignTemplateAction). */
+  templateId?: string;
+  templateLabel?: string;
   /** Color theme id from the site-wide palette (see src/lib/designPresets.ts's listColorPalette) —
    * chosen independently of templateId/preset. */
   colorScheme: string;
@@ -19,8 +24,15 @@ export type HearingSheet = {
   phone: string;
   line: string;
   department: string;
+  /** Snapshot of the service names selected on /mypage/apply's "診療科・サービス" step (see
+   * src/lib/content.ts). `department` above is derived from these at submit time for
+   * generateContentPlan, which only reads free text. */
+  serviceNames?: string[];
   hours: string;
   features: string;
+  /** Snapshot of the feature names selected on /mypage/apply's "特徴" step. `features` above is
+   * derived from these at submit time for generateContentPlan. */
+  featureNames?: string[];
   request: string;
   /** Real staff members to render as #staff cards — count drives how many card blocks are rendered. */
   staffMembers?: { name: string; comment: string; role?: string; photoUrl?: string }[];
@@ -33,6 +45,9 @@ export type HearingSheet = {
   /** Explicit per-section show/hide + display order chosen on the hearing screen — when present, this
    * wins over the AI's own sectionVisibility judgement call (see planGeneration). */
   sectionPrefs?: { id: string; visible: boolean; order: number }[];
+  /** Target patient demographics picked from the admin-managed Targets list (hp-templates content
+   * model) — supplementary context for the AI, not tied to any single SITE_SPEC section. */
+  targetNames?: string[];
   createdAt: string;
   previewUrl?: string;
   generationError?: string;
@@ -78,6 +93,25 @@ export async function listHearings(): Promise<HearingSheet[]> {
   return hearings.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
+/** The current clinic_owner's own submissions only — powers /mypage's 申請一覧・サイト一覧, which
+ * (unlike /admin/requests) must never show another clinic's data. */
+export async function listHearingsByOwner(ownerEmail: string): Promise<HearingSheet[]> {
+  const all = await listHearings();
+  return all.filter((h) => h.ownerEmail === ownerEmail);
+}
+
+export type HearingStatus = { key: "pending_template" | "processing" | "generated" | "failed"; label: string; className: string };
+
+/** Shared by /admin/requests and /mypage/requests so both screens agree on what a hearing's status
+ * means. "pending_template" only exists because /mypage/apply intentionally never sets templateId —
+ * that choice is deferred to an admin via assignTemplateAction. */
+export function hearingStatus(hearing: Pick<HearingSheet, "templateId" | "previewUrl" | "generationError">): HearingStatus {
+  if (!hearing.templateId) return { key: "pending_template", label: "審査待ち", className: "bg-amber-50 text-amber-700" };
+  if (hearing.generationError) return { key: "failed", label: "生成失敗", className: "bg-red-50 text-red-700" };
+  if (hearing.previewUrl) return { key: "generated", label: "生成済み", className: "bg-emerald-50 text-emerald-700" };
+  return { key: "processing", label: "処理中", className: "bg-slate-100 text-slate-500" };
+}
+
 export async function getHearing(slug: string): Promise<HearingSheet | null> {
   try {
     const raw = await readFile(path.join(DATA_DIR, `${slug}.json`), "utf-8");
@@ -89,7 +123,12 @@ export async function getHearing(slug: string): Promise<HearingSheet | null> {
 
 export async function updateHearing(
   slug: string,
-  patch: Partial<Pick<HearingSheet, "previewUrl" | "generationError" | "cloudflareUrl" | "cloudflareError">>
+  patch: Partial<
+    Pick<
+      HearingSheet,
+      "previewUrl" | "generationError" | "cloudflareUrl" | "cloudflareError" | "templateId" | "templateLabel"
+    >
+  >
 ): Promise<HearingSheet | null> {
   const hearing = await getHearing(slug);
   if (!hearing) {

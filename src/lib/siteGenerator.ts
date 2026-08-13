@@ -231,7 +231,7 @@ function buildViewModel(
 }
 
 export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite> {
-  const preset = getDesignPreset(hearing.templateId);
+  const preset = hearing.templateId ? getDesignPreset(hearing.templateId) : undefined;
   if (!preset) {
     throw new Error("選択されたデザインプリセットが見つかりません。");
   }

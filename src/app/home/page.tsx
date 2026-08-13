@@ -36,6 +36,13 @@ export default async function Home() {
           閲覧
           <span aria-hidden>→</span>
         </Link>
+        <Link
+          href="/mypage"
+          className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-7 py-3.5 text-[13px] font-medium tracking-[0.08em] text-slate-700 transition-colors hover:bg-slate-50"
+        >
+          申請・サイト管理
+          <span aria-hidden>→</span>
+        </Link>
       </div>
 
       <div className="mt-10 flex items-center justify-center gap-1 text-[13px] text-slate-400">

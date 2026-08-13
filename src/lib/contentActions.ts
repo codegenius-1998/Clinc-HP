@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin, createUser, deleteUser } from "./auth";
-import { deleteHearing } from "./hearing";
+import { deleteHearing, getHearing, updateHearing } from "./hearing";
+import { listDesignPresets } from "./designPresets";
+import { generateSite } from "./siteGenerator";
 import {
   createSection,
   updateSection,
@@ -67,6 +69,35 @@ export async function deleteUserAction(id: string): Promise<void> {
 export async function deleteRequestAction(slug: string): Promise<void> {
   await requireAdmin();
   await deleteHearing(slug);
+  revalidatePath("/admin/requests");
+}
+
+/** Assigns a design template to a /mypage/apply submission and generates the site — the step that
+ * turns a "審査待ち" application into an actual site, deliberately kept out of the clinic owner's
+ * hands (see the "delete template selection" decision behind ApplyForm). Runs generateSite inline
+ * (same pattern as regenerateSiteAction in actions.ts) rather than queuing it, so the admin sees the
+ * result — success or failure — reflected on the requests table right after submitting. */
+export async function assignTemplateAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const slug = field(formData, "slug");
+  const templateId = field(formData, "templateId");
+  if (!slug || !templateId) return;
+
+  const preset = listDesignPresets().find((p) => p.id === templateId);
+  if (!preset) return;
+
+  await updateHearing(slug, { templateId: preset.id, templateLabel: preset.label });
+  const hearing = await getHearing(slug);
+  if (!hearing) return;
+
+  try {
+    const result = await generateSite(hearing);
+    await updateHearing(slug, { previewUrl: result.previewUrl, generationError: undefined });
+  } catch (err) {
+    await updateHearing(slug, {
+      generationError: err instanceof Error ? err.message : "サイトの生成に失敗しました。",
+    });
+  }
   revalidatePath("/admin/requests");
 }
 

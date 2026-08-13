@@ -1,12 +1,19 @@
 import Link from "next/link";
 import { listDesignPresets, listColorPalette } from "@/lib/designPresets";
 import { getBodySections } from "@/lib/siteSpec";
+import { listDepartments, listServices, listFeatures, listTargets } from "@/lib/content";
 import { HearingSheetForm } from "@/components/create/HearingSheetForm";
 
 export default async function CreateSitePage() {
   const presets = listDesignPresets();
   const colors = listColorPalette();
   const sections = getBodySections();
+  const [departments, services, features, targets] = await Promise.all([
+    listDepartments(),
+    listServices(),
+    listFeatures(),
+    listTargets(),
+  ]);
 
   return (
     <div className="flex-1 bg-gradient-to-b from-sky-50 via-white to-white px-6 py-24">
@@ -27,7 +34,15 @@ export default async function CreateSitePage() {
         </p>
 
         <div className="mt-12">
-          <HearingSheetForm presets={presets} colors={colors} sections={sections} />
+          <HearingSheetForm
+            presets={presets}
+            colors={colors}
+            sections={sections}
+            departments={departments}
+            services={services}
+            features={features}
+            targets={targets}
+          />
         </div>
       </div>
     </div>

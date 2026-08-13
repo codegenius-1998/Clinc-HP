@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { listHearings } from "@/lib/hearing";
-import { deleteRequestAction } from "@/lib/contentActions";
+import { listHearings, hearingStatus } from "@/lib/hearing";
+import { listDesignPresets } from "@/lib/designPresets";
+import { deleteRequestAction, assignTemplateAction } from "@/lib/contentActions";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { ConfirmDeleteButton } from "@/components/admin/ConfirmDeleteButton";
 
@@ -14,18 +15,13 @@ function formatDate(iso: string): string {
   });
 }
 
-function statusOf(hearing: { previewUrl?: string; generationError?: string }): { label: string; className: string } {
-  if (hearing.generationError) return { label: "生成失敗", className: "bg-red-50 text-red-700" };
-  if (hearing.previewUrl) return { label: "生成済み", className: "bg-emerald-50 text-emerald-700" };
-  return { label: "未生成", className: "bg-slate-100 text-slate-500" };
-}
-
 export default async function AdminRequestsPage() {
   const hearings = await listHearings();
+  const presets = listDesignPresets();
 
   return (
     <div>
-      <AdminPageHeader title="リクエスト管理" description="クリニックオーナーから送信されたホームページ作成リクエスト（ヒアリングシート）の一覧です。" />
+      <AdminPageHeader title="リクエスト管理" description="クリニックオーナーから送信されたホームページ作成申請の一覧です。「審査待ち」の申請はデザインテンプレートを割り当てると生成されます。" />
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
         <table className="w-full text-left text-[15px]">
@@ -40,16 +36,20 @@ export default async function AdminRequestsPage() {
           </thead>
           <tbody>
             {hearings.map((hearing) => {
-              const status = statusOf(hearing);
+              const status = hearingStatus(hearing);
               return (
                 <tr key={hearing.slug} className="border-b border-slate-50 last:border-0">
                   <td className="px-4 py-3">
-                    <Link href={`/sites/${hearing.slug}`} className="text-slate-900 underline-offset-4 hover:underline">
-                      {hearing.clinicName}
-                    </Link>
+                    {status.key === "generated" ? (
+                      <Link href={`/sites/${hearing.slug}`} className="text-slate-900 underline-offset-4 hover:underline">
+                        {hearing.clinicName}
+                      </Link>
+                    ) : (
+                      <span className="text-slate-900">{hearing.clinicName}</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-slate-500">
-                    {hearing.templateLabel} ・ {hearing.colorSchemeLabel}
+                    {hearing.templateLabel ? `${hearing.templateLabel} ・ ${hearing.colorSchemeLabel}` : hearing.colorSchemeLabel}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`rounded-full px-2.5 py-1 text-[13px] font-medium ${status.className}`}>
@@ -58,10 +58,38 @@ export default async function AdminRequestsPage() {
                   </td>
                   <td className="px-4 py-3 text-slate-400">{formatDate(hearing.createdAt)}</td>
                   <td className="px-4 py-3 text-right">
-                    <ConfirmDeleteButton
-                      action={deleteRequestAction.bind(null, hearing.slug)}
-                      confirmText={`「${hearing.clinicName}」のリクエストを削除しますか？`}
-                    />
+                    <div className="flex items-center justify-end gap-3">
+                      {status.key === "pending_template" && (
+                        <form action={assignTemplateAction} className="flex items-center gap-2">
+                          <input type="hidden" name="slug" value={hearing.slug} />
+                          <select
+                            name="templateId"
+                            defaultValue=""
+                            required
+                            className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[13px] text-slate-700"
+                          >
+                            <option value="" disabled>
+                              テンプレートを選択
+                            </option>
+                            {presets.map((preset) => (
+                              <option key={preset.id} value={preset.id}>
+                                {preset.label}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="submit"
+                            className="rounded-lg bg-sky-600 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-sky-500"
+                          >
+                            割り当てて生成
+                          </button>
+                        </form>
+                      )}
+                      <ConfirmDeleteButton
+                        action={deleteRequestAction.bind(null, hearing.slug)}
+                        confirmText={`「${hearing.clinicName}」のリクエストを削除しますか？`}
+                      />
+                    </div>
                   </td>
                 </tr>
               );
