@@ -1,60 +1,41 @@
-# hp-templates — AIによるクリニックHP制作ガイド（索引）
+# hp-templates — 索引
 
-> **⚠️ 2026年8月改訂: このディレクトリ以下のHTML/CSS/JSは実行時にはもう使われません。**
-> 現在のサイト生成は「OpenAIがページ内容を一から作成し、コードがHTML/CSSに組み立てる」方式に変わりました（詳細は [`TEMPLATE_VARIABLES.md`](TEMPLATE_VARIABLES.md) と、必須セクション構成の正本 [`SITE_SPEC.json`](SITE_SPEC.json) を参照）。以下の9テンプレートと `template0001` は、配色・雰囲気を抽出した「デザインプリセット」（[`presets/`](presets/)）の元ネタとして保存してあるだけの参考資料です。本文中の「`variables.json` を読んでから編集する」といった手順はもう有効ではありません。
+このディレクトリは、クリニックサイトを自動生成するための**データ**（デザインプリセット・配色・必須セクション仕様）だけを置く場所です。HTML/CSS/JSの完成品テンプレートは置いていません。
 
-このリポジトリには、無料HTMLテンプレート配布サイト「[Template Party](https://template-party.com/)」（テンプレートパーティ）由来の、医療・クリニック系ホームページテンプレートが9種類収録されています。サイト運営者は Template Party の**有償ライセンス契約を締結済み**で、これを根拠に以下の前処理を全テンプレートに対して実施済みです。
+## ファイル一覧
 
-1. **クレジット表記の削除** — 各HTMLファイル末尾にあった `<!--以下の行はテンプレートの著作。削除しないで下さい。-->` というコメントと、それに続く `<span class="pr"><a href="https://template-party.com/">《Web Design:Template-Party》</a></span>` のクレジットリンクを全ページから削除済みです。あわせて、`index.html`（テンプレートによっては `_readme.html`）に埋め込まれていた「テンプレートのご利用前に必ずお読み下さい」「無料CMS（Template Party CMS）のご案内」「無料素材サイト（haconana）のご案内」「このテンプレートはフレーム＆パーツを使用しています」といった、Template Party自身の販促・注意書きセクションも、実サイトのコンテンツではないため削除済みです。
-2. **サンプル画像の削除** — 各テンプレートの `images/` フォルダから、サンプル写真・ロゴ画像・装飾画像などのラスター/ベクター画像ファイル（jpg/jpeg/png/webp/psd/gif）を全て削除済みです（フォルダ自体、および `sample.pdf` や `movie.mp4` のような非画像の配布物は残しています）。削除前に、各画像の元ファイル名・ピクセルサイズ・HTML/CSS内の参照箇所を記録した `_removed_images_manifest.md` を各テンプレート直下に作成してあります。実際のクリニック写真を用意する際は、この一覧を参照してください。
-3. **AI向け作業ガイドの作成** — 各テンプレートについて、配布元の人間向けマニュアル（`_manual.html` / `booklet.html` / `_readme.html` / `_manual/` フォルダなど、テンプレートごとに名称・形式が異なります）とHTML/CSS/JSソース一式を実際に読み込んだ上で、AIアシスタントや非エンジニアのサイト運営者がコードベース全体を読み直さなくても改修作業に着手できるように、各テンプレート直下に **`AI_GUIDE.md`** を作成しました。本ファイルはその9本の索引です。
-
-## 使い方
-
-特定のクリニックサイトを1つ作る場合は、以下のテンプレート一覧から用途に合うものを1つだけ選び、**そのディレクトリの `variables.json` と `AI_GUIDE.md` を読んでから**編集を始めてください。他のテンプレートのファイルには触れる必要はありません。各テンプレートは完全に独立しており、共通のCSS変数名やクラス名を持つとは限らない点に注意してください（後述）。
-
-### 管理画面・プレビュー向け変数（必読）
-
-テキスト修正・写真差し替え以外の次の操作は、テンプレート側で変数化済みです。
-
-| 機能 | 正本 | 適用先 |
+| ファイル | 役割 | 読み込み元 |
 |---|---|---|
-| カラースキーム切替 | `variables.json` → `colorScheme` | `<html data-theme="...">` + `css/site-controls.css` |
-| セクション表示/非表示 | `variables.json` → `sections[]` | `data-section` / `data-visible` |
-| カスタムCSS注入 | `variables.json` → `customCss.content` | `css/custom.css` |
-| レイアウト微調整（カラム数・余白） | `variables.json` → `layout` | `<html style="--layout-...">` |
+| [`SITE_SPEC.json`](SITE_SPEC.json) | 全クリニック共通の必須セクション構成・生成ルールの正本（診療科案内・ご挨拶・診療時間など13セクション、正直性ルールなど） | `src/lib/siteSpec.ts` |
+| [`colors.json`](colors.json) | サイト全体の配色パレット（primary/accent/light の7色セット） | `src/lib/designPresets.ts` `listColorPalette()` |
+| [`presets/*.json`](presets/) | デザインプリセット（雰囲気・フォント・カード形状・レイアウト構造）。1ファイル1プリセット、色は持たない | `src/lib/designPresets.ts` `listDesignPresets()` |
+| [`TEMPLATE_VARIABLES.md`](TEMPLATE_VARIABLES.md) | 現在のサイト生成アーキテクチャ（ヒアリング→AI生成→HTML組み立て）の仕様書。ファイル名は初期の実装（テンプレートの変数化）の名残だが、内容は最新 | ドキュメントのみ（コードからは読まれない） |
+| [`NEXTJS_TAILWIND_GSAP_GUIDE.md`](NEXTJS_TAILWIND_GSAP_GUIDE.md) | 生成後のクリニックサイトを Next.js＋Tailwind＋GSAP で実装する場合の具体的な手順書 | ドキュメントのみ |
 
-**AI・管理画面実装者は必ず [`TEMPLATE_VARIABLES.md`](TEMPLATE_VARIABLES.md) を先に読むこと。**  
-JSON Schema は [`schema/template-variables.schema.json`](schema/template-variables.schema.json)。各テンプレ直下の `variables.json` が個別の正本です。
+## デザインプリセット一覧
 
-## テンプレート一覧
+`presets/` 配下の9本は、実在するHTMLテンプレートから抽出した「雰囲気・レイアウト構造の指示書」であり、対応するHTML実体はもう存在しません（下記「2026年8月の整理」参照）。
 
-| ディレクトリ | 想定用途・特徴 | 構成 | ページ数 | 個別ガイド |
-|---|---|---|---|---|
-| `tp_beginner10_clinic` | 初心者向け 病院・クリニック | 複数ページ | 7 | [AI_GUIDE.md](tp_beginner10_clinic/AI_GUIDE.md) |
-| `tp_clinic4_pink` | 病院・歯科医院・整体・整骨院（ピンク配色、旧世代CSS） | 複数ページ（フォーム3ステップ含む） | 18 | [AI_GUIDE.md](tp_clinic4_pink/AI_GUIDE.md) |
-| `tp_clinic5_pink` | 病院・歯科医院・整体・整骨院（ピンク配色、装飾多め） | 複数ページ（フォーム3ステップ含む） | 13 | [AI_GUIDE.md](tp_clinic5_pink/AI_GUIDE.md) |
-| `tp_clinic6_skyblue` | 病院・歯科医院（クリニック）、スカイブルー配色 | 複数ページ | 14 | [AI_GUIDE.md](tp_clinic6_skyblue/AI_GUIDE.md) |
-| `tp_clinic7_blue` | 病院・歯科医院（クリニック）、ブルー配色 | 複数ページ | 7 | [AI_GUIDE.md](tp_clinic7_blue/AI_GUIDE.md) |
-| `tp_clinic7_blue_LP` | `tp_clinic7_blue` と同デザインの**1ページ完結LP版** | 単一ページ（index.htmlのみ） | 1 | [AI_GUIDE.md](tp_clinic7_blue_LP/AI_GUIDE.md) |
-| `tp_lp3_clinic_slide` | クリニック向けLP、スライドショー主体（マニュアルが13分割） | LP + お知らせ一覧ページ | 2 | [AI_GUIDE.md](tp_lp3_clinic_slide/AI_GUIDE.md) |
-| `tp_mix2_home` | 元は老人ホーム・介護施設・デイサービス向け（医療系に転用） | 複数ページ | 7 | [AI_GUIDE.md](tp_mix2_home/AI_GUIDE.md) |
-| `tp_seikotsu1_navy` | 整骨院・接骨院向けLP、ネイビー配色 | 少数ページ（LP中心） | 4 | [AI_GUIDE.md](tp_seikotsu1_navy/AI_GUIDE.md) |
+| id | label | fontFamily/cardStyle/heroLayout/blockLayout/spacing |
+|---|---|---|
+| template0001 | クリニック | sans/rounded/full-bleed/grid/compact |
+| template0002 | 初心者向けクリニック | sans/rounded/full-bleed/grid/compact |
+| template0003 | クリニック（旧世代ピンク） | sans/rounded/split/grid/spacious |
+| template0004 | クリニック（装飾多めピンク） | sans/rounded/split/list/spacious |
+| template0005 | クリニック（ブルー・LP統合版） | sans/rounded/full-bleed/grid/compact |
+| template0006 | クリニック（ブルー・純LP） | sans/sharp/split/list/compact |
+| template0007 | クリニックLP（スライド主体） | sans/rounded/full-bleed/minimal/spacious |
+| template0008 | ホーム・介護施設（医療転用可） | serif/rounded/full-bleed/minimal/spacious |
+| template0009 | 整骨院（ネイビー） | serif/sharp/split/list/compact |
 
-`tp_clinic7_blue` と `tp_clinic7_blue_LP` は同じデザインの多ページ版／単一ページ版という関係ですが、それ以外の8ディレクトリは互いに独立した別デザインです。
+各フィールドの意味は [`TEMPLATE_VARIABLES.md`](TEMPLATE_VARIABLES.md) の「カラーパレットとデザインプリセット」章を参照。プリセットを追加する場合は、この形式のJSONを `presets/` に置くだけでよい（コード変更不要、対応するHTML実体を用意する必要もない）。
 
-## 全テンプレートに共通する作業の型
+## 実際の生成の仕組み
 
-各テンプレート個別の `AI_GUIDE.md` に詳細がありますが、9本すべてに共通する編集の考え方は以下の通りです。
+ヒアリングシートの内容と上記のデータを元に、OpenAIがページの見出し・本文・画像を1から生成し、`src/lib/render/`（Reactコンポーネント＋`site.css`＋`main.js`）が素のHTML/CSS/JSとして機械的に組み立てる。詳細は [`TEMPLATE_VARIABLES.md`](TEMPLATE_VARIABLES.md)。
 
-- **ナビゲーションメニュー**: 各HTMLファイルの `<header>` 内、`<nav><ul>...</ul></nav>` に列挙されています。共通のヘッダー/フッターをincludeする仕組みは**どのテンプレートにも存在しません**（静的HTMLの単純な複製）。メニュー項目を追加・削除・変更する場合は、対象ページ**全て**で同じ編集を繰り返す必要があります。
-- **レスポンシブの切り替え幅**: 多くのテンプレートで `js/main.js` 内に `const breakPoint = ...;` という変数があり、この幅未満でハンバーガーメニューに切り替わります。テンプレートによっては `9999` のような極端な値になっており、実質的に常にハンバーガーメニュー表示になっているものもあります（各ガイドの該当箇所を参照）。
-- **配色・フォントサイズ**: テンプレートによって管理方法が大きく異なります。新しめのテンプレートは `css/theme.css` または `css/style.css` 冒頭の `:root { --変数名: 値; }` というCSSカスタムプロパティで一括管理されていますが、`tp_clinic4_pink` や `tp_clinic5_pink` のような旧世代のテンプレートには `:root` ブロック自体が存在せず、色は各所に直接16進数カラーコードで書かれています。どちらの方式かは各テンプレートのガイドで明記しています。
-- **画像の差し替え**: 削除済みの画像は、`_removed_images_manifest.md` に記載された**元のファイル名と同名のファイル**を `images/` フォルダに置くだけで、HTML/CSS側の変更なしに反映されます（パスの変更が必要なケースがあれば、各テンプレートのガイド内で個別に明記しています）。マニフェストに記載の「元のピクセルサイズ」はあくまで目安であり、厳密に一致させる必要はありません。
-- **プレースホルダーテキスト**: 「サンプルテキスト」「20XX/00/00」「あなたのサイト名」といった文字列が各所に残っています。各テンプレートのガイドの「テキスト・コンテンツの編集箇所」章に、grepで実際に確認した出現箇所の一覧があります。
-- **公開前に削除してよいファイル**: 元のマニュアル/ブックレット/readmeファイル（`_manual.html`、`booklet.html`、`_readme.html`、`_manual/` フォルダなど）と、各テンプレートの `_removed_images_manifest.md` は、いずれも制作者向けの資料であり実サイトのページではありません。本番公開前に削除して構いません（すでに `AI_GUIDE.md` にその内容は集約済みです）。また、ページ本文中に個別に残っている `template-party.com` へのリンク（GoogleMap設定方法やフォームビルダーの案内など、開発者向けの小さな案内リンク）は削除せずそのまま残してあります。各テンプレートのガイドの最終章に出現箇所を一覧化してあるので、必要に応じて削除するかどうかを判断してください。
+**サイト運営者側は最終的な実装をNext.js＋Tailwind CSS＋GSAPで作る想定**のため、上記の素のHTML/CSS/JS出力をそのまま公開するのではなく、[`NEXTJS_TAILWIND_GSAP_GUIDE.md`](NEXTJS_TAILWIND_GSAP_GUIDE.md) の手順で作り直すことを前提にしている。
 
-## 注意事項
+## 2026年8月の整理
 
-- 9つのテンプレートは共通コンポーネントを持たない独立したプロジェクトです。あるテンプレートの `AI_GUIDE.md` に書かれているCSS変数名やクラス名を、別のテンプレートにそのまま当てはめないでください。
-- `tp_mix2_home` の `css/.fuse_hidden0000000600000001` は編集ソフトが残したゴミファイルで、テンプレートの一部ではありません（削除して問題ありませんが、動作には影響しません）。
+以前はこのディレクトリに、無料HTMLテンプレート配布サイト「Template Party」由来の完成品テンプレート（`template0001`〜`template0006`、index.html＋css＋js＋images一式）を、デザインプリセットの抽出元の参考資料として保存していた。これらはコードから一切読み込まれておらず（`presets/*.json` を作成した時点で用済み）、サイト運営者の実装方針（Next.js＋Tailwind＋GSAP、素のHTML/CSS/JSは不使用）とも合わないため削除した。抽出済みの `presets/*.json` と `colors.json` はそのまま有効。
