@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getSession } from "@/lib/auth";
 import { listHearingsByOwner } from "@/lib/hearing";
-import { generatedSiteExists } from "@/lib/siteGenerator";
+import { generatedSlugExists } from "@/lib/render/renderSiteFiles";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 
 function formatDate(iso: string): string {
@@ -21,7 +21,7 @@ export default async function MypageSitesPage() {
   // before listing it as a real site (see /sites for the same check).
   const generated = (
     await Promise.all(
-      hearings.map(async (h) => (h.previewUrl && (await generatedSiteExists(h.slug)) ? h : null))
+      hearings.map(async (h) => (h.previewUrl && (await generatedSlugExists(h.slug)) ? h : null))
     )
   ).filter((h): h is NonNullable<typeof h> => h !== null);
 

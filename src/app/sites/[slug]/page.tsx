@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getHearing } from "@/lib/hearing";
 import { regenerateSiteAction, deployToCloudflareAction } from "@/lib/actions";
-import { generatedSiteExists } from "@/lib/siteGenerator";
+import { generatedSlugExists } from "@/lib/render/renderSiteFiles";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString("ja-JP", {
@@ -42,7 +42,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ slu
 
   // `previewUrl` alone only means generation once succeeded — the output directory can be gone
   // (dev server killed mid-write, folder cleaned up by hand) without the record ever being updated.
-  const isGenerated = hearing.previewUrl ? await generatedSiteExists(slug) : false;
+  const isGenerated = hearing.previewUrl ? await generatedSlugExists(slug) : false;
 
   return (
     <div className="flex-1 bg-gradient-to-b from-sky-50 via-white to-white px-6 py-24">

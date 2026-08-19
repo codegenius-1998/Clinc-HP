@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { listHearings } from "@/lib/hearing";
-import { generatedSiteExists } from "@/lib/siteGenerator";
+import { generatedSlugExists } from "@/lib/render/renderSiteFiles";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString("ja-JP", {
@@ -17,7 +17,7 @@ export default async function SitesPage() {
   // `previewUrl` alone only means generation once succeeded — confirm the files are still on disk
   // before showing "生成済み" (the dev server can be killed mid-write, or the folder cleaned up by hand).
   const existsBySlug = new Map(
-    await Promise.all(hearings.map(async (h) => [h.slug, h.previewUrl ? await generatedSiteExists(h.slug) : false] as const))
+    await Promise.all(hearings.map(async (h) => [h.slug, h.previewUrl ? await generatedSlugExists(h.slug) : false] as const))
   );
 
   return (

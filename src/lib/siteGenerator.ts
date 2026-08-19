@@ -1,38 +1,40 @@
-import { mkdir, readFile, rm, writeFile } from "fs/promises";
+import { mkdir, rm, writeFile } from "fs/promises";
 import path from "path";
-import { getSiteSpec, isAiAuthoredSection, type SiteSpec, type SiteSpecSection } from "./siteSpec";
-import { getDesignPreset, getColorTheme, type ColorTheme, type DesignPreset } from "./designPresets";
+import { renderSiteFiles, siteOutputPath } from "./render/renderSiteFiles";
+import { instantiateTemplate, saveDocument } from "./site/store";
+import { selectTemplate } from "./template/selectTemplate";
 import { generateContentPlan, type ContentPlan, type ImageAspect } from "./openai/generateContentPlan";
 import { generateSiteImage, type ImageStyle } from "./openai/generateSiteImage";
 import { matchImagesToCategories, type ImageTarget as CategoryImageTarget } from "./openai/matchImageCategories";
 import type { HearingSheet } from "./hearing";
+import type { Block, SiteDocument } from "./site/document";
 import type { ImageCategoryKey } from "./imageCategories";
-import type { HoursRow, NavItem, SectionView, SiteViewModel } from "./render/types";
-import { renderSiteHtml } from "./render/renderSiteHtml";
 
-const GENERATED_ROOT = path.join(process.cwd(), "public", "generated");
-const SITE_CSS_SOURCE = path.join(process.cwd(), "src", "lib", "render", "site.css");
-const SITE_JS_SOURCE = path.join(process.cwd(), "src", "lib", "render", "main.js");
+/** Builds one clinic site: pick a template, clone it, write the copy, generate the images, save the
+ * document, render the files.
+ *
+ * The document is the deliverable here, not the HTML. Everything the page shows now round-trips
+ * through D1, which is what makes the editor possible at all — the pre-block generator threw its
+ * view model away and left only an HTML file that nothing could edit. Rendering is a separate,
+ * AI-free step (renderSiteFiles) that the editor calls on every save. */
+
 const IMAGE_CONCURRENCY = 3;
 
 export type GeneratedSite = {
+  documentId: string;
   slug: string;
   previewUrl: string;
+  templateId: string;
+  /** One-line explanation of why the auto-selector chose that template, when an AI call decided it. */
+  templateReason: string | null;
 };
 
-export async function generatedSiteExists(slug: string): Promise<boolean> {
-  try {
-    await readFile(path.join(GENERATED_ROOT, slug, "index.html"));
-    return true;
-  } catch {
-    return false;
-  }
-}
+// --- hearing sheet -> factual block content ------------------------------------------------------
 
 /** Splits `hearing.hours` (free-form, newline-separated) into table rows, pulling a "label：value"
  * shape apart where present. Deterministic — never routed through the AI, so it can never drift from
- * what the clinic actually typed (see SITE_SPEC.json honestyRules). */
-function hoursRowsFromHearing(hearing: HearingSheet): HoursRow[] {
+ * what the clinic actually typed (see HONESTY_RULES). */
+function hoursRowsFromHearing(hearing: HearingSheet): { label: string; value: string }[] {
   return (hearing.hours ?? "")
     .split("\n")
     .map((line) => line.trim())
@@ -43,29 +45,113 @@ function hoursRowsFromHearing(hearing: HearingSheet): HoursRow[] {
     });
 }
 
-type ResolvedSection = { id: string; label: string; order: number; visible: boolean };
-
-/** Combines the user's explicit sectionPrefs (from the hearing screen's reorder UI — always wins when
- * present) with SITE_SPEC's default order/visibility (for older hearings saved before that UI
- * existed), and layers the "don't show an empty section" honesty rules on top: hours/access/pricing
- * only render when the backing hearing field actually has content, regardless of what the user
- * toggled — there's nothing honest to show otherwise. */
-function resolveSections(siteSpec: SiteSpec, hearing: HearingSheet): ResolvedSection[] {
-  const prefsById = new Map((hearing.sectionPrefs ?? []).map((p) => [p.id, p]));
-
-  return siteSpec.sections.map((section) => {
-    const pref = prefsById.get(section.id);
-    const order = pref?.order ?? section.order;
-    let visible = section.removable ? (pref?.visible ?? section.defaultVisible) : true;
-
-    if (section.id === "hours") visible = visible && (hearing.hours ?? "").trim().length > 0;
-    if (section.id === "access") visible = visible && (hearing.address ?? "").trim().length > 0;
-    if (section.id === "staff") visible = visible && (hearing.staffMembers?.length ?? 0) > 0;
-    if (section.id === "pricing") visible = visible && (hearing.priceItems?.length ?? 0) > 0;
-
-    return { id: section.id, label: section.label, order, visible };
-  });
+/** Hides the blocks the clinic gave us nothing to fill. An empty 料金表 is worse than no 料金表: the
+ * section would render as a heading over a blank table, which reads as a broken page rather than as
+ * an omission. Applied BEFORE the content plan is requested so the model never writes copy for a
+ * section that won't ship. */
+function applyFactualVisibility(doc: SiteDocument, hearing: HearingSheet): void {
+  const has = {
+    hours: (hearing.hours ?? "").trim().length > 0,
+    access: (hearing.address ?? "").trim().length > 0,
+    staff: (hearing.staffMembers?.length ?? 0) > 0,
+    pricing: (hearing.priceItems?.length ?? 0) > 0,
+  };
+  for (const block of doc.blocks) {
+    if (block.type === "hours") block.visible = block.visible && has.hours;
+    if (block.type === "access") block.visible = block.visible && has.access;
+    if (block.type === "staff") block.visible = block.visible && has.staff;
+    if (block.type === "pricing") block.visible = block.visible && has.pricing;
+  }
 }
+
+/** Copies the hearing sheet's hard facts into the blocks that report them. This copy is what makes
+ * the site editable later: from here on the document is the source of truth, and re-reading the
+ * hearing sheet at render time (which the old generator did) would silently undo the user's edits. */
+function applyFactualContent(doc: SiteDocument, hearing: HearingSheet, plan: ContentPlan): void {
+  const hoursRows = hoursRowsFromHearing(hearing);
+
+  for (const block of doc.blocks) {
+    switch (block.type) {
+      case "hours":
+        block.data.rows = hoursRows;
+        break;
+      case "access":
+        block.data.address = hearing.address ?? "";
+        block.data.mapQuery = hearing.address ? encodeURIComponent(hearing.address) : "";
+        break;
+      case "pricing":
+        block.data.items = (hearing.priceItems ?? []).map((item) => ({
+          name: item.name,
+          price: item.price,
+          note: item.note,
+        }));
+        break;
+      case "staff":
+        block.data.members = (hearing.staffMembers ?? []).map((m) => ({
+          name: m.name,
+          role: m.role,
+          comment: m.comment,
+          image: undefined,
+        }));
+        break;
+      case "news":
+        // Real announcements always win; the AI's generic ones only fill an otherwise empty section.
+        block.data.items =
+          hearing.news && hearing.news.length > 0
+            ? hearing.news.map((n) => ({ date: n.date, title: n.title }))
+            : plan.newsFallback;
+        break;
+      case "faq":
+        block.data.items = hearing.faqs && hearing.faqs.length > 0 ? hearing.faqs : plan.faqFallback;
+        break;
+      default:
+        break;
+    }
+  }
+}
+
+// --- content plan -> authored block content ------------------------------------------------------
+
+function applyContentPlan(doc: SiteDocument, plan: ContentPlan): void {
+  const byId = new Map(plan.blocks.map((b) => [b.blockId, b]));
+
+  doc.meta.seo = plan.seo;
+
+  for (const block of doc.blocks) {
+    const content = byId.get(block.id);
+    if (!content) continue;
+
+    switch (block.type) {
+      case "hero":
+        block.data.headline = content.heading;
+        block.data.subheadline = content.body;
+        break;
+      case "rich":
+        block.data.heading = content.heading;
+        block.data.body = content.body;
+        block.data.cards = content.cards.map((card) => ({ heading: card.heading, body: card.body }));
+        break;
+      case "contact":
+        block.data.heading = content.heading;
+        block.data.lead = content.body;
+        break;
+      case "freeText":
+        block.data.heading = content.heading;
+        block.data.body = content.body;
+        break;
+      case "gallery":
+        block.data.heading = content.heading;
+        break;
+      case "imageBanner":
+        block.data.caption = content.heading || undefined;
+        break;
+      default:
+        break;
+    }
+  }
+}
+
+// --- images --------------------------------------------------------------------------------------
 
 const ASPECT_SIZE: Record<ImageAspect, { width: number; height: number }> = {
   "1:1": { width: 1024, height: 1024 },
@@ -74,8 +160,18 @@ const ASPECT_SIZE: Record<ImageAspect, { width: number; height: number }> = {
   "2:1": { width: 1200, height: 600 },
 };
 
+const LOGO_SLOT = "logo";
+
+/** Slot keys address one image placement: a block's own image, or the nth item inside it. They double
+ * as output filenames, so they're kept to characters that are safe in a path and in a URL. */
+function slotKey(blockId: string, index?: number): string {
+  const base = index === undefined ? blockId : `${blockId}-${index}`;
+  return base.replace(/[^A-Za-z0-9_-]/g, "-");
+}
+
 type ImageJob = {
-  id: string;
+  slot: string;
+  /** Site-relative path written into the block, e.g. "images/hero.jpg". */
   path: string;
   alt: string;
   role: ImageStyle;
@@ -83,59 +179,124 @@ type ImageJob = {
   targetSize: { width: number; height: number };
 };
 
-/** Turns the AI's `images` plan (sectionId/blockIndex pairs) into concrete, collision-free output
- * file paths, and adds the staff-photo jobs the content plan never sees (staff is never AI-authored —
- * see SITE_SPEC.json — so those slots are synthesized here directly from `hearing.staffMembers`). */
-function buildImageJobs(
-  hearing: HearingSheet,
-  plan: ContentPlan,
-  aiSectionIds: Set<string>,
-  blockLayout: DesignPreset["blockLayout"]
-): ImageJob[] {
+/** Turns the plan's image list into concrete, collision-free output paths, then adds the placements
+ * the plan never sees: the header logo (structural — a missing one leaves a broken <img> in every
+ * page) and staff portraits (never AI-authored copy, so they're synthesized straight from the
+ * hearing sheet). */
+function buildImageJobs(doc: SiteDocument, hearing: HearingSheet, plan: ContentPlan): ImageJob[] {
+  const blocksById = new Map(doc.blocks.map((b) => [b.id, b]));
   const jobs: ImageJob[] = [];
-  const seenKeys = new Set<string>();
+  const seen = new Set<string>();
 
-  for (const img of plan.images) {
-    if (img.sectionId !== "header" && img.sectionId !== "hero" && !aiSectionIds.has(img.sectionId)) continue;
-    // "minimal" block layout never renders a per-card image (see AiSection in components.tsx) — skip
-    // generating one so a real API call isn't spent on a file the page will never reference.
-    if (img.blockIndex !== undefined && blockLayout === "minimal") continue;
-    const key = img.blockIndex !== undefined ? `${img.sectionId}-${img.blockIndex}` : img.sectionId;
-    if (seenKeys.has(key)) continue;
-    seenKeys.add(key);
-    const ext = img.role === "logo" ? "png" : "jpg";
-    jobs.push({
-      id: key,
-      path: `images/${key}.${ext}`,
-      alt: img.alt,
-      role: img.role,
-      prompt: img.prompt,
-      targetSize: img.role === "logo" ? { width: 128, height: 128 } : ASPECT_SIZE[img.aspect],
+  function push(job: ImageJob) {
+    if (seen.has(job.slot)) return;
+    seen.add(job.slot);
+    jobs.push(job);
+  }
+
+  for (const image of plan.images) {
+    if (image.blockId === LOGO_SLOT || image.role === "logo") {
+      push({
+        slot: LOGO_SLOT,
+        path: "images/logo.png",
+        alt: hearing.clinicName,
+        role: "logo",
+        prompt: image.prompt,
+        targetSize: { width: 128, height: 128 },
+      });
+      continue;
+    }
+
+    const block = blocksById.get(image.blockId);
+    if (!block || !block.visible) continue;
+    // A card image the chosen template will never render ("minimal" drops them entirely) would be a
+    // real image-generation API call spent on a file no <img> points at.
+    if (image.cardIndex !== undefined && block.type === "rich" && doc.design.block.cardLayout === "minimal") continue;
+
+    const slot = slotKey(block.id, image.cardIndex);
+    push({
+      slot,
+      path: `images/${slot}.jpg`,
+      alt: image.alt,
+      role: image.role,
+      prompt: image.prompt,
+      targetSize: ASPECT_SIZE[image.aspect],
     });
   }
 
-  // Guarantee logo/hero exist even if the model omitted them from `images` — both are structural and
-  // always rendered, so a missing job here would leave a broken <img src> in the final page.
-  if (!seenKeys.has("header")) {
-    jobs.push({ id: "header", path: "images/logo.png", alt: hearing.clinicName, role: "logo", targetSize: { width: 128, height: 128 } });
-  }
-  if (!seenKeys.has("hero")) {
-    jobs.push({ id: "hero", path: "images/hero.jpg", alt: hearing.clinicName, role: "photo", targetSize: ASPECT_SIZE["2:1"] });
-  }
-
-  (hearing.staffMembers ?? []).forEach((member, i) => {
-    if (member.photoUrl) return; // handled as a forced upload, not a generation job
-    jobs.push({
-      id: `staff-${i}`,
-      path: `images/staff-${i}.jpg`,
-      alt: member.name,
-      role: "photo",
-      prompt: undefined,
-      targetSize: ASPECT_SIZE["1:1"],
-    });
+  // Structural guarantees the model can't be trusted to remember.
+  push({
+    slot: LOGO_SLOT,
+    path: "images/logo.png",
+    alt: hearing.clinicName,
+    role: "logo",
+    targetSize: { width: 128, height: 128 },
   });
+  for (const block of doc.blocks) {
+    if (block.type !== "hero" || !block.visible) continue;
+    push({
+      slot: slotKey(block.id),
+      path: `images/${slotKey(block.id)}.jpg`,
+      alt: hearing.clinicName,
+      role: "photo",
+      targetSize: ASPECT_SIZE["2:1"],
+    });
+  }
+  for (const block of doc.blocks) {
+    if (block.type !== "staff" || !block.visible) continue;
+    block.data.members.forEach((member, i) => {
+      const slot = slotKey(block.id, i);
+      push({
+        slot,
+        path: `images/${slot}.jpg`,
+        alt: member.name,
+        role: "photo",
+        targetSize: ASPECT_SIZE["1:1"],
+      });
+    });
+  }
 
   return jobs;
+}
+
+/** Writes the finished image paths back into the blocks. Slots with no file (the model didn't plan
+ * one, or generation was skipped) are left alone so a template's own sample image survives. */
+function applyImagePaths(doc: SiteDocument, paths: Map<string, string>): void {
+  const logo = paths.get(LOGO_SLOT);
+  if (logo) doc.meta.logoImage = logo;
+
+  for (const block of doc.blocks) {
+    const own = paths.get(slotKey(block.id));
+    switch (block.type) {
+      case "hero":
+        if (own) block.data.image = own;
+        break;
+      case "rich":
+        if (own) block.data.image = own;
+        block.data.cards = block.data.cards.map((card, i) => {
+          const image = paths.get(slotKey(block.id, i));
+          return image ? { ...card, image } : card;
+        });
+        break;
+      case "imageBanner":
+        if (own) block.data.image = own;
+        break;
+      case "gallery":
+        block.data.images = block.data.images.map((image, i) => {
+          const src = paths.get(slotKey(block.id, i));
+          return src ? { ...image, src } : image;
+        });
+        break;
+      case "staff":
+        block.data.members = block.data.members.map((member, i) => {
+          const image = paths.get(slotKey(block.id, i));
+          return image ? { ...member, image } : member;
+        });
+        break;
+      default:
+        break;
+    }
+  }
 }
 
 async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
@@ -151,119 +312,25 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T,
   return results;
 }
 
-function buildSectionView(section: SiteSpecSection, plan: ContentPlan, imagePaths: Map<string, string>): SectionView {
-  const content = plan.sections[section.id];
-  const singleImage = imagePaths.get(section.id);
-  const blocks = (content?.blocks ?? []).map((block, i) => ({
-    heading: block.heading,
-    body: block.body,
-    image: imagePaths.get(`${section.id}-${i}`),
-  }));
-  return {
-    id: section.id,
-    label: section.label,
-    heading: content?.heading ?? section.label,
-    body: content?.body ?? "",
-    blocks,
-    image: singleImage,
-  };
-}
-
-function buildViewModel(
+/** Resolves every image placement to bytes on disk. A photo the clinic actually uploaded always beats
+ * an invented one, so uploads are matched to placements first (by category, via the AI matcher) and
+ * only the leftovers are generated. Each uploaded photo is used at most once. */
+async function produceImages(
+  doc: SiteDocument,
   hearing: HearingSheet,
-  preset: DesignPreset,
-  colorTheme: ColorTheme,
-  siteSpec: SiteSpec,
-  resolved: ResolvedSection[],
-  plan: ContentPlan,
-  imagePaths: Map<string, string>
-): SiteViewModel {
-  const visibleOrdered = resolved.filter((s) => s.visible).sort((a, b) => a.order - b.order);
-  const navItems: NavItem[] = visibleOrdered.map((s) => ({ id: s.id, label: s.label }));
-  const aiSections: SectionView[] = siteSpec.sections
-    .filter((s) => isAiAuthoredSection(s) && visibleOrdered.some((v) => v.id === s.id))
-    .map((s) => buildSectionView(s, plan, imagePaths));
-
-  const newsVisible = visibleOrdered.some((s) => s.id === "news");
-  const faqVisible = visibleOrdered.some((s) => s.id === "faq");
-
-  return {
-    clinicName: hearing.clinicName,
-    phone: hearing.phone || undefined,
-    line: hearing.line || undefined,
-    address: hearing.address || undefined,
-    mapQuery: hearing.address ? encodeURIComponent(hearing.address) : undefined,
-    logoImage: imagePaths.get("header") ?? "images/logo.png",
-    heroImage: imagePaths.get("hero") ?? "images/hero.jpg",
-    heroHeadline: plan.hero.headline,
-    heroSubheadline: plan.hero.subheadline || undefined,
-    theme: colorTheme,
-    fontFamily: preset.fontFamily,
-    cardStyle: preset.cardStyle,
-    heroLayout: preset.heroLayout,
-    blockLayout: preset.blockLayout,
-    spacing: preset.spacing,
-    seo: plan.seo,
-    navItems,
-    aiSections,
-    hours: { visible: visibleOrdered.some((s) => s.id === "hours"), rows: hoursRowsFromHearing(hearing) },
-    access: { visible: visibleOrdered.some((s) => s.id === "access") },
-    news: {
-      visible: newsVisible,
-      items: hearing.news && hearing.news.length > 0 ? hearing.news : plan.newsFallback,
-    },
-    staff: {
-      visible: visibleOrdered.some((s) => s.id === "staff"),
-      members: (hearing.staffMembers ?? []).map((m, i) => ({
-        name: m.name,
-        role: m.role,
-        comment: m.comment,
-        image: m.photoUrl ? imagePaths.get(`staff-${i}`) ?? m.photoUrl : imagePaths.get(`staff-${i}`),
-      })),
-    },
-    faq: {
-      visible: faqVisible,
-      items: hearing.faqs && hearing.faqs.length > 0 ? hearing.faqs : plan.faqFallback,
-    },
-    pricing: { visible: visibleOrdered.some((s) => s.id === "pricing"), items: hearing.priceItems ?? [] },
-    snsLinks: [],
-  };
-}
-
-export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite> {
-  const preset = hearing.templateId ? getDesignPreset(hearing.templateId) : undefined;
-  if (!preset) {
-    throw new Error("選択されたデザインプリセットが見つかりません。");
-  }
-  const colorTheme = getColorTheme(hearing.colorScheme);
-  const siteSpec = getSiteSpec();
-  const resolved = resolveSections(siteSpec, hearing);
-  const aiSections = siteSpec.sections.filter((s) => isAiAuthoredSection(s) && resolved.some((r) => r.id === s.id && r.visible));
-  const aiSectionIds = new Set(aiSections.map((s) => s.id));
-
-  const needsNewsFallback = resolved.some((r) => r.id === "news" && r.visible) && (!hearing.news || hearing.news.length === 0);
-  const needsFaqFallback = resolved.some((r) => r.id === "faq" && r.visible) && (!hearing.faqs || hearing.faqs.length === 0);
-
-  const plan = await generateContentPlan(hearing, preset, colorTheme, siteSpec, aiSections, needsNewsFallback, needsFaqFallback);
-
-  const outDir = path.join(GENERATED_ROOT, hearing.slug);
-  await rm(outDir, { recursive: true, force: true });
-  await mkdir(path.join(outDir, "images"), { recursive: true });
-  await mkdir(path.join(outDir, "css"), { recursive: true });
-  await mkdir(path.join(outDir, "js"), { recursive: true });
-
-  // --- images: AI-planned placements (logo/hero/section/block photos) plus staff photos the content
-  // plan never authors. Uploaded photos win over AI generation wherever the category matcher finds a
-  // fit; each uploaded photo is used at most once. ---
-  const jobs = buildImageJobs(hearing, plan, aiSectionIds, preset.blockLayout);
+  jobs: ImageJob[],
+  outDir: string
+): Promise<Map<string, string>> {
   const uploadedImages = hearing.uploadedImages ?? {};
-  const availableCategories = (Object.keys(uploadedImages) as ImageCategoryKey[]).filter((k) => (uploadedImages[k]?.length ?? 0) > 0);
+  const availableCategories = (Object.keys(uploadedImages) as ImageCategoryKey[]).filter(
+    (key) => (uploadedImages[key]?.length ?? 0) > 0
+  );
 
-  const matchableJobs = jobs.filter((j) => j.role !== "logo");
+  const matchableJobs = jobs.filter((job) => job.role !== "logo");
   const categoryAssignment: Record<string, ImageCategoryKey | null> =
     availableCategories.length > 0 && matchableJobs.length > 0
       ? await matchImagesToCategories(
-          matchableJobs.map((j): CategoryImageTarget => ({ id: j.id, alt: j.alt })),
+          matchableJobs.map((job): CategoryImageTarget => ({ id: job.slot, alt: job.alt })),
           availableCategories.map((key) => ({ key, sampleUrl: uploadedImages[key]![0] }))
         )
       : {};
@@ -278,33 +345,28 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
     return urls[cursor];
   }
 
-  const staffForcedUrls = new Map<string, string>(
-    (hearing.staffMembers ?? [])
-      .map((m, i): [string, string | undefined] => [`staff-${i}`, m.photoUrl])
-      .filter((entry): entry is [string, string] => Boolean(entry[1]))
-  );
+  // A staff member who supplied their own photo must get that photo, not a category match.
+  const forcedUrls = new Map<string, string>();
+  for (const block of doc.blocks) {
+    if (block.type !== "staff") continue;
+    (hearing.staffMembers ?? []).forEach((member, i) => {
+      if (member.photoUrl) forcedUrls.set(slotKey(block.id, i), member.photoUrl);
+    });
+  }
 
   const uploadedJobs: { job: ImageJob; url: string }[] = [];
   const aiJobs: ImageJob[] = [];
   for (const job of jobs) {
-    const forced = staffForcedUrls.get(job.id);
-    const category = categoryAssignment[job.id];
-    const url = forced ?? (category ? nextUploadedUrl(category) : undefined);
-    if (url) {
-      uploadedJobs.push({ job, url });
-    } else {
-      aiJobs.push(job);
-    }
+    const url = forcedUrls.get(job.slot) ?? (categoryAssignment[job.slot] ? nextUploadedUrl(categoryAssignment[job.slot]!) : undefined);
+    if (url) uploadedJobs.push({ job, url });
+    else aiJobs.push(job);
   }
 
-  const imagePaths = new Map<string, string>();
-  for (const job of jobs) imagePaths.set(job.id, job.path);
-
-  const [aiImageFiles, uploadedImageFiles] = await Promise.all([
+  const [generated, downloaded] = await Promise.all([
     mapWithConcurrency(aiJobs, IMAGE_CONCURRENCY, async (job, index) => ({
       job,
       buffer: await generateSiteImage(hearing, {
-        label: job.alt || job.id,
+        label: job.alt || job.slot,
         variationHint: `${index + 1}/${aiJobs.length}`,
         customPrompt: job.prompt,
         style: job.role,
@@ -320,16 +382,60 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
     ),
   ]);
 
-  for (const { job, buffer } of [...aiImageFiles, ...uploadedImageFiles]) {
+  const paths = new Map<string, string>();
+  for (const { job, buffer } of [...generated, ...downloaded]) {
     await writeFile(path.join(outDir, job.path), buffer);
+    paths.set(job.slot, job.path);
   }
+  return paths;
+}
 
-  // --- assemble + render ---
-  const vm = buildViewModel(hearing, preset, colorTheme, siteSpec, resolved, plan, imagePaths);
-  const html = await renderSiteHtml(vm);
-  await writeFile(path.join(outDir, "index.html"), html, "utf-8");
-  await writeFile(path.join(outDir, "css", "site.css"), await readFile(SITE_CSS_SOURCE, "utf-8"), "utf-8");
-  await writeFile(path.join(outDir, "js", "main.js"), await readFile(SITE_JS_SOURCE, "utf-8"), "utf-8");
+// --- entry point ---------------------------------------------------------------------------------
 
-  return { slug: hearing.slug, previewUrl: `/generated/${hearing.slug}/index.html` };
+export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite> {
+  const { template, reason } = await selectTemplate(hearing);
+
+  const doc = instantiateTemplate(template, {
+    slug: hearing.slug,
+    name: hearing.clinicName,
+    ownerEmail: hearing.ownerEmail,
+  });
+  doc.meta = {
+    ...doc.meta,
+    clinicName: hearing.clinicName,
+    phone: hearing.phone ?? "",
+    line: hearing.line ?? "",
+    address: hearing.address ?? "",
+  };
+
+  applyFactualVisibility(doc, hearing);
+
+  const newsBlock = doc.blocks.find((b): b is Extract<Block, { type: "news" }> => b.type === "news" && b.visible);
+  const faqBlock = doc.blocks.find((b): b is Extract<Block, { type: "faq" }> => b.type === "faq" && b.visible);
+  const needsNewsFallback = Boolean(newsBlock) && (hearing.news?.length ?? 0) === 0;
+  const needsFaqFallback = Boolean(faqBlock) && (hearing.faqs?.length ?? 0) === 0;
+
+  const plan = await generateContentPlan(hearing, doc, needsNewsFallback, needsFaqFallback);
+  applyContentPlan(doc, plan);
+  applyFactualContent(doc, hearing, plan);
+
+  // Full regeneration replaces every image, so the old directory is cleared here — unlike
+  // renderSiteFiles, which must preserve it. This is the only place that removal is correct.
+  const { outDir, previewUrl } = siteOutputPath(doc);
+  await rm(outDir, { recursive: true, force: true });
+  await mkdir(path.join(outDir, "images"), { recursive: true });
+
+  const imagePaths = await produceImages(doc, hearing, buildImageJobs(doc, hearing, plan), outDir);
+  applyImagePaths(doc, imagePaths);
+
+  await saveDocument(doc);
+  await renderSiteFiles(doc);
+
+  return {
+    documentId: doc.id,
+    slug: doc.slug,
+    previewUrl,
+    templateId: template.id,
+    templateReason: reason,
+  };
 }

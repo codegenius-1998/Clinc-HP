@@ -4,16 +4,35 @@
  */
 
 :root {
+  /* 配色 */
   --primary: #4ba3fc;
   --accent: #2d7dd2;
   --light: #e8f4ff;
+  --bg: #fff;
+  --text: #2b2b2b;
   --primary-inverse: #fff;
   --accent-inverse: #fff;
+
+  /* 文字 */
+  --font-heading: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", "Segoe UI", sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", "Segoe UI", sans-serif;
+  --font-size: 16px;
+  --line-height: 1.8;
+  --heading-weight: 700;
+
+  /* ブロックの形 */
   --radius: 12px;
-  --font: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", "Segoe UI", sans-serif;
+  --border-width: 1px;
+  --border-color: #eee;
+  --shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+
+  /* レイアウト */
   --space: 5vw;
   --space-scale: 1;
   --max-width: 1080px;
+
+  /* 演出 */
+  --reveal-duration: 700ms;
 }
 
 * { box-sizing: border-box; }
@@ -27,19 +46,34 @@ html { scroll-behavior: smooth; }
 /* スクロール演出（js/main.js の IntersectionObserver と対）
  * .js が付いた場合のみ初期状態を隠す — プログレッシブエンハンスメント。
  * JSが読み込めない/無効な環境でも本文は最初から普通に表示される。 */
-.js .reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.7s ease, transform 0.7s ease; }
-.js .reveal.is-visible { opacity: 1; transform: translateY(0); }
+.js .reveal {
+  opacity: 0;
+  transition: opacity var(--reveal-duration) ease, transform var(--reveal-duration) ease;
+  /* 段差表示。main.js が同じ並びの中の順番に応じて書き込む（未設定なら遅延なし）。 */
+  transition-delay: var(--reveal-delay, 0ms);
+}
+/* 演出の「形」はテンプレートが決める（<html data-reveal>）。 */
+html.js[data-reveal="slide-up"] .reveal { transform: translateY(28px); }
+html.js[data-reveal="zoom"] .reveal { transform: scale(0.94); }
+html.js[data-reveal="fade"] .reveal { transform: none; }
+/* 表示後の解除ルールは、上の3つより詳細度を高くしておく必要がある
+ * （`.js .reveal.is-visible` ではクラス3つで data-reveal 側と同点になり、
+ *   後勝ちで translateY が残ったまま = 常に28pxずれた位置で止まる）。 */
+html.js[data-reveal] .reveal.is-visible { opacity: 1; transform: none; }
+/* "none" opts the template out of motion entirely — including for readers whose browsers do run JS. */
+html[data-reveal="none"] .reveal { opacity: 1; transform: none; transition: none; }
 body {
-  font-family: var(--font);
-  color: #2b2b2b;
-  line-height: 1.8;
-  background: #fff;
+  font-family: var(--font-body);
+  font-size: var(--font-size);
+  color: var(--text);
+  line-height: var(--line-height);
+  background: var(--bg);
   -webkit-font-smoothing: antialiased;
 }
 img { max-width: 100%; height: auto; display: block; }
 a { color: inherit; text-decoration: none; }
 ul { list-style: none; margin: 0; padding: 0; }
-h1, h2, h3, h4 { margin: 0; font-weight: 700; }
+h1, h2, h3, h4 { margin: 0; font-family: var(--font-heading); font-weight: var(--heading-weight); }
 
 .container { max-width: var(--max-width); margin: 0 auto; padding: 0 var(--space); }
 
@@ -149,7 +183,7 @@ nav.site-nav a:hover { background: var(--accent); }
 /* セクション共通
 ---------------------------------------------------------------------------*/
 .section { padding: calc(4rem * var(--space-scale)) var(--space); }
-.section:nth-of-type(even) { background: var(--light); }
+.section-alt { background: var(--light); }
 .section-inner { max-width: var(--max-width); margin: 0 auto; }
 .section h2 { font-size: 1.5rem; margin-bottom: 0.5rem; border-bottom: 3px solid #ddd; padding-bottom: 0.7rem; position: relative; }
 .section h2::after { content: ""; position: absolute; left: 0; bottom: -3px; width: 4.5rem; height: 3px; background: var(--primary); }
@@ -158,7 +192,7 @@ nav.site-nav a:hover { background: var(--accent); }
 /* "grid"（既定）: 写真つきカードを折り返しグリッドで並べる */
 .cards { display: grid; grid-template-columns: 1fr; gap: calc(1.2rem * var(--space-scale)); margin-top: 1.5rem; }
 @media (min-width: 640px) { .cards { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); } }
-.card { background: #fff; border-radius: var(--radius); overflow: hidden; box-shadow: 0 1px 6px rgba(0,0,0,0.06); }
+.card { background: var(--bg); border: var(--border-width) solid var(--border-color); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
 .card img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
 .card-body { padding: 1.1rem; }
 .card-body h3, .card-body h4 { font-size: 1rem; margin-bottom: 0.4rem; color: var(--accent); }
@@ -186,12 +220,12 @@ nav.site-nav a:hover { background: var(--accent); }
   display: flex;
   gap: 1rem;
   align-items: flex-start;
-  background: #fff;
-  border: 1px solid #e5e5e5;
+  background: var(--bg);
+  border: var(--border-width) solid var(--border-color);
   box-shadow: none;
   padding: 1.2rem;
 }
-.card-index { flex-shrink: 0; font-size: 1.5rem; font-weight: 700; line-height: 1; color: var(--accent); font-family: var(--font); }
+.card-index { flex-shrink: 0; font-size: 1.5rem; font-weight: 700; line-height: 1; color: var(--accent); font-family: var(--font-heading); }
 
 .split { display: grid; gap: 1.5rem; align-items: center; }
 @media (min-width: 760px) { .split { grid-template-columns: 40% 1fr; } }
@@ -200,7 +234,7 @@ nav.site-nav a:hover { background: var(--accent); }
 
 /* 表（診療時間・料金表・アクセス）
 ---------------------------------------------------------------------------*/
-table.info-table { width: 100%; border-collapse: collapse; margin-top: 1rem; background: #fff; border-radius: var(--radius); overflow: hidden; }
+table.info-table { width: 100%; border-collapse: collapse; margin-top: 1rem; background: var(--bg); border-radius: var(--radius); overflow: hidden; }
 table.info-table th, table.info-table td { padding: 0.9rem 1rem; border-bottom: 1px solid #e5e5e5; text-align: left; font-size: 0.92rem; }
 table.info-table th { background: var(--light); width: 32%; white-space: pre-line; }
 table.info-table td { white-space: pre-line; }
@@ -217,7 +251,7 @@ table.info-table td.price { text-align: right; font-weight: 700; white-space: no
 /* FAQ（アコーディオン開閉。JS未実行時は全件開いたまま表示されるフォールバック付き）
 ---------------------------------------------------------------------------*/
 .faq-list { margin-top: 1rem; }
-.faq-item { background: #fff; border-radius: var(--radius); margin-bottom: 0.9rem; box-shadow: 0 1px 6px rgba(0,0,0,0.06); overflow: hidden; }
+.faq-item { background: var(--bg); border-radius: var(--radius); margin-bottom: 0.9rem; box-shadow: var(--shadow); overflow: hidden; }
 .faq-q {
   display: flex; align-items: center; justify-content: space-between; gap: 1rem;
   width: 100%; border: none; background: none; cursor: pointer;
@@ -260,3 +294,89 @@ footer.site-footer { background: #2b2f36; color: #dcdfe4; padding: 3rem var(--sp
 .footer-sns { display: flex; gap: 0.8rem; margin-top: 1rem; }
 .footer-sns a { width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; }
 .copyright { text-align: center; font-size: 0.75rem; color: #8b9096; margin-top: 2.5rem; }
+
+/* ヒーロー "centered": 画像を上に置き、テキストはその下に中央寄せ。
+ * full-bleed が写真の上に文字を重ねるのに対し、こちらは文字が必ず読める — 
+ * 明るい写真や文字数の多いキャッチコピーを持つテンプレート向け。
+---------------------------------------------------------------------------*/
+.hero.hero-centered { display: flex; flex-direction: column; background: var(--light); }
+.hero.hero-centered img { aspect-ratio: 21 / 9; }
+.hero.hero-centered .hero-copy {
+  position: static;
+  background: none;
+  color: var(--text);
+  padding: calc(2.5rem * var(--space-scale)) var(--space);
+}
+.hero.hero-centered .hero-copy h1 { color: var(--primary); text-shadow: none; }
+.hero.hero-centered .hero-copy p { color: #555; opacity: 1; }
+
+/* カード "overlap": カードを少しずつ縦にずらして重なりを作る、雑誌的な並び。
+ * 対応していない狭い画面では素直なグリッドに戻る。
+---------------------------------------------------------------------------*/
+@media (min-width: 860px) {
+  .cards-overlap { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); align-items: start; }
+  .cards-overlap .card:nth-child(even) { margin-top: calc(2.5rem * var(--space-scale)); }
+  .cards-overlap .card { transition: transform 0.3s ease; }
+  .cards-overlap .card:hover { transform: translateY(-6px); }
+}
+
+/* セクションの区切り装飾（テンプレートの layout.sectionDivider）
+ * 純粋な装飾なので、いずれも aria から見えない疑似要素だけで作る。
+---------------------------------------------------------------------------*/
+html[data-divider="diagonal"] .section-alt { clip-path: polygon(0 2.5vw, 100% 0, 100% 100%, 0 calc(100% - 2.5vw)); }
+html[data-divider="wave"] .section-alt { position: relative; }
+html[data-divider="wave"] .section-alt::before,
+html[data-divider="wave"] .section-alt::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2.2vw;
+  background: radial-gradient(circle at 50% 0, transparent 70%, var(--light) 71%);
+  background-size: 4.4vw 4.4vw;
+}
+html[data-divider="wave"] .section-alt::before { top: -2.2vw; }
+html[data-divider="wave"] .section-alt::after { bottom: -2.2vw; transform: rotate(180deg); }
+
+/* 自由文ブロック
+---------------------------------------------------------------------------*/
+.free-text .lead { color: var(--text); font-size: 1.05rem; margin-top: 0; }
+.free-text.align-center .section-inner { text-align: center; }
+.free-text.align-center h2 { border-bottom: none; display: inline-block; }
+.free-text.align-center h2::after { left: 50%; transform: translateX(-50%); }
+
+/* 画像バナー
+---------------------------------------------------------------------------*/
+.image-banner { position: relative; overflow: hidden; }
+.image-banner img { width: 100%; object-fit: cover; }
+.image-banner.banner-short img { aspect-ratio: 5 / 1; }
+.image-banner.banner-tall img { aspect-ratio: 5 / 2; }
+.banner-caption {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  text-align: center;
+  font-family: var(--font-heading);
+  font-weight: var(--heading-weight);
+  font-size: 1.3rem;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.3);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+
+/* 写真ギャラリー
+---------------------------------------------------------------------------*/
+.gallery { display: grid; gap: calc(0.9rem * var(--space-scale)); margin-top: 1.5rem; grid-template-columns: repeat(2, 1fr); }
+@media (min-width: 640px) {
+  .gallery-3 { grid-template-columns: repeat(3, 1fr); }
+  .gallery-4 { grid-template-columns: repeat(4, 1fr); }
+}
+.gallery figure { margin: 0; }
+.gallery img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--radius); }
+.gallery figcaption { margin-top: 0.4rem; font-size: 0.8rem; color: #666; text-align: center; }
+
+/* ヒーローのパララックス（main.js が --parallax-y を書き込む） */
+html[data-parallax="1"] .hero.hero-full-bleed .hero-image { transform: translate3d(0, var(--parallax-y, 0px), 0) scale(1.08); }
