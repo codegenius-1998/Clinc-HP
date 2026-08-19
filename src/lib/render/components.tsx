@@ -85,7 +85,10 @@ function Header({ doc }: { doc: SiteDocument }) {
           {meta.phone}
         </a>
       )}
-      <input type="checkbox" id="nav-toggle" className="nav-toggle" />
+      {/* The checkbox itself lives OUTSIDE this header (see SitePage) so that it and <nav> are
+          siblings — the CSS-only hamburger relies on `.nav-toggle:checked ~ nav.site-nav`, which
+          only matches between elements sharing a parent. A <label for> works across the document,
+          so the button can still sit here in the header. */}
       <label htmlFor="nav-toggle" className="nav-toggle-label" aria-label="メニュー">
         <span />
       </label>
@@ -484,6 +487,10 @@ export function SitePage({ doc }: { doc: SiteDocument }) {
       </head>
       <body>
         <a id="top" />
+        {/* Sibling of <nav> on purpose — `.nav-toggle:checked ~ nav.site-nav` is what opens the
+            mobile menu, and the general sibling combinator only reaches elements with the same
+            parent. Its label sits inside the header. */}
+        <input type="checkbox" id="nav-toggle" className="nav-toggle" />
         <Header doc={doc} />
         <Nav items={navBlocks(doc)} />
         <main>{visible.map((block) => renderBlock(block, doc))}</main>

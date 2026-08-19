@@ -45,6 +45,23 @@
     });
   }
 
+  /** 実測したヘッダーの高さを --header-h として公開する。
+   * スマートフォンのメニューは position: fixed でヘッダーの真下に出すため、その高さが要る。
+   * ヘッダーの高さはロゴの有無・医院名の行数・フォント設定で変わるので、CSS 側に固定値では書けない。
+   * 取得できない場合に備えて CSS 側に既定値を持たせてあるので、この処理が動かなくても崩れはしない。 */
+  function trackHeaderHeight() {
+    var header = document.querySelector(".site-header");
+    if (!header) return;
+    var update = function () {
+      document.documentElement.style.setProperty("--header-h", header.offsetHeight + "px");
+    };
+    update();
+    window.addEventListener("resize", update);
+    // 画像の読み込みでヘッダーの高さが変わることがある（ロゴの縦横比が確定するのは読み込み後）。
+    var logo = header.querySelector("img");
+    if (logo && !logo.complete) logo.addEventListener("load", update);
+  }
+
   function setupHeaderScrollState() {
     var header = document.querySelector(".site-header");
     if (!header) return;
@@ -133,6 +150,7 @@
 
   setupFaqAccordion();
   setupMobileNavAutoClose();
+  trackHeaderHeight();
   setupHeaderScrollState();
   setupScrollReveal();
   setupParallaxHero();

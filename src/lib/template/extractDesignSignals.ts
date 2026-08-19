@@ -13,8 +13,25 @@ import { safeFetchText } from "./safeFetch";
  * model can look at them, which is why they are returned as URLs and never as bytes. */
 
 const MAX_HTML_BYTES = 1_000_000;
-const MAX_CSS_FILES = 3;
-const MAX_CSS_TOTAL_BYTES = 500_000;
+const MAX_CSS_FILES = 5;
+const MAX_CSS_TOTAL_BYTES = 700_000;
+
+/** Stylesheets that describe a framework rather than this site. Most Japanese clinic sites are
+ * WordPress, and a WordPress page loads wp-block-library, dashicons and Font Awesome before its own
+ * theme — so a naive "first few stylesheets" read comes back describing WordPress's default editor
+ * palette and Font Awesome's icon animations, and nothing about the clinic. */
+const BOILERPLATE_STYLESHEET =
+  /(wp-includes\/css\/dist|block-library|dashicons|font-?awesome|bootstrap(\.min)?\.css|normalize(\.min)?\.css|reset(\.min)?\.css|swiper|slick|animate(\.min)?\.css)/i;
+
+/** Looks like the site's own theme/design CSS — fetched first when present. */
+const THEME_STYLESHEET = /(\/wp-content\/themes\/|\/themes?\/|style\.css|main\.css|common\.css|custom\.css|app\.css)/i;
+
+/** Custom properties belonging to a framework's own machinery, not to this site's design. */
+const FRAMEWORK_PROPERTY = /^--(wp|fa|bs|tw|swiper|slick)-/i;
+
+/** Icon fonts. They appear in `font-family` more often than the real body font does (every icon rule
+ * repeats them) and would otherwise win the tally outright. */
+const ICON_FONT = /(font\s*awesome|fontawesome|dashicons|material icons|glyphicon|icomoon|"?icon)/i;
 
 export type Counted = { value: string; count: number };
 
@@ -138,8 +155,16 @@ export async function extractDesignSignals(rawUrl: string): Promise<DesignSignal
     .get()
     .join("\n");
 
+  // Skip framework stylesheets outright, then read anything that looks like the site's own theme
+  // before the leftovers — the byte budget is small enough that order decides what we actually see.
+  const usableUrls = stylesheetUrls.filter((href) => !BOILERPLATE_STYLESHEET.test(href));
+  const orderedUrls = [
+    ...usableUrls.filter((href) => THEME_STYLESHEET.test(href)),
+    ...usableUrls.filter((href) => !THEME_STYLESHEET.test(href)),
+  ];
+
   const cssSources: string[] = [];
-  for (const href of stylesheetUrls.slice(0, MAX_CSS_FILES)) {
+  for (const href of orderedUrls.slice(0, MAX_CSS_FILES)) {
     if (css.length >= MAX_CSS_TOTAL_BYTES) break;
     try {
       const sheet = await safeFetchText(href, MAX_CSS_TOTAL_BYTES - css.length);
@@ -151,9 +176,15 @@ export async function extractDesignSignals(rawUrl: string): Promise<DesignSignal
     }
   }
 
+  // A stylesheet can pull Google Fonts in itself with @import, which no amount of looking at <link>
+  // tags will find — common on WordPress themes that bundle their font loading into style.css.
+  for (const match of css.matchAll(/@import\s+(?:url\()?["']?(https?:\/\/fonts\.googleapis\.com\/[^"')\s]+)/gi)) {
+    parseGoogleFontsHref(match[1]).forEach((f) => googleFonts.add(f));
+  }
+
   const customProperties = [...css.matchAll(/(--[\w-]+)\s*:\s*([^;{}]+)/g)]
     .map((m) => ({ name: m[1], value: m[2].trim() }))
-    .filter((p) => p.value.length > 0 && p.value.length < 120)
+    .filter((p) => p.value.length > 0 && p.value.length < 120 && !FRAMEWORK_PROPERTY.test(p.name))
     .slice(0, 60);
 
   const colors = tally(
@@ -164,14 +195,18 @@ export async function extractDesignSignals(rawUrl: string): Promise<DesignSignal
   );
 
   const fontFamilies = tally(
-    collect(/font-family\s*:\s*([^;{}]+)/gi, css).map((f) => f.replace(/\s+/g, " ").trim()),
+    collect(/font-family\s*:\s*([^;{}]+)/gi, css)
+      .map((f) => f.replace(/\s+/g, " ").trim())
+      .filter((f) => !ICON_FONT.test(f)),
     8
   );
 
   const radii = tally(collect(/border-radius\s*:\s*([^;{}]+)/gi, css), 6);
   const shadows = [...new Set(collect(/box-shadow\s*:\s*([^;{}]+)/gi, css))].slice(0, 6);
   const transitionDurations = [...new Set(collect(/transition[^;{}]*?(\d*\.?\d+m?s)/gi, css))].slice(0, 6);
-  const keyframeNames = [...new Set(collect(/@keyframes\s+([\w-]+)/gi, css))].slice(0, 10);
+  const keyframeNames = [...new Set(collect(/@keyframes\s+([\w-]+)/gi, css))]
+    .filter((name) => !/^(fa|swiper|slick|wp)-/i.test(name))
+    .slice(0, 10);
 
   const imageCandidates: string[] = [];
   function pushImage(raw: string | undefined) {

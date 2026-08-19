@@ -16,9 +16,14 @@ import {
  * the only discriminator — which is what lets one editor and one renderer serve both.
  *
  * Blocks live in `site_sections`, one row per block instance, ordered by `position`:
- *   site_sections.id       -> block.id       (instance)
- *   site_sections.sec_id   -> block.type     (one of the fixed catalog rows seeded in 0003)
- *   site_sections.content  -> block.data     (JSON, shape depends on the type)
+ *   site_sections.id       -> "<siteId>:<block.id>"  (see rowId / blockIdFromRow below)
+ *   site_sections.sec_id   -> block.type             (one of the fixed catalog rows seeded in 0003)
+ *   site_sections.content  -> block.data             (JSON, shape depends on the type)
+ *
+ * A block id only has to be unique WITHIN its document, and templates deliberately use readable ones
+ * ("hero", "department") because they become the page's HTML anchors. `site_sections.id` is a global
+ * primary key, so the stored row id is namespaced by site id — otherwise the second template to
+ * contain a block called "hero" fails to insert.
  *
  * `src/lib/d1.ts`'s d1Query sends exactly one statement per HTTP round trip, so saving is written as
  * a small fixed number of statements (upsert + delete + chunked multi-row insert) rather than one
@@ -92,6 +97,18 @@ function parseJson<T>(raw: string | null, fallback: T): T {
   }
 }
 
+/** "<siteId>:<blockId>" — the stored primary key for one block row. */
+function rowId(siteId: string, blockId: string): string {
+  return `${siteId}:${blockId}`;
+}
+
+/** Inverse of `rowId`. An unprefixed value is passed through unchanged, so rows written before the
+ * namespacing still load rather than reading back as corrupt. */
+function blockIdFromRow(siteId: string, storedId: string): string {
+  const prefix = `${siteId}:`;
+  return storedId.startsWith(prefix) ? storedId.slice(prefix.length) : storedId;
+}
+
 function toSummary(row: SiteRow): DocumentSummary {
   return {
     id: row.id,
@@ -114,7 +131,7 @@ function toSummary(row: SiteRow): DocumentSummary {
  * row must not make the whole site unopenable in the editor, which is the one place it can be fixed. */
 function toBlock(row: SectionRow): Block | null {
   const candidate = {
-    id: row.id,
+    id: blockIdFromRow(row.site_id, row.id),
     type: row.sec_id as BlockType,
     visible: row.visible === 1,
     navLabel: row.nav_label ?? "",
@@ -242,7 +259,7 @@ export async function saveDocument(doc: SiteDocument): Promise<SiteDocument> {
     const chunk = parsed.blocks.slice(start, start + BLOCK_CHUNK_SIZE);
     const placeholders = chunk.map(() => `(${Array(BLOCK_INSERT_COLUMNS).fill("?").join(", ")})`).join(", ");
     const params = chunk.flatMap((block, i) => [
-      block.id,
+      rowId(parsed.id, block.id),
       block.type,
       parsed.id,
       JSON.stringify(block.data),
@@ -290,9 +307,10 @@ export function instantiateTemplate(
     mood: undefined,
     sourceUrl: undefined,
     thumbnailUrl: undefined,
-    // Block ids are regenerated because they double as this page's HTML anchors; keeping the
-    // template's ids would be harmless today but makes "which document is this block from?" ambiguous.
-    blocks: template.blocks.map((block) => ({ ...block, id: `${block.type}_${Math.random().toString(36).slice(2, 8)}` })),
+    // Block ids carry over verbatim. They double as the page's HTML anchors, so "#department" reads
+    // better than a random id, and `rowId` already namespaces the stored row by document — two sites
+    // cloned from the same template cannot collide on insert.
+    blocks: template.blocks.map((block) => ({ ...block })),
     createdAt: now,
     updatedAt: now,
   };

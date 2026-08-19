@@ -123,12 +123,39 @@ nav.site-nav a:hover { background: var(--accent); }
 
 @media (max-width: 760px) {
   .nav-toggle-label { display: block; }
+
+  /* `fixed`, not `absolute`: <nav> is a child of <body>, and nothing between it and the viewport is
+     positioned, so `absolute; top: 100%` resolved against the initial containing block and dropped
+     the menu a full viewport below the header. `fixed` also keeps the menu reachable after the page
+     has been scrolled — the header is sticky, but the nav is not. --header-h is measured in main.js;
+     the fallback covers the moment before that runs, and the case where JS is unavailable. */
   nav.site-nav {
-    position: absolute; top: 100%; left: 0; right: 0; max-height: 0; overflow: hidden; transition: max-height 0.25s ease;
+    position: fixed; top: var(--header-h, 72px); left: 0; right: 0;
+    max-height: 0; overflow: hidden; transition: max-height 0.25s ease;
     z-index: 20;
   }
   nav.site-nav ul { flex-direction: column; }
-  .nav-toggle:checked ~ nav.site-nav { max-height: 80vh; overflow-y: auto; }
+
+  /* Deliberately a plain sibling combinator, not `:has()`. An earlier version of this rule added
+     `body:has(.nav-toggle:checked) nav.site-nav` as a fallback for pages whose checkbox still sat
+     inside <header> (pre-dating the fix in components.tsx that made it a sibling of <nav>). That
+     fallback was dropped after testing showed a real browser applying `:checked`-driven style
+     recalculation to the wrong box for a `:has()`-matched target — `getComputedStyle` and even a
+     forced `!important` inline height both reported 0, while the exact same node measured correctly
+     the moment it was moved in the DOM. `:has()` is new enough, and that failure mode strange enough,
+     that it is not worth the risk in markup every clinic's page depends on. The fix instead is
+     structural: the checkbox is a sibling of <nav> in every CURRENT render (see SitePage below), and
+     any page still carrying the old markup gets corrected the next time it is saved/re-rendered —
+     renderSiteFiles always emits current markup, so there is nothing to keep working around. */
+  .nav-toggle:checked ~ nav.site-nav {
+    max-height: calc(100vh - var(--header-h, 72px));
+    overflow-y: auto;
+  }
+
+  /* Open state: the three bars become an X, so the button reports whether the menu is showing. */
+  .nav-toggle:checked ~ header.site-header .nav-toggle-label span { background: transparent; }
+  .nav-toggle:checked ~ header.site-header .nav-toggle-label span::before { top: 0; transform: rotate(45deg); }
+  .nav-toggle:checked ~ header.site-header .nav-toggle-label span::after { top: 0; transform: rotate(-45deg); }
 }
 
 /* ヒーロー
@@ -179,6 +206,26 @@ nav.site-nav a:hover { background: var(--accent); }
 .hero.hero-split .cta-buttons { justify-content: flex-start; }
 
 .cta-buttons { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.8rem; margin-top: 0.6rem; }
+
+/* full-bleed ヒーローのはみ出し対策
+ * 画像とテキストを重ねる際、テキスト側を絶対配置にすると親の高さを押し広げられない。
+ * キャッチコピーが長い医院やSP幅では、文字がヘッダーの上や次のセクションにはみ出す
+ * （実測: 375px幅で上に77px・下に78pxはみ出していた）。
+ * gridで同じセルに重ねると、行の高さが「画像の高さ」と「文字の高さ」の大きい方になるため、
+ * はみ出しが原理的に起こらなくなる。見た目（画像の上に文字が乗る）は変わらない。 */
+.hero.hero-full-bleed { display: grid; }
+.hero.hero-full-bleed > img,
+.hero.hero-full-bleed > .hero-copy { grid-area: 1 / 1; }
+.hero.hero-full-bleed > img { height: 100%; }
+.hero.hero-full-bleed > .hero-copy { position: static; padding: 2rem 1rem; }
+
+/* SP: 予約ボタンは縦積みにして幅を揃える。
+ * 「LINEで相談・予約する」と「お電話で相談・予約する」は文字数が違うだけでボタン幅が
+ * 変わり（実測 210px と 218px）、縦に並んだときに右端が揃わず不揃いに見えるため。 */
+@media (max-width: 560px) {
+  .cta-buttons { flex-direction: column; align-self: stretch; width: 100%; }
+  .cta-buttons .btn { width: 100%; justify-content: center; }
+}
 .btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.8rem 1.6rem; border-radius: var(--radius); font-weight: 700; font-size: 0.95rem; }
 .btn-tel { background: var(--primary); color: var(--primary-inverse); }
 .btn-line { background: #06c755; color: #fff; }
@@ -214,7 +261,6 @@ nav.site-nav a:hover { background: var(--accent); }
   border-bottom: 1px solid #e2e2e2;
   padding-bottom: calc(1.5rem * var(--space-scale));
 }
-.cards-list .card:last-child { border-bottom: none; }
 .cards-list .card img { width: 140px; height: 140px; flex-shrink: 0; aspect-ratio: 1 / 1; border-radius: var(--radius); }
 .cards-list .card-body { padding: 0; }
 

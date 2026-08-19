@@ -5,7 +5,7 @@ import { assertPublicUrl } from "./safeFetch";
 import { describeSignals, extractDesignSignals, type DesignSignals } from "./extractDesignSignals";
 import { DEFAULT_DESIGN_TOKENS, designTokensSchema, type DesignTokens, type SiteDocument } from "@/lib/site/document";
 import { defaultTemplateBlocks } from "@/lib/site/defaultTemplate";
-import { newDocumentId, saveDocument } from "@/lib/site/store";
+import { deleteDocument, newDocumentId, saveDocument } from "@/lib/site/store";
 import { renderSiteFiles } from "@/lib/render/renderSiteFiles";
 import { applySampleCopy } from "./sampleCopy";
 
@@ -68,6 +68,26 @@ const aiTemplateSchema = z.object({
 type AiTemplate = z.infer<typeof aiTemplateSchema>;
 
 const HEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+
+/** Checks a reference image is actually fetchable and actually an image before handing its URL to
+ * the model. Worth the round trip: the model fetches these itself, and a single dead URL — a stale
+ * <img src> on the reference page, a hotlink-protected CDN — fails the whole request with
+ * "Error while downloading file", which tells the admin nothing about which image was at fault.
+ *
+ * Uses a 1-byte ranged GET rather than HEAD, since plenty of servers answer HEAD with 405. */
+async function isFetchableImage(url: string): Promise<boolean> {
+  try {
+    const response = await fetch(url, {
+      headers: { Range: "bytes=0-0", "User-Agent": "Mozilla/5.0 (compatible; ClincHP-TemplateImporter/1.0)" },
+      signal: AbortSignal.timeout(6_000),
+    });
+    if (!response.ok && response.status !== 206) return false;
+    await response.body?.cancel();
+    return (response.headers.get("content-type") ?? "").toLowerCase().startsWith("image/");
+  } catch {
+    return false;
+  }
+}
 
 function safeColor(value: string, fallback: string): string {
   const trimmed = value.trim().toLowerCase();
@@ -202,10 +222,19 @@ export async function importTemplateFromUrl(input: ImportTemplateInput): Promise
   const candidateImages = adminImages.length > 0 ? adminImages : (signals?.imageCandidates ?? []).slice(0, 3);
   const imageUrls: string[] = [];
   for (const raw of candidateImages.slice(0, 4)) {
+    let href: string;
     try {
-      imageUrls.push((await assertPublicUrl(raw)).href);
+      href = (await assertPublicUrl(raw)).href;
     } catch {
       warnings.push(`参考画像を読み込めませんでした（${raw}）。`);
+      continue;
+    }
+    if (await isFetchableImage(href)) {
+      imageUrls.push(href);
+    } else if (adminImages.length > 0) {
+      // Only worth telling the admin about images they chose themselves; the ones scraped off the
+      // reference page are a best-effort extra and a dead one is not their problem.
+      warnings.push(`参考画像を取得できませんでした（${raw}）。`);
     }
   }
 
@@ -240,8 +269,11 @@ export async function importTemplateFromUrl(input: ImportTemplateInput): Promise
     // returning an HTML error page, a mislabelled content type, a redirect to a login screen. The
     // CSS evidence is usually enough on its own, so drop the images and try once more rather than
     // making the admin guess which URL was the bad one.
-    const message = err instanceof Error ? err.message : String(err);
-    if (imageUrls.length === 0 || !/image/i.test(message)) throw err;
+    // Any failure with images attached is retried without them. The failure mode is almost always
+    // the images (unreachable, mislabelled, hotlink-protected) and the CSS evidence alone is usually
+    // enough, so one extra call beats making the admin debug a URL list.
+    if (imageUrls.length === 0) throw err;
+    console.warn("[importFromUrl] 参考画像つきの解析に失敗したため、画像なしで再試行します。", err);
     warnings.push("参考画像を読み込めなかったため、HTMLとCSSの情報だけで判断しました。");
     response = await ask([userContent[0]]);
   }
@@ -286,8 +318,17 @@ export async function importTemplateFromUrl(input: ImportTemplateInput): Promise
     updatedAt: now,
   };
 
-  const saved = await saveDocument(document);
-  const { previewUrl } = await renderSiteFiles(saved);
+  // Saving is two statements against D1 (the site row, then its blocks) with no transaction spanning
+  // them, so a failure partway leaves a template with no blocks — which then shows up in the admin
+  // list as a real, broken template. Roll the row back rather than leaving that behind.
+  let saved;
+  try {
+    saved = await saveDocument(document);
+  } catch (err) {
+    await deleteDocument(document.id).catch(() => {});
+    throw err;
+  }
 
+  const { previewUrl } = await renderSiteFiles(saved);
   return { document: saved, signals, previewUrl, warnings };
 }
