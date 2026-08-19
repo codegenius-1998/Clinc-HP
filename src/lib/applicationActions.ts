@@ -3,7 +3,6 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getSession } from "./auth";
-import { listColorPalette } from "./designPresets";
 import { generateSlug, getHearing, saveHearing, deleteHearing, type HearingSheet } from "./hearing";
 import { listDepartments, listServices, listFeatures, listTargets } from "./content";
 import { IMAGE_CATEGORIES } from "./imageCategories";
@@ -17,10 +16,10 @@ function requiredField(formData: FormData, name: string): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-/** Submits a new site-build application from /mypage/apply. Unlike the older /create flow, this
- * never picks a design template or triggers generation directly — an admin assigns the template
- * from /admin/requests (see assignTemplateAction in contentActions.ts), which is what actually
- * kicks off generateSite. */
+/** Submits a new site-build application from /mypage/apply. Unlike the /create flow, this never
+ * triggers generation directly: an admin approves the request from /admin/requests (see
+ * approveRequestAction in contentActions.ts), and that is what kicks off generateSite — including
+ * the automatic template choice. */
 export async function createApplicationAction(
   _prevState: ApplicationFormState,
   formData: FormData
@@ -34,16 +33,10 @@ export async function createApplicationAction(
   const address = requiredField(formData, "address");
   const phone = requiredField(formData, "phone");
   const line = requiredField(formData, "line");
-  const colorScheme = requiredField(formData, "colorScheme");
 
   if (!clinicName) {
     return { error: "クリニック名を入力してください。" };
   }
-  if (!colorScheme) {
-    return { error: "サイトカラーを選択してください。" };
-  }
-
-  const colorSchemeOption = listColorPalette().find((c) => c.id === colorScheme);
 
   const uploadedImages: NonNullable<HearingSheet["uploadedImages"]> = {};
   for (const category of IMAGE_CATEGORIES) {
@@ -83,8 +76,6 @@ export async function createApplicationAction(
   await saveHearing({
     slug,
     ownerEmail: session.email,
-    colorScheme,
-    colorSchemeLabel: colorSchemeOption?.label ?? colorScheme,
     clinicName,
     directorName: "",
     address,

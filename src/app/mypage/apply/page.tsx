@@ -1,11 +1,9 @@
 import Link from "next/link";
-import { listColorPalette } from "@/lib/designPresets";
 import { listDepartments, listServices, listFeatures, listTargets } from "@/lib/content";
 import { ApplyForm } from "@/components/apply/ApplyForm";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 
 export default async function MypageApplyPage() {
-  const colors = listColorPalette();
   const [departments, services, features, targets] = await Promise.all([
     listDepartments(),
     listServices(),
@@ -19,10 +17,10 @@ export default async function MypageApplyPage() {
         ← 申請一覧へ戻る
       </Link>
       <div className="mt-6">
-        <AdminPageHeader title="新規申請" description="ホームページ作成の申請内容を入力してください。" />
+        <AdminPageHeader title="新規申請" description="ホームページ作成の申請内容を入力してください。デザインは内容に合わせて自動で選ばれます。" />
       </div>
       <div className="max-w-2xl">
-        <ApplyForm colors={colors} departments={departments} services={services} features={features} targets={targets} />
+        <ApplyForm departments={departments} services={services} features={features} targets={targets} />
       </div>
     </div>
   );

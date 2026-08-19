@@ -12,6 +12,9 @@
   --text: #2b2b2b;
   --primary-inverse: #fff;
   --accent-inverse: #fff;
+  /* 文字として使う用の、背景に対して読める明度に補正した色（components.tsx が上書きする） */
+  --primary-text: #2d7dd2;
+  --accent-text: #2d7dd2;
 
   /* 文字 */
   --font-heading: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", "Segoe UI", sans-serif;
@@ -96,7 +99,7 @@ header.site-header.is-scrolled { box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
 .brand { display: flex; align-items: center; gap: 0.7rem; }
 .brand img { width: 44px; height: 44px; object-fit: contain; }
 .brand .clinic-name { font-size: 1.05rem; font-weight: 700; letter-spacing: 0.02em; }
-.header-tel { font-size: 1.15rem; font-weight: 700; color: var(--primary); white-space: nowrap; }
+.header-tel { font-size: 1.15rem; font-weight: 700; color: var(--primary-text); white-space: nowrap; }
 
 /* ハンバーガー（CSSのみ・JS不要） */
 .nav-toggle { display: none; }
@@ -171,7 +174,7 @@ nav.site-nav a:hover { background: var(--accent); }
   padding: 0;
   min-width: 0;
 }
-.hero.hero-split .hero-copy h1 { color: var(--primary); text-shadow: none; }
+.hero.hero-split .hero-copy h1 { color: var(--primary-text); text-shadow: none; }
 .hero.hero-split .hero-copy p { color: #555; opacity: 1; }
 .hero.hero-split .cta-buttons { justify-content: flex-start; }
 
@@ -195,7 +198,7 @@ nav.site-nav a:hover { background: var(--accent); }
 .card { background: var(--bg); border: var(--border-width) solid var(--border-color); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
 .card img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
 .card-body { padding: 1.1rem; }
-.card-body h3, .card-body h4 { font-size: 1rem; margin-bottom: 0.4rem; color: var(--accent); }
+.card-body h3, .card-body h4 { font-size: 1rem; margin-bottom: 0.4rem; color: var(--accent-text); }
 .card-body p { font-size: 0.9rem; color: #555; margin: 0; white-space: pre-line; }
 
 /* "list": 写真を左に置いた横並びの編集記事風の行を縦に積む */
@@ -225,7 +228,7 @@ nav.site-nav a:hover { background: var(--accent); }
   box-shadow: none;
   padding: 1.2rem;
 }
-.card-index { flex-shrink: 0; font-size: 1.5rem; font-weight: 700; line-height: 1; color: var(--accent); font-family: var(--font-heading); }
+.card-index { flex-shrink: 0; font-size: 1.5rem; font-weight: 700; line-height: 1; color: var(--accent-text); font-family: var(--font-heading); }
 
 .split { display: grid; gap: 1.5rem; align-items: center; }
 @media (min-width: 760px) { .split { grid-template-columns: 40% 1fr; } }
@@ -246,7 +249,7 @@ table.info-table td.price { text-align: right; font-weight: 700; white-space: no
 /* お知らせ
 ---------------------------------------------------------------------------*/
 .news-list li { display: flex; gap: 1rem; padding: 0.9rem 0; border-bottom: 1px solid #e5e5e5; flex-wrap: wrap; }
-.news-list time { flex-shrink: 0; width: 7rem; color: var(--primary); font-weight: 700; }
+.news-list time { flex-shrink: 0; width: 7rem; color: var(--primary-text); font-weight: 700; }
 
 /* FAQ（アコーディオン開閉。JS未実行時は全件開いたまま表示されるフォールバック付き）
 ---------------------------------------------------------------------------*/
@@ -256,13 +259,13 @@ table.info-table td.price { text-align: right; font-weight: 700; white-space: no
   display: flex; align-items: center; justify-content: space-between; gap: 1rem;
   width: 100%; border: none; background: none; cursor: pointer;
   padding: 1.1rem 1.3rem; font: inherit; text-align: left;
-  font-weight: 700; color: var(--accent);
+  font-weight: 700; color: var(--accent-text);
 }
 .faq-q::before { content: "Q. "; }
-.faq-icon { flex-shrink: 0; font-size: 1.2rem; line-height: 1; color: var(--primary); transition: transform 0.25s ease; }
+.faq-icon { flex-shrink: 0; font-size: 1.2rem; line-height: 1; color: var(--primary-text); transition: transform 0.25s ease; }
 .faq-item.open .faq-icon { transform: rotate(45deg); }
 .faq-a { max-height: 800px; padding: 0 1.3rem 1.1rem 1.3rem; white-space: pre-line; }
-.faq-a::before { content: "A. "; color: var(--primary); font-weight: 700; }
+.faq-a::before { content: "A. "; color: var(--primary-text); font-weight: 700; }
 /* JSが動いている場合のみ閉じた状態を作る（.faq-itemに.openが無ければ隠す）。
  * JS無効時は .js が付かないため常に全件展開表示のまま — 情報が読めなくなることはない。 */
 .js .faq-a { max-height: 0; padding-top: 0; padding-bottom: 0; overflow: hidden; transition: max-height 0.3s ease, padding 0.3s ease; }
@@ -274,7 +277,7 @@ table.info-table td.price { text-align: right; font-weight: 700; white-space: no
 @media (min-width: 640px) { .staff-grid { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); } }
 .staff-card img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: var(--radius); }
 .staff-card h3 { margin-top: 0.8rem; font-size: 1rem; }
-.staff-card .role { font-size: 0.8rem; color: var(--accent); margin: 0.2rem 0 0.5rem; }
+.staff-card .role { font-size: 0.8rem; color: var(--accent-text); margin: 0.2rem 0 0.5rem; }
 .staff-card p { font-size: 0.88rem; color: #555; white-space: pre-line; }
 
 /* お問い合わせ
@@ -307,7 +310,7 @@ footer.site-footer { background: #2b2f36; color: #dcdfe4; padding: 3rem var(--sp
   color: var(--text);
   padding: calc(2.5rem * var(--space-scale)) var(--space);
 }
-.hero.hero-centered .hero-copy h1 { color: var(--primary); text-shadow: none; }
+.hero.hero-centered .hero-copy h1 { color: var(--primary-text); text-shadow: none; }
 .hero.hero-centered .hero-copy p { color: #555; opacity: 1; }
 
 /* カード "overlap": カードを少しずつ縦にずらして重なりを作る、雑誌的な並び。

@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin, createUser, deleteUser } from "./auth";
 import { deleteHearing, getHearing, updateHearing } from "./hearing";
-import { listDesignPresets } from "./designPresets";
 import { generateSite } from "./siteGenerator";
 import {
   createSection,
@@ -77,22 +76,24 @@ export async function deleteRequestAction(slug: string): Promise<void> {
  * hands (see the "delete template selection" decision behind ApplyForm). Runs generateSite inline
  * (same pattern as regenerateSiteAction in actions.ts) rather than queuing it, so the admin sees the
  * result — success or failure — reflected on the requests table right after submitting. */
-export async function assignTemplateAction(formData: FormData): Promise<void> {
+/** Approves a pending application and builds the site. The admin no longer chooses a design — the
+ * template is selected automatically from the hearing sheet (see selectTemplate.ts) — so this is a
+ * pure go/no-go decision, and the template it settled on (plus why) is recorded on the hearing for
+ * the admin to review afterwards. */
+export async function approveRequestAction(slug: string): Promise<void> {
   await requireAdmin();
-  const slug = field(formData, "slug");
-  const templateId = field(formData, "templateId");
-  if (!slug || !templateId) return;
-
-  const preset = listDesignPresets().find((p) => p.id === templateId);
-  if (!preset) return;
-
-  await updateHearing(slug, { templateId: preset.id, templateLabel: preset.label });
   const hearing = await getHearing(slug);
   if (!hearing) return;
 
   try {
     const result = await generateSite(hearing);
-    await updateHearing(slug, { previewUrl: result.previewUrl, generationError: undefined });
+    await updateHearing(slug, {
+      previewUrl: result.previewUrl,
+      generationError: undefined,
+      templateId: result.templateId,
+      templateLabel: result.templateName,
+      templateReason: result.templateReason ?? undefined,
+    });
   } catch (err) {
     await updateHearing(slug, {
       generationError: err instanceof Error ? err.message : "サイトの生成に失敗しました。",

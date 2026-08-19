@@ -1,13 +1,8 @@
 import Link from "next/link";
-import { listDesignPresets, listColorPalette } from "@/lib/designPresets";
-import { getBodySections } from "@/lib/siteSpec";
 import { listDepartments, listServices, listFeatures, listTargets } from "@/lib/content";
 import { HearingSheetForm } from "@/components/create/HearingSheetForm";
 
 export default async function CreateSitePage() {
-  const presets = listDesignPresets();
-  const colors = listColorPalette();
-  const sections = getBodySections();
   const [departments, services, features, targets] = await Promise.all([
     listDepartments(),
     listServices(),
@@ -30,14 +25,11 @@ export default async function CreateSitePage() {
           ヒアリングシート
         </h1>
         <p className="mt-4 max-w-md text-[14px] leading-loose text-slate-500">
-          ホームページの元になる情報を入力してください。入力内容をもとにホームページを作成します。
+          ホームページの元になる情報を入力してください。入力内容をもとに、デザインの選定から文章・画像の作成まで自動で行います。
         </p>
 
         <div className="mt-12">
           <HearingSheetForm
-            presets={presets}
-            colors={colors}
-            sections={sections}
             departments={departments}
             services={services}
             features={features}

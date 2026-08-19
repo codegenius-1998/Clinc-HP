@@ -68,7 +68,7 @@ export default async function SitesPage() {
                     </span>
                   </div>
                   <p className="mt-1 text-[13px] text-slate-500">
-                    {hearing.templateLabel} ・ {hearing.colorSchemeLabel}
+                    {hearing.templateLabel ?? "デザイン未選定"}
                   </p>
                   <p className="mt-4 text-[12px] text-slate-400">{formatDate(hearing.createdAt)}</p>
                 </Link>

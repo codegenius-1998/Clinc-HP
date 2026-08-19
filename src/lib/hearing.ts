@@ -7,17 +7,14 @@ export type HearingSheet = {
   /** Email of the clinic_owner who submitted this via /mypage/apply. Absent on hearings created
    * through the older, unauthenticated /create flow. */
   ownerEmail?: string;
-  /** Chosen design preset id (see src/lib/designPresets.ts) — a style/mood brief, not an HTML
-   * skeleton. The actual page content and structure are generated fresh by OpenAI (see
-   * src/lib/siteGenerator.ts) for every clinic. Left unset for applications submitted via
-   * /mypage/apply — an admin assigns it later from /admin/requests, which is what actually
-   * triggers generation (see assignTemplateAction). */
+  /** The design template this site was built from — a record of what the AI auto-selector CHOSE
+   * (see selectTemplate.ts), not something the clinic picks. Unset until generation has run, which
+   * is what `hearingStatus` reads to tell an unapproved application from a built one. */
   templateId?: string;
   templateLabel?: string;
-  /** Color theme id from the site-wide palette (see src/lib/designPresets.ts's listColorPalette) —
-   * chosen independently of templateId/preset. */
-  colorScheme: string;
-  colorSchemeLabel: string;
+  /** Why the auto-selector picked that template. Shown to admins so a poor result can be traced to
+   * the template's `mood` text rather than guessed at. */
+  templateReason?: string;
   clinicName: string;
   directorName: string;
   address: string;
@@ -42,9 +39,6 @@ export type HearingSheet = {
   news?: { date: string; title: string }[];
   /** Real price-list rows for #pricing — never AI-invented; the section is hidden entirely when empty. */
   priceItems?: { name: string; price: string; note?: string }[];
-  /** Explicit per-section show/hide + display order chosen on the hearing screen — when present, this
-   * wins over the AI's own sectionVisibility judgement call (see planGeneration). */
-  sectionPrefs?: { id: string; visible: boolean; order: number }[];
   /** Target patient demographics picked from the admin-managed Targets list (hp-templates content
    * model) — supplementary context for the AI, not tied to any single SITE_SPEC section. */
   targetNames?: string[];
@@ -106,7 +100,7 @@ export type HearingStatus = { key: "pending_template" | "processing" | "generate
  * means. "pending_template" only exists because /mypage/apply intentionally never sets templateId —
  * that choice is deferred to an admin via assignTemplateAction. */
 export function hearingStatus(hearing: Pick<HearingSheet, "templateId" | "previewUrl" | "generationError">): HearingStatus {
-  if (!hearing.templateId) return { key: "pending_template", label: "審査待ち", className: "bg-amber-50 text-amber-700" };
+  if (!hearing.templateId) return { key: "pending_template", label: "承認待ち", className: "bg-amber-50 text-amber-700" };
   if (hearing.generationError) return { key: "failed", label: "生成失敗", className: "bg-red-50 text-red-700" };
   if (hearing.previewUrl) return { key: "generated", label: "生成済み", className: "bg-emerald-50 text-emerald-700" };
   return { key: "processing", label: "処理中", className: "bg-slate-100 text-slate-500" };
@@ -126,7 +120,13 @@ export async function updateHearing(
   patch: Partial<
     Pick<
       HearingSheet,
-      "previewUrl" | "generationError" | "cloudflareUrl" | "cloudflareError" | "templateId" | "templateLabel"
+      | "previewUrl"
+      | "generationError"
+      | "cloudflareUrl"
+      | "cloudflareError"
+      | "templateId"
+      | "templateLabel"
+      | "templateReason"
     >
   >
 ): Promise<HearingSheet | null> {

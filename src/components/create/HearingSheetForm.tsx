@@ -2,11 +2,8 @@
 
 import { startTransition, useActionState, useMemo, useState } from "react";
 import { createHearingAction, type HearingFormState } from "@/lib/actions";
-import type { DesignPreset, ColorTheme } from "@/lib/designPresets";
-import type { SiteSpecSection } from "@/lib/siteSpec";
 import { IMAGE_CATEGORIES, type ImageCategoryKey } from "@/lib/imageCategories";
 import type { Department, Service, Feature, Target } from "@/lib/content";
-import { SectionOrderEditor, initialSectionRows, type SectionRow } from "./SectionOrderEditor";
 
 type PickedImage = { kind: "file"; file: File; previewUrl: string } | { kind: "url"; url: string };
 
@@ -131,38 +128,39 @@ const DEFAULT_FAQS: FaqInput[] = [
 const DEFAULT_NEWS: NewsInput[] = [];
 const DEFAULT_PRICE_ITEMS: PriceItemInput[] = [];
 
-const STEP_LABELS = ["セクション構成・カラー", "セクション情報を入力", "デザイン選択", "作成"];
+const STEP_LABELS = ["情報を入力", "確認して作成"];
 
-/** Sections with no input of their own — their content comes entirely from the shared "features" note
- * or from fields already collected in the "basic"/"photos" stops — so they're skipped as their own
- * stop in the step-2 sub-wizard (nothing to ask twice). */
-const NO_DEDICATED_INPUT_SECTIONS = new Set(["facility", "contact"]);
+/** Every section the hearing sheet asks about, in the order it asks. This is a fixed list now that
+ * the clinic no longer picks a layout: which of these actually appear on the finished page is decided
+ * by the chosen template plus whether the clinic gave us anything to put there (see
+ * applyFactualVisibility in siteGenerator.ts), and can be changed afterwards in the editor. Asking
+ * about all of them costs the user nothing — an empty answer simply hides the section. */
+const CONTENT_SECTION_STEPS: ContentStep[] = [
+  { id: "greeting", title: "ご挨拶" },
+  { id: "hours", title: "診療時間" },
+  { id: "access", title: "アクセス" },
+  { id: "news", title: "お知らせ" },
+  { id: "staff", title: "スタッフ紹介" },
+  { id: "faq", title: "よくある質問" },
+  { id: "pricing", title: "料金表" },
+];
 
 type ContentStep = { id: string; title: string };
 
 export function HearingSheetForm({
-  presets,
-  colors,
-  sections,
   departments,
   services,
   features,
   targets,
 }: {
-  presets: DesignPreset[];
-  colors: ColorTheme[];
-  sections: SiteSpecSection[];
   departments: Department[];
   services: Service[];
   features: Feature[];
   targets: Target[];
 }) {
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [step, setStep] = useState<1 | 2>(1);
   const [stepError, setStepError] = useState<string | null>(null);
-  const [templateId, setTemplateId] = useState(presets[0]?.id ?? "");
-  const [colorScheme, setColorScheme] = useState(colors[0]?.id ?? "");
   const [clinicName, setClinicName] = useState(DEFAULT_CLINIC_NAME);
-  const [sectionRows, setSectionRows] = useState<SectionRow[]>(() => initialSectionRows(sections));
   const [contentStepIndex, setContentStepIndex] = useState(0);
   const [state, formAction, pending] = useActionState(createHearingAction, initialState);
   const [imagesByCategory, setImagesByCategory] = useState<Record<ImageCategoryKey, PickedImage[]>>(defaultImagesByCategory);
@@ -176,57 +174,34 @@ export function HearingSheetForm({
     () => Object.fromEntries(IMAGE_CATEGORIES.map((c) => [c.key, ""])) as Record<ImageCategoryKey, string>
   );
 
-  const selectedPreset = presets.find((p) => p.id === templateId) ?? presets[0];
   const busy = uploading || pending;
 
-  function isVisible(id: string): boolean {
-    return sectionRows.find((r) => r.id === id)?.visible ?? true;
-  }
-
-  const showPhotosStep = ["department", "greeting", "facility"].some(isVisible);
-
-  // The step-2 sub-wizard: fixed stops for information that isn't tied to a single section (basic
-  // contact info, department/service picker, features, targets), then one stop per remaining visible
-  // section (in the order chosen in step 1), then photos and a closing free-text request. Recomputed
-  // from `sectionRows` rather than stored separately, so toggling a section in step 1 can never leave
-  // a stale stop behind.
-  const contentSteps = useMemo<ContentStep[]>(() => {
-    const steps: ContentStep[] = [
+  const contentSteps = useMemo<ContentStep[]>(
+    () => [
       { id: "basic", title: "基本情報" },
       { id: "department", title: "診療科・サービス" },
       { id: "features", title: "医院の特徴" },
       { id: "targets", title: "ターゲット" },
-    ];
-    for (const row of sectionRows) {
-      if (!row.visible || NO_DEDICATED_INPUT_SECTIONS.has(row.id) || row.id === "features" || row.id === "department") {
-        continue;
-      }
-      if (["greeting", "hours", "access", "news", "staff", "faq", "pricing"].includes(row.id)) {
-        steps.push({ id: row.id, title: row.label });
-      }
-    }
-    if (showPhotosStep) steps.push({ id: "photos", title: "写真" });
-    steps.push({ id: "request", title: "ご要望" });
-    return steps;
-  }, [sectionRows, showPhotosStep]);
+      ...CONTENT_SECTION_STEPS,
+      { id: "photos", title: "写真" },
+      { id: "request", title: "ご要望" },
+    ],
+    []
+  );
 
   const currentContentStepIndex = Math.min(contentStepIndex, contentSteps.length - 1);
   const currentContentStep = contentSteps[currentContentStepIndex];
 
-  function goToStep(next: 1 | 2 | 3 | 4) {
+  function goToStep(next: 1 | 2) {
     setStepError(null);
     setStep(next);
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function selectPreset(preset: DesignPreset) {
-    setTemplateId(preset.id);
-  }
-
   function goToContentStep(index: number) {
     setStepError(null);
     setContentStepIndex(index);
-    setStep(2);
+    setStep(1);
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -238,16 +213,12 @@ export function HearingSheetForm({
     if (currentContentStepIndex < contentSteps.length - 1) {
       goToContentStep(currentContentStepIndex + 1);
     } else {
-      goToStep(3);
+      goToStep(2);
     }
   }
 
   function handleContentBack() {
-    if (currentContentStepIndex > 0) {
-      goToContentStep(currentContentStepIndex - 1);
-    } else {
-      goToStep(1);
-    }
+    if (currentContentStepIndex > 0) goToContentStep(currentContentStepIndex - 1);
   }
 
   function handleImagesSelected(category: ImageCategoryKey, fileList: FileList | null) {
@@ -437,16 +408,16 @@ export function HearingSheetForm({
   // field — including plain `defaultValue` inputs with no React state — keeps its current value when
   // the user moves between steps, and so `new FormData(form)` at final submit still picks up every
   // field regardless of which step happens to be showing.
-  const stepStyle = (n: 1 | 2 | 3 | 4): React.CSSProperties => ({ display: step === n ? undefined : "none" });
+  const stepStyle = (n: 1 | 2): React.CSSProperties => ({ display: step === n ? undefined : "none" });
   const contentStepStyle = (id: string): React.CSSProperties => ({
-    display: step === 2 && currentContentStep?.id === id ? undefined : "none",
+    display: step === 1 && currentContentStep?.id === id ? undefined : "none",
   });
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <ol className="flex flex-wrap items-center gap-2 text-[12px] text-slate-400">
         {STEP_LABELS.map((label, i) => {
-          const n = (i + 1) as 1 | 2 | 3 | 4;
+          const n = (i + 1) as 1 | 2;
           return (
             <li key={label} className="flex items-center gap-2">
               <span
@@ -462,7 +433,7 @@ export function HearingSheetForm({
           );
         })}
       </ol>
-      {step === 2 && (
+      {step === 1 && (
         <p className="text-[12px] text-slate-400">
           セクション {currentContentStepIndex + 1} / {contentSteps.length}：{currentContentStep?.title}
         </p>
@@ -488,56 +459,8 @@ export function HearingSheetForm({
         </p>
       )}
 
-      {/* ステップ1: セクション構成・カラー */}
-      <div className="space-y-6" style={stepStyle(1)}>
-        <div className={cardClassName}>
-          <SectionOrderEditor rows={sectionRows} onChange={setSectionRows} />
-        </div>
-
-        <div className={cardClassName}>
-          <p className="text-[13px] font-medium text-slate-700">
-            カラー
-            <span className="ml-1 text-sky-500">*</span>
-          </p>
-          <p className="mt-1 text-[12px] leading-relaxed text-slate-400">サイト全体の配色です。デザイン（雰囲気）は次の画面以降で選びます。</p>
-          <ul className="mt-4 flex flex-wrap gap-2">
-            {colors.map((theme) => (
-              <li key={theme.id}>
-                <label className="flex cursor-pointer items-center gap-2 rounded-full border border-slate-200 px-3 py-2 text-[13px] text-slate-700 transition-colors has-checked:border-sky-400 has-checked:bg-sky-50 has-checked:text-sky-700">
-                  <input
-                    type="radio"
-                    name="colorScheme"
-                    value={theme.id}
-                    checked={colorScheme === theme.id}
-                    onChange={() => setColorScheme(theme.id)}
-                    className="h-3.5 w-3.5 text-sky-600 focus:ring-0"
-                    required
-                  />
-                  <span
-                    aria-hidden
-                    className="h-4 w-4 shrink-0 rounded-full border border-black/10"
-                    style={{ backgroundColor: theme.tokens.primary }}
-                  />
-                  {theme.label}
-                </label>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => goToContentStep(0)}
-          disabled={colors.length === 0}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-sky-600 px-7 py-3.5 text-[13px] font-medium tracking-[0.08em] text-white shadow-sm shadow-sky-200 transition-transform hover:-translate-y-0.5 hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-        >
-          次へ：セクション情報を入力
-          <span aria-hidden>→</span>
-        </button>
-      </div>
-
-      {/* ステップ2: セクション情報を入力（Section1 → Section2 → … と1つずつ） */}
-      <div style={stepStyle(2)}>
+      {/* ステップ1: 情報を入力（1画面につき1テーマずつ） */}
+      <div style={stepStyle(1)}>
         <div style={contentStepStyle("basic")} className="space-y-6">
           <div className={cardClassName}>
             <p className="text-[13px] font-medium text-slate-700">基本情報</p>
@@ -1120,45 +1043,24 @@ export function HearingSheetForm({
         </div>
       </div>
 
-      {/* ステップ3: デザイン選択（配色に関係しない雰囲気・フォント・カード形状） */}
-      <div className="space-y-6" style={stepStyle(3)}>
+      {/* ステップ2: 確認して作成 */}
+      <div className="space-y-6" style={stepStyle(2)}>
         <div className={cardClassName}>
-          <p className="text-[13px] font-medium text-slate-700">
-            デザイン
-            <span className="ml-1 text-sky-500">*</span>
+          <p className="text-[13px] font-medium text-slate-700">この内容でホームページを作成します</p>
+          <dl className="mt-4 space-y-3 text-[13px]">
+            <div className="flex justify-between gap-4">
+              <dt className="text-slate-400">クリニック名</dt>
+              <dd className="text-right text-slate-800">{clinicName || "（未入力）"}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="shrink-0 text-slate-400">デザイン</dt>
+              <dd className="text-right text-slate-800">入力内容に合わせてAIが自動で選びます</dd>
+            </div>
+          </dl>
+          <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2.5 text-[12px] leading-relaxed text-slate-500">
+            配色・書体・レイアウトは、診療科や医院の特徴からAIが最適なテンプレートを選んで決めます。
+            作成後に編集画面から、文章・写真・配色・セクションの並び順まで、すべて変更できます。
           </p>
-          <p className="mt-1 text-[12px] leading-relaxed text-slate-400">
-            レイアウトの雰囲気・フォント・文章のトーンです。配色はStep1で選んだ色がそのまま使われます。
-          </p>
-          {presets.length === 0 ? (
-            <p className="mt-3 text-[13px] text-slate-400">利用可能なデザインがありません。</p>
-          ) : (
-            <ul className="mt-4 grid gap-2 sm:grid-cols-2">
-              {presets.map((preset) => (
-                <li key={preset.id}>
-                  <label
-                    className={`flex cursor-pointer flex-col gap-1 rounded-lg border px-4 py-3 text-[13px] transition-colors ${
-                      templateId === preset.id ? "border-sky-400 bg-sky-50" : "border-slate-200 hover:bg-slate-50"
-                    }`}
-                  >
-                    <span className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name="templateId"
-                        value={preset.id}
-                        checked={templateId === preset.id}
-                        onChange={() => selectPreset(preset)}
-                        className="h-4 w-4 text-sky-600 focus:ring-0"
-                        required
-                      />
-                      <span className="font-medium text-slate-900">{preset.label}</span>
-                    </span>
-                    {preset.notes && <span className="pl-6 text-[12px] leading-relaxed text-slate-400">{preset.notes}</span>}
-                  </label>
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row">
@@ -1168,65 +1070,11 @@ export function HearingSheetForm({
             className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 px-7 py-3.5 text-[13px] font-medium tracking-[0.08em] text-slate-600 hover:bg-slate-50"
           >
             <span aria-hidden>←</span>
-            戻る：セクション情報を入力
-          </button>
-          <button
-            type="button"
-            onClick={() => goToStep(4)}
-            disabled={presets.length === 0}
-            className="inline-flex items-center justify-center gap-2 rounded-full bg-sky-600 px-7 py-3.5 text-[13px] font-medium tracking-[0.08em] text-white shadow-sm shadow-sky-200 transition-transform hover:-translate-y-0.5 hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            次へ：確認して作成
-            <span aria-hidden>→</span>
-          </button>
-        </div>
-      </div>
-
-      {/* ステップ4: 確認して作成 */}
-      <div className="space-y-6" style={stepStyle(4)}>
-        <div className={cardClassName}>
-          <p className="text-[13px] font-medium text-slate-700">この内容でホームページを作成します</p>
-          <dl className="mt-4 space-y-3 text-[13px]">
-            <div className="flex justify-between gap-4">
-              <dt className="text-slate-400">クリニック名</dt>
-              <dd className="text-right text-slate-800">{clinicName || "（未入力）"}</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-slate-400">カラー</dt>
-              <dd className="flex items-center justify-end gap-2 text-right text-slate-800">
-                <span
-                  aria-hidden
-                  className="h-3.5 w-3.5 shrink-0 rounded-full border border-black/10"
-                  style={{ backgroundColor: colors.find((c) => c.id === colorScheme)?.tokens.primary }}
-                />
-                {colors.find((c) => c.id === colorScheme)?.label ?? "-"}
-              </dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-slate-400">デザイン</dt>
-              <dd className="text-right text-slate-800">{selectedPreset?.label ?? "-"}</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="shrink-0 text-slate-400">表示するセクション</dt>
-              <dd className="text-right text-slate-800">
-                {sectionRows.filter((r) => r.visible).map((r) => r.label).join("・") || "（なし）"}
-              </dd>
-            </div>
-          </dl>
-        </div>
-
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <button
-            type="button"
-            onClick={() => goToStep(3)}
-            className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 px-7 py-3.5 text-[13px] font-medium tracking-[0.08em] text-slate-600 hover:bg-slate-50"
-          >
-            <span aria-hidden>←</span>
-            戻る：デザイン選択
+            戻る：情報の入力
           </button>
           <button
             type="submit"
-            disabled={busy || presets.length === 0}
+            disabled={busy}
             className="inline-flex items-center justify-center gap-2 rounded-full bg-sky-600 px-7 py-3.5 text-[13px] font-medium tracking-[0.08em] text-white shadow-sm shadow-sky-200 transition-transform hover:-translate-y-0.5 hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {uploading ? "アップロード中..." : pending ? "生成中..." : "作成"}

@@ -56,7 +56,9 @@ export type BlockDefinition = {
   defaultData: () => Record<string, unknown>;
 };
 
-const PLACEHOLDER_IMAGE = "images/placeholder.jpg";
+/** Shipped into every rendered site by renderSiteFiles, so a new block always has something
+ * to show before its real photo is chosen. */
+const PLACEHOLDER_IMAGE = "images/placeholder.svg";
 
 export const BLOCK_DEFINITIONS: Record<BlockType, BlockDefinition> = {
   hero: {

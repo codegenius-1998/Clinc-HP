@@ -25,6 +25,7 @@ export type GeneratedSite = {
   slug: string;
   previewUrl: string;
   templateId: string;
+  templateName: string;
   /** One-line explanation of why the auto-selector chose that template, when an AI call decided it. */
   templateReason: string | null;
 };
@@ -436,6 +437,7 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
     slug: doc.slug,
     previewUrl,
     templateId: template.id,
+    templateName: template.name,
     templateReason: reason,
   };
 }

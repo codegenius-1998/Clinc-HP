@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getHearing } from "@/lib/hearing";
 import { regenerateSiteAction, deployToCloudflareAction } from "@/lib/actions";
 import { generatedSlugExists } from "@/lib/render/renderSiteFiles";
+import { getDocumentBySlug } from "@/lib/site/store";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString("ja-JP", {
@@ -43,6 +44,9 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ slu
   // `previewUrl` alone only means generation once succeeded — the output directory can be gone
   // (dev server killed mid-write, folder cleaned up by hand) without the record ever being updated.
   const isGenerated = hearing.previewUrl ? await generatedSlugExists(slug) : false;
+  // Sites built before the block model exist only as HTML — there is no document to edit, so the
+  // editor link is withheld rather than offered and then refused.
+  const isEditable = (await getDocumentBySlug(slug)) !== null;
 
   return (
     <div className="flex-1 bg-gradient-to-b from-sky-50 via-white to-white px-6 py-24">
@@ -52,12 +56,17 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ slu
         </Link>
 
         <p className="mt-8 text-[12px] tracking-[0.35em] text-sky-500">
-          {hearing.templateLabel} ・ {hearing.colorSchemeLabel}
+          {hearing.templateLabel ?? "デザイン未選定"}
         </p>
         <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
           {hearing.clinicName}
         </h1>
         <p className="mt-3 text-[12px] text-slate-400">作成日時: {formatDate(hearing.createdAt)}</p>
+        {hearing.templateReason && (
+          <p className="mt-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-[13px] leading-relaxed text-slate-500">
+            <span className="text-slate-400">このデザインを選んだ理由:</span> {hearing.templateReason}
+          </p>
+        )}
 
         <div className={`mt-10 ${cardClassName}`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -78,9 +87,20 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ slu
                 <iframe src={hearing.previewUrl} className="h-[480px] w-full" title="ホームページのプレビュー" />
               </div>
               <div className="mt-4 flex flex-wrap items-center gap-3">
-                <a href={hearing.previewUrl} target="_blank" rel="noreferrer" className={buttonClassName}>
+                {isEditable && (
+                  <Link href={`/sites/${slug}/edit`} className={buttonClassName}>
+                    編集する
+                    <span aria-hidden>→</span>
+                  </Link>
+                )}
+
+                <a
+                  href={hearing.previewUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-6 py-2.5 text-[13px] font-medium tracking-[0.05em] text-slate-700 transition-colors hover:bg-slate-50"
+                >
                   新しいタブで開く
-                  <span aria-hidden>→</span>
                 </a>
 
                 <form action={deployToCloudflareAction.bind(null, slug)}>
@@ -99,6 +119,12 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ slu
                   <a href={hearing.cloudflareUrl} target="_blank" rel="noreferrer" className="underline">
                     {hearing.cloudflareUrl}
                   </a>
+                </p>
+              )}
+              {!isEditable && (
+                <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-relaxed text-amber-800">
+                  このサイトは編集機能の導入前に作られたため、編集できません。「AIで再生成する」を押すと、
+                  以降は文章・写真・配色・セクションの並び順まで編集できるようになります。
                 </p>
               )}
               {hearing.cloudflareError && (

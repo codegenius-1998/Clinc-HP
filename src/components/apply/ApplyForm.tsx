@@ -2,7 +2,6 @@
 
 import { startTransition, useActionState, useState } from "react";
 import { createApplicationAction, type ApplicationFormState } from "@/lib/applicationActions";
-import type { ColorTheme } from "@/lib/designPresets";
 import { IMAGE_CATEGORIES, type ImageCategoryKey } from "@/lib/imageCategories";
 import type { Department, Service, Feature, Target } from "@/lib/content";
 
@@ -19,7 +18,7 @@ const cardClassName = "rounded-2xl border border-slate-200 bg-white p-6 shadow-s
 
 const initialState: ApplicationFormState = { error: null };
 
-const STEP_TITLES = ["基本情報", "サイトカラー", "写真", "診療科・サービス", "医院の特徴", "ターゲット", "確認・申請"];
+const STEP_TITLES = ["基本情報", "写真", "診療科・サービス", "医院の特徴", "ターゲット", "確認・申請"];
 
 function emptyImagesByCategory(): Record<ImageCategoryKey, PickedImage[]> {
   const entries = IMAGE_CATEGORIES.map((c) => [c.key, [] as PickedImage[]] as const);
@@ -27,13 +26,11 @@ function emptyImagesByCategory(): Record<ImageCategoryKey, PickedImage[]> {
 }
 
 export function ApplyForm({
-  colors,
   departments,
   services,
   features,
   targets,
 }: {
-  colors: ColorTheme[];
   departments: Department[];
   services: Service[];
   features: Feature[];
@@ -47,7 +44,6 @@ export function ApplyForm({
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
   const [line, setLine] = useState("");
-  const [colorScheme, setColorScheme] = useState(colors[0]?.id ?? "");
   const [selectedServiceIds, setSelectedServiceIds] = useState<Set<string>>(new Set());
   const [selectedFeatureIds, setSelectedFeatureIds] = useState<Set<string>>(new Set());
   const [selectedTargetIds, setSelectedTargetIds] = useState<Set<string>>(new Set());
@@ -108,10 +104,6 @@ export function ApplyForm({
       setStepError("クリニック名を入力してください。");
       return;
     }
-    if (step === 1 && !colorScheme) {
-      setStepError("サイトカラーを選択してください。");
-      return;
-    }
     goTo(Math.min(step + 1, STEP_TITLES.length - 1));
   }
 
@@ -166,7 +158,6 @@ export function ApplyForm({
   }
 
   const stepStyle = (n: number): React.CSSProperties => ({ display: step === n ? undefined : "none" });
-  const selectedColor = colors.find((c) => c.id === colorScheme);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -261,43 +252,8 @@ export function ApplyForm({
         </div>
       </div>
 
-      {/* Step 1: サイトカラー */}
+      {/* Step 1: 写真 */}
       <div style={stepStyle(1)} className="space-y-6">
-        <div className={cardClassName}>
-          <p className="text-[13px] font-medium text-slate-700">
-            サイトカラー
-            <span className="ml-1 text-sky-500">*</span>
-          </p>
-          <p className="mt-1 text-[12px] leading-relaxed text-slate-400">サイト全体の配色を選択してください。</p>
-          <ul className="mt-4 flex flex-wrap gap-2">
-            {colors.map((theme) => (
-              <li key={theme.id}>
-                <label className="flex cursor-pointer items-center gap-2 rounded-full border border-slate-200 px-3 py-2 text-[13px] text-slate-700 transition-colors has-checked:border-sky-400 has-checked:bg-sky-50 has-checked:text-sky-700">
-                  <input
-                    type="radio"
-                    name="colorScheme"
-                    value={theme.id}
-                    checked={colorScheme === theme.id}
-                    onChange={() => setColorScheme(theme.id)}
-                    className="h-3.5 w-3.5 text-sky-600 focus:ring-0"
-                    required
-                  />
-                  <span
-                    aria-hidden
-                    className="h-4 w-4 shrink-0 rounded-full border border-black/10"
-                    style={{ backgroundColor: theme.tokens.primary }}
-                  />
-                  {theme.label}
-                </label>
-              </li>
-            ))}
-            {colors.length === 0 && <p className="text-[13px] text-slate-400">選択可能なカラーがありません。</p>}
-          </ul>
-        </div>
-      </div>
-
-      {/* Step 2: 写真 */}
-      <div style={stepStyle(2)} className="space-y-6">
         <div className={cardClassName}>
           <p className="text-[13px] font-medium text-slate-700">写真（任意）</p>
           <p className="mt-1 text-[12px] leading-relaxed text-slate-400">
@@ -364,8 +320,8 @@ export function ApplyForm({
         </div>
       </div>
 
-      {/* Step 3: 診療科・サービス選択 */}
-      <div style={stepStyle(3)} className="space-y-6">
+      {/* Step 1: 診療科・サービス選択 */}
+      <div style={stepStyle(1)} className="space-y-6">
         <div className={cardClassName}>
           <p className="text-[13px] font-medium text-slate-700">診療科・サービス（任意）</p>
           <p className="mt-1 text-[12px] leading-relaxed text-slate-400">提供する診療科・サービスを選択してください。</p>
@@ -403,8 +359,8 @@ export function ApplyForm({
         </div>
       </div>
 
-      {/* Step 4: 特徴選択 */}
-      <div style={stepStyle(4)} className="space-y-6">
+      {/* Step 1: 特徴選択 */}
+      <div style={stepStyle(1)} className="space-y-6">
         <div className={cardClassName}>
           <p className="text-[13px] font-medium text-slate-700">医院の特徴（任意）</p>
           <p className="mt-1 text-[12px] leading-relaxed text-slate-400">当てはまる特徴を選択してください。</p>
@@ -429,8 +385,8 @@ export function ApplyForm({
         </div>
       </div>
 
-      {/* Step 5: ターゲット選択 */}
-      <div style={stepStyle(5)} className="space-y-6">
+      {/* Step 1: ターゲット選択 */}
+      <div style={stepStyle(1)} className="space-y-6">
         <div className={cardClassName}>
           <p className="text-[13px] font-medium text-slate-700">ターゲット（任意）</p>
           <p className="mt-1 text-[12px] leading-relaxed text-slate-400">想定する患者層を選択してください。</p>
@@ -455,8 +411,8 @@ export function ApplyForm({
         </div>
       </div>
 
-      {/* Step 6: 確認・申請 */}
-      <div style={stepStyle(6)} className="space-y-6">
+      {/* Step 1: 確認・申請 */}
+      <div style={stepStyle(1)} className="space-y-6">
         <div className={cardClassName}>
           <p className="text-[13px] font-medium text-slate-700">この内容で申請します</p>
           <dl className="mt-4 space-y-3 text-[13px]">
@@ -475,19 +431,6 @@ export function ApplyForm({
             <div className="flex justify-between gap-4">
               <dt className="text-slate-400">LINE</dt>
               <dd className="text-right text-slate-800">{line || "-"}</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-slate-400">サイトカラー</dt>
-              <dd className="flex items-center justify-end gap-2 text-right text-slate-800">
-                {selectedColor && (
-                  <span
-                    aria-hidden
-                    className="h-3.5 w-3.5 shrink-0 rounded-full border border-black/10"
-                    style={{ backgroundColor: selectedColor.tokens.primary }}
-                  />
-                )}
-                {selectedColor?.label ?? "-"}
-              </dd>
             </div>
             <div className="flex justify-between gap-4">
               <dt className="shrink-0 text-slate-400">診療科・サービス</dt>

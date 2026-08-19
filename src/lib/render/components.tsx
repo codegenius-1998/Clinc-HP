@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import { navBlocks, type Block, type BlockOf, type DesignTokens, type SiteDocument } from "@/lib/site/document";
+import { readableOn } from "@/lib/site/color";
 
 /** Renders a SiteDocument to a static page. The page is driven entirely by `doc.blocks` in array
  * order — there is no fixed section list and no per-type visibility logic left in here, because a
@@ -49,6 +50,13 @@ function themeStyle(design: DesignTokens): CSSProperties {
 
     "--max-width": `${design.layout.maxWidth}px`,
     "--space-scale": String(design.layout.spacingScale),
+
+    /* Text-safe variants. A template's palette comes from an arbitrary reference site, so `accent`
+     * may be a colour that only works as a fill — LeadGrid's #ffe600 as a card heading on white is
+     * ~1.2:1, i.e. invisible. These are derived rather than authored so every imported template is
+     * readable without the admin having to notice. */
+    "--primary-text": readableOn(design.colors.primary, design.colors.background, design.colors.text),
+    "--accent-text": readableOn(design.colors.accent, design.colors.background, design.colors.text),
 
     "--reveal-duration": `${design.animation.duration}ms`,
   } as CSSProperties;
