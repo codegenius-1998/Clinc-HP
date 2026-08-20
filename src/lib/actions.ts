@@ -90,19 +90,11 @@ export async function createHearingAction(
     priceItems: priceItems.length > 0 ? priceItems : undefined,
   });
 
-  try {
-    const result = await generateSite(hearing);
-    await updateHearing(hearing.slug, {
-      previewUrl: result.previewUrl,
-      generationError: undefined,
-      templateId: result.templateId,
-      templateLabel: result.templateName,
-      templateReason: result.templateReason ?? undefined,
-    });
-  } catch (err) {
-    await updateHearing(hearing.slug, { generationError: generationErrorMessage(err) });
-  }
-
+  // Generation is a separate, explicit step from here (see the "AIで生成する" button on the page this
+  // redirects to) rather than happening inline: generateSite takes minutes (AI text + 10-20 images),
+  // and blocking the 作成 button on that left the submitter staring at a spinner with no way to see
+  // what they'd actually entered until it finished. Redirecting immediately lets them review the
+  // submitted content first and kick off generation themselves when ready.
   redirect(`/sites/${hearing.slug}`);
 }
 

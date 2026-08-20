@@ -6,7 +6,9 @@ import path from "path";
 import { revalidatePath } from "next/cache";
 import { renderSiteFiles, siteOutputPath } from "@/lib/render/renderSiteFiles";
 import { deployGeneratedSiteToCloudflare } from "@/lib/cloudflareDeploy";
+import { checkGuidelineCompliance, type GuidelineCheckResult } from "@/lib/openai/checkGuidelineCompliance";
 import { AccessDeniedError, requireEditableDocument } from "./access";
+import { pruneOrphanedStyles } from "./fieldPath";
 import { saveDocument } from "./store";
 import { siteDocumentSchema, type SiteDocument } from "./document";
 
@@ -43,13 +45,32 @@ export async function saveDocumentAction(id: string, incoming: SiteDocument): Pr
       createdAt: document.createdAt,
     });
 
-    const saved = await saveDocument(parsed);
+    // Drops any per-field textStyles override left behind by a field that no longer exists on this
+    // block's type (a rename/removal in BLOCK_DEFINITIONS, or a stale client payload) — see
+    // pruneOrphanedStyles for why the schema's regex alone can't catch this.
+    const saved = await saveDocument(pruneOrphanedStyles(parsed));
     await renderSiteFiles(saved);
 
     revalidatePath(saved.isTemplate ? `/admin/templates/${saved.id}` : `/sites/${saved.slug}`);
     return { error: null, updatedAt: saved.updatedAt };
   } catch (err) {
     return { error: errorMessage(err, "保存に失敗しました。"), updatedAt: null };
+  }
+}
+
+/** Runs the medical-advertising guideline check against whatever is currently in the editor — including
+ * unsaved changes, since catching a problem before it's ever saved/published is the point. Nothing is
+ * persisted here; `requireEditableDocument` only confirms this user may see this document at all. */
+export async function checkGuidelineComplianceAction(
+  id: string,
+  current: SiteDocument
+): Promise<{ result: GuidelineCheckResult | null; error: string | null }> {
+  try {
+    await requireEditableDocument(id);
+    const result = await checkGuidelineCompliance(current);
+    return { result, error: null };
+  } catch (err) {
+    return { result: null, error: errorMessage(err, "ガイドライン確認に失敗しました。") };
   }
 }
 

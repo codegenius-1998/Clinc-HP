@@ -33,10 +33,31 @@ export async function createApplicationAction(
   const address = requiredField(formData, "address");
   const phone = requiredField(formData, "phone");
   const line = requiredField(formData, "line");
+  const hours = requiredField(formData, "hours");
 
   if (!clinicName) {
     return { error: "クリニック名を入力してください。" };
   }
+
+  const staffNames = formData.getAll("staffName").map((v) => (typeof v === "string" ? v.trim() : ""));
+  const staffComments = formData.getAll("staffComment").map((v) => (typeof v === "string" ? v.trim() : ""));
+  const staffRoles = formData.getAll("staffRole").map((v) => (typeof v === "string" ? v.trim() : ""));
+  const staffPhotoUrls = formData.getAll("staffPhotoUrl").map((v) => (typeof v === "string" ? v.trim() : ""));
+  const staffMembers = staffNames
+    .map((name, i) => ({
+      name,
+      comment: staffComments[i] ?? "",
+      role: staffRoles[i] ?? "",
+      photoUrl: staffPhotoUrls[i] || undefined,
+    }))
+    .filter((member) => member.name.length > 0);
+
+  const priceNames = formData.getAll("priceName").map((v) => (typeof v === "string" ? v.trim() : ""));
+  const pricePrices = formData.getAll("pricePrice").map((v) => (typeof v === "string" ? v.trim() : ""));
+  const priceNotes = formData.getAll("priceNote").map((v) => (typeof v === "string" ? v.trim() : ""));
+  const priceItems = priceNames
+    .map((name, i) => ({ name, price: pricePrices[i] ?? "", note: priceNotes[i] || undefined }))
+    .filter((item) => item.name.length > 0 && item.price.length > 0);
 
   const uploadedImages: NonNullable<HearingSheet["uploadedImages"]> = {};
   for (const category of IMAGE_CATEGORIES) {
@@ -84,13 +105,15 @@ export async function createApplicationAction(
     // Legacy free-text fields the AI content-plan prompt reads directly — derived from the
     // structured selections above so generateContentPlan needs no changes.
     department: selectedDepartmentNames.join("・"),
-    hours: "",
+    hours,
     features: featureNames.join("、"),
     request: "",
     serviceNames,
     featureNames,
     targetNames,
     uploadedImages,
+    staffMembers: staffMembers.length > 0 ? staffMembers : undefined,
+    priceItems: priceItems.length > 0 ? priceItems : undefined,
   });
 
   revalidatePath("/mypage/requests");

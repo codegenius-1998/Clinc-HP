@@ -37,15 +37,7 @@ export default async function AdminRequestsPage() {
               const status = hearingStatus(hearing);
               return (
                 <tr key={hearing.slug} className="border-b border-slate-50 last:border-0">
-                  <td className="px-4 py-3">
-                    {status.key === "generated" ? (
-                      <Link href={`/sites/${hearing.slug}`} className="text-slate-900 underline-offset-4 hover:underline">
-                        {hearing.clinicName}
-                      </Link>
-                    ) : (
-                      <span className="text-slate-900">{hearing.clinicName}</span>
-                    )}
-                  </td>
+                  <td className="px-4 py-3 text-slate-900">{hearing.clinicName}</td>
                   <td className="px-4 py-3 text-slate-500">
                     {hearing.templateLabel ?? "—"}
                   </td>
@@ -57,6 +49,12 @@ export default async function AdminRequestsPage() {
                   <td className="px-4 py-3 text-slate-400">{formatDate(hearing.createdAt)}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-3">
+                      <Link
+                        href={`/sites/${hearing.slug}`}
+                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-[13px] text-slate-700 hover:bg-slate-50"
+                      >
+                        詳細を確認
+                      </Link>
                       {status.key === "pending_template" && (
                         <form action={approveRequestAction.bind(null, hearing.slug)}>
                           <button

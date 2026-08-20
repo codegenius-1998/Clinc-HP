@@ -101,8 +101,12 @@ export type HearingStatus = { key: "pending_template" | "processing" | "generate
  * that choice is deferred to an admin via assignTemplateAction. */
 export function hearingStatus(hearing: Pick<HearingSheet, "templateId" | "previewUrl" | "generationError">): HearingStatus {
   if (!hearing.templateId) return { key: "pending_template", label: "承認待ち", className: "bg-amber-50 text-amber-700" };
-  if (hearing.generationError) return { key: "failed", label: "生成失敗", className: "bg-red-50 text-red-700" };
+  // previewUrl wins over generationError: regenerateSiteAction can fail on a re-run (e.g. a transient
+  // API error) while leaving an EARLIER successful previewUrl untouched — the clinic's already-live,
+  // still-viewable site shouldn't read as "生成失敗" just because the most recent regenerate attempt
+  // didn't overwrite it with a fresh one.
   if (hearing.previewUrl) return { key: "generated", label: "生成済み", className: "bg-emerald-50 text-emerald-700" };
+  if (hearing.generationError) return { key: "failed", label: "生成失敗", className: "bg-red-50 text-red-700" };
   return { key: "processing", label: "処理中", className: "bg-slate-100 text-slate-500" };
 }
 

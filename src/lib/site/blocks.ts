@@ -379,9 +379,87 @@ export function createBlock(type: BlockType, overrides?: Partial<Omit<Block, "ty
   } as Block;
 }
 
+/** What the visual editor's canvas needs to know about one field path (see src/lib/site/document.ts's
+ * "field path" convention): its human label and its editing surface. `"list"` fields never resolve —
+ * there's no single value to click on the page for "the cards"; only an item's own sub-field does
+ * (e.g. "cards.1.heading" resolves, "cards" alone does not). Used by both the canvas click-handler
+ * (to decide contentEditable-ability) and the Inspector panel (to pick which controls to render). */
+export type FieldTypeInfo = { label: string; type: LeafField["type"] | "select" };
+
+/** Resolves a field path to its registry entry. Returns null for paths with no rendered text/image on
+ * the page (a `select`-driven field like `align`, a field that never appears as a text node like
+ * `mapQuery`, or an unrecognised/stale path) — callers treat null as "not canvas-editable". */
+export function resolveFieldDefinition(type: BlockType, path: string): FieldTypeInfo | null {
+  const def = BLOCK_DEFINITIONS[type];
+  const [topKey, indexStr, subKey] = path.split(".");
+  const top = def.fields.find((f) => f.key === topKey);
+  if (!top) return null;
+
+  if (indexStr === undefined) {
+    if (top.type === "list") return null;
+    return { label: top.label, type: top.type };
+  }
+  if (top.type !== "list" || subKey === undefined) return null;
+  const sub = top.fields.find((f) => f.key === subKey);
+  return sub ? { label: sub.label, type: sub.type } : null;
+}
+
+/** `hero` and `imageBanner` put their image directly in the outer element's own grid/flex box with no
+ * inner padded wrapper (see components.tsx) — outer padding would inset the image and break the
+ * edge-to-edge layout those two block types are built around. Margin (which only ever pushes the whole
+ * block, never touches internal layout) stays available for all 12 types regardless. */
+export function blockSupportsPadding(type: BlockType): boolean {
+  return type !== "hero" && type !== "imageBanner";
+}
+
+export type TextExcerpt = { path: string; label: string; value: string };
+
+/** Flattens a block's text/textarea field values — including each list item's own text/textarea
+ * sub-fields — into a flat list addressed by the same field-path convention used throughout the
+ * editor. Used by the medical-advertising guideline check (checkGuidelineCompliance.ts) to gather
+ * everything a patient could actually read on the page; skipped fields (image/select/url, and any
+ * blank value) have nothing a reviewer could judge. */
+export function extractBlockTexts(block: Block): TextExcerpt[] {
+  const def = BLOCK_DEFINITIONS[block.type];
+  const data = block.data as Record<string, unknown>;
+  const out: TextExcerpt[] = [];
+  for (const field of def.fields) {
+    if (field.type === "text" || field.type === "textarea") {
+      const value = data[field.key];
+      if (typeof value === "string" && value.trim()) out.push({ path: field.key, label: field.label, value });
+    } else if (field.type === "list") {
+      const items = data[field.key];
+      if (!Array.isArray(items)) continue;
+      items.forEach((item, i) => {
+        for (const sub of field.fields) {
+          if (sub.type !== "text" && sub.type !== "textarea") continue;
+          const value = (item as Record<string, unknown>)[sub.key];
+          if (typeof value === "string" && value.trim()) {
+            out.push({ path: `${field.key}.${i}.${sub.key}`, label: `${field.label}${i + 1} / ${sub.label}`, value });
+          }
+        }
+      });
+    }
+  }
+  return out;
+}
+
+/** Block list rows are narrow (sidebar width minus icon and the ↑↓👁✕ controls), so a full headline
+ * — the hero's catchphrase especially — routinely ran past the row and under those controls even with
+ * CSS `truncate` applied. Capped here too, not just in CSS, so the row reliably shows just the gist. */
+const SUMMARY_MAX_LENGTH = 16;
+
+function capSummary(text: string): string {
+  return text.length > SUMMARY_MAX_LENGTH ? `${text.slice(0, SUMMARY_MAX_LENGTH)}…` : text;
+}
+
 /** A short human summary of a block, for the editor's block list — so a page with four "文章＋カード"
  * blocks doesn't show four identical rows. */
 export function blockSummary(block: Block): string {
+  return capSummary(rawBlockSummary(block));
+}
+
+function rawBlockSummary(block: Block): string {
   switch (block.type) {
     case "hero":
       return block.data.headline || "（キャッチコピー未設定）";

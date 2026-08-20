@@ -19,7 +19,7 @@ export default async function MypageApplyPage() {
       <div className="mt-6">
         <AdminPageHeader title="新規申請" description="ホームページ作成の申請内容を入力してください。デザインは内容に合わせて自動で選ばれます。" />
       </div>
-      <div className="max-w-2xl">
+      <div className="mx-auto max-w-2xl">
         <ApplyForm departments={departments} services={services} features={features} targets={targets} />
       </div>
     </div>

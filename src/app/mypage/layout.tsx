@@ -12,9 +12,9 @@ export default async function MypageLayout({ children }: { children: React.React
   return (
     <div className="flex flex-1 flex-col">
       <AdminTopBar email={session.email} />
-      <div className="flex flex-1">
+      <div className="flex flex-1 flex-col lg:flex-row">
         <MypageSidebar />
-        <main className="flex-1 overflow-y-auto bg-slate-50 px-10 py-10">{children}</main>
+        <main className="flex-1 overflow-y-auto bg-slate-50 px-4 py-6 sm:px-10 sm:py-10">{children}</main>
       </div>
     </div>
   );

@@ -18,7 +18,12 @@ const cardClassName = "rounded-2xl border border-slate-200 bg-white p-6 shadow-s
 
 const initialState: ApplicationFormState = { error: null };
 
-const STEP_TITLES = ["基本情報", "写真", "診療科・サービス", "医院の特徴", "ターゲット", "確認・申請"];
+const STEP_TITLES = ["基本情報", "写真", "診療科", "特徴", "ターゲット", "診療時間", "スタッフ紹介", "料金表", "申請"];
+
+const STAFF_ROLE_OPTIONS = ["院長", "副院長", "医師", "看護師", "薬剤師", "受付・事務", "スタッフ"];
+
+type StaffMemberInput = { name: string; comment: string; role: string; photo: PickedImage | null; photoUrlDraft: string };
+type PriceItemInput = { name: string; price: string; note: string };
 
 function emptyImagesByCategory(): Record<ImageCategoryKey, PickedImage[]> {
   const entries = IMAGE_CATEGORIES.map((c) => [c.key, [] as PickedImage[]] as const);
@@ -47,6 +52,9 @@ export function ApplyForm({
   const [selectedServiceIds, setSelectedServiceIds] = useState<Set<string>>(new Set());
   const [selectedFeatureIds, setSelectedFeatureIds] = useState<Set<string>>(new Set());
   const [selectedTargetIds, setSelectedTargetIds] = useState<Set<string>>(new Set());
+  const [hours, setHours] = useState("");
+  const [staffMembers, setStaffMembers] = useState<StaffMemberInput[]>([]);
+  const [priceItems, setPriceItems] = useState<PriceItemInput[]>([]);
 
   const [imagesByCategory, setImagesByCategory] = useState<Record<ImageCategoryKey, PickedImage[]>>(emptyImagesByCategory);
   const [categoryUrlDraft, setCategoryUrlDraft] = useState<Record<ImageCategoryKey, string>>(
@@ -93,6 +101,72 @@ export function ApplyForm({
     });
   }
 
+  function addStaffMember() {
+    setStaffMembers((prev) => [...prev, { name: "", comment: "", role: "", photo: null, photoUrlDraft: "" }]);
+  }
+
+  function updateStaffMember(index: number, field: "name" | "comment" | "role", value: string) {
+    setStaffMembers((prev) => prev.map((m, i) => (i === index ? { ...m, [field]: value } : m)));
+  }
+
+  function removeStaffMember(index: number) {
+    setStaffMembers((prev) => {
+      const removed = prev[index];
+      if (removed?.photo?.kind === "file") URL.revokeObjectURL(removed.photo.previewUrl);
+      return prev.filter((_, i) => i !== index);
+    });
+  }
+
+  function setStaffPhoto(index: number, file: File | null) {
+    setStaffMembers((prev) =>
+      prev.map((m, i) => {
+        if (i !== index) return m;
+        if (m.photo?.kind === "file") URL.revokeObjectURL(m.photo.previewUrl);
+        return { ...m, photo: file ? { kind: "file", file, previewUrl: URL.createObjectURL(file) } : null };
+      })
+    );
+  }
+
+  function updateStaffPhotoUrlDraft(index: number, value: string) {
+    setStaffMembers((prev) => prev.map((m, i) => (i === index ? { ...m, photoUrlDraft: value } : m)));
+  }
+
+  function registerStaffPhotoUrl(index: number) {
+    setStaffMembers((prev) =>
+      prev.map((m, i) => {
+        if (i !== index) return m;
+        const url = m.photoUrlDraft.trim();
+        if (!url) return m;
+        if (m.photo?.kind === "file") URL.revokeObjectURL(m.photo.previewUrl);
+        return { ...m, photo: { kind: "url", url }, photoUrlDraft: "" };
+      })
+    );
+  }
+
+  function addPriceItem() {
+    setPriceItems((prev) => [...prev, { name: "", price: "", note: "" }]);
+  }
+
+  function updatePriceItem(index: number, field: keyof PriceItemInput, value: string) {
+    setPriceItems((prev) => prev.map((p, i) => (i === index ? { ...p, [field]: value } : p)));
+  }
+
+  function removePriceItem(index: number) {
+    setPriceItems((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  async function uploadOne(category: string, file: File): Promise<string> {
+    const uploadForm = new FormData();
+    uploadForm.append("category", category);
+    uploadForm.append("files", file);
+    const res = await fetch("/api/uploads", { method: "POST", body: uploadForm });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error ?? "画像のアップロードに失敗しました。");
+    }
+    return (data.urls as string[])[0];
+  }
+
   function goTo(next: number) {
     setStepError(null);
     setStep(next);
@@ -125,8 +199,9 @@ export function ApplyForm({
     const categoriesNeedingUpload = IMAGE_CATEGORIES.filter((c) =>
       imagesByCategory[c.key].some((img) => img.kind === "file")
     );
+    const anyStaffFileUpload = staffMembers.some((m) => m.photo?.kind === "file");
 
-    if (categoriesNeedingUpload.length > 0) {
+    if (categoriesNeedingUpload.length > 0 || anyStaffFileUpload) {
       setUploading(true);
       try {
         for (const category of categoriesNeedingUpload) {
@@ -144,12 +219,28 @@ export function ApplyForm({
           }
           (data.urls as string[]).forEach((url) => formData.append(`imageUrls_${category.key}`, url));
         }
+
+        // One staffPhotoUrl per staff row, in order, so the server action can zip it back up against
+        // staffName/staffComment/staffRole by index.
+        for (const member of staffMembers) {
+          if (member.photo?.kind === "file") {
+            formData.append("staffPhotoUrl", await uploadOne("staff", member.photo.file));
+          } else {
+            formData.append("staffPhotoUrl", member.photo?.kind === "url" ? member.photo.url : "");
+          }
+        }
       } catch (err) {
         setUploadError(err instanceof Error ? err.message : "画像のアップロードに失敗しました。");
         setUploading(false);
         return;
       }
       setUploading(false);
+    } else {
+      // Nothing needs uploading, but staffPhotoUrl still needs one entry per row (URL-registered
+      // photo, or empty) to keep index alignment with staffName/staffComment/staffRole.
+      for (const member of staffMembers) {
+        formData.append("staffPhotoUrl", member.photo?.kind === "url" ? member.photo.url : "");
+      }
     }
 
     startTransition(() => {
@@ -320,8 +411,8 @@ export function ApplyForm({
         </div>
       </div>
 
-      {/* Step 1: 診療科・サービス選択 */}
-      <div style={stepStyle(1)} className="space-y-6">
+      {/* Step 2: 診療科・サービス選択 */}
+      <div style={stepStyle(2)} className="space-y-6">
         <div className={cardClassName}>
           <p className="text-[13px] font-medium text-slate-700">診療科・サービス（任意）</p>
           <p className="mt-1 text-[12px] leading-relaxed text-slate-400">提供する診療科・サービスを選択してください。</p>
@@ -359,8 +450,8 @@ export function ApplyForm({
         </div>
       </div>
 
-      {/* Step 1: 特徴選択 */}
-      <div style={stepStyle(1)} className="space-y-6">
+      {/* Step 3: 特徴選択 */}
+      <div style={stepStyle(3)} className="space-y-6">
         <div className={cardClassName}>
           <p className="text-[13px] font-medium text-slate-700">医院の特徴（任意）</p>
           <p className="mt-1 text-[12px] leading-relaxed text-slate-400">当てはまる特徴を選択してください。</p>
@@ -385,8 +476,8 @@ export function ApplyForm({
         </div>
       </div>
 
-      {/* Step 1: ターゲット選択 */}
-      <div style={stepStyle(1)} className="space-y-6">
+      {/* Step 4: ターゲット選択 */}
+      <div style={stepStyle(4)} className="space-y-6">
         <div className={cardClassName}>
           <p className="text-[13px] font-medium text-slate-700">ターゲット（任意）</p>
           <p className="mt-1 text-[12px] leading-relaxed text-slate-400">想定する患者層を選択してください。</p>
@@ -411,8 +502,222 @@ export function ApplyForm({
         </div>
       </div>
 
-      {/* Step 1: 確認・申請 */}
-      <div style={stepStyle(1)} className="space-y-6">
+      {/* Step 5: 診療時間 */}
+      <div style={stepStyle(5)} className="space-y-6">
+        <div className={cardClassName}>
+          <p className="text-[13px] font-medium text-slate-700">診療時間（任意）</p>
+          <p className="mt-1 text-[12px] leading-relaxed text-slate-400">記載の通りそのまま掲載します（AIによる書き換えはしません）。</p>
+          <textarea
+            name="hours"
+            placeholder={"例:\n月〜金 9:00-13:00 / 15:00-19:00\n土 9:00-13:00\n日・祝 休診"}
+            value={hours}
+            onChange={(e) => setHours(e.target.value)}
+            rows={4}
+            className={inputClassName}
+          />
+        </div>
+      </div>
+
+      {/* Step 6: スタッフ紹介 */}
+      <div style={stepStyle(6)} className="space-y-6">
+        <div className={cardClassName}>
+          <p className="text-[13px] font-medium text-slate-700">スタッフ紹介（任意）</p>
+          <p className="mt-1 text-[12px] leading-relaxed text-slate-400">
+            実在するスタッフがいる場合のみ入力してください。人数分だけカードが生成されます。未入力の場合、スタッフ紹介セクションは非表示になります。
+          </p>
+
+          {staffMembers.length > 0 && (
+            <ul className="mt-4 space-y-4">
+              {staffMembers.map((member, i) => (
+                <li key={i} className="rounded-lg border border-slate-200 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="grid flex-1 gap-3 sm:grid-cols-2">
+                      <label className="block">
+                        <span className="text-[12px] font-medium text-slate-700">氏名</span>
+                        <input
+                          type="text"
+                          name="staffName"
+                          placeholder="山田 花子"
+                          value={member.name}
+                          onChange={(e) => updateStaffMember(i, "name", e.target.value)}
+                          className={inputClassName}
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-[12px] font-medium text-slate-700">役割</span>
+                        <select
+                          name="staffRole"
+                          value={member.role}
+                          onChange={(e) => updateStaffMember(i, "role", e.target.value)}
+                          className={inputClassName}
+                        >
+                          <option value="">未設定</option>
+                          {STAFF_ROLE_OPTIONS.map((role) => (
+                            <option key={role} value={role}>
+                              {role}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block sm:col-span-2">
+                        <span className="text-[12px] font-medium text-slate-700">コメント</span>
+                        <input
+                          type="text"
+                          name="staffComment"
+                          placeholder="簡単な自己紹介・担当業務など"
+                          value={member.comment}
+                          onChange={(e) => updateStaffMember(i, "comment", e.target.value)}
+                          className={inputClassName}
+                        />
+                      </label>
+                      <label className="block sm:col-span-2">
+                        <span className="text-[12px] font-medium text-slate-700">写真（任意）</span>
+                        <p className="text-[11px] text-slate-400">未指定の場合はAIが生成します。</p>
+                        {member.photo ? (
+                          <div className="mt-2 flex items-center gap-3">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={previewSrc(member.photo)}
+                              alt=""
+                              className="h-16 w-16 rounded-lg border border-slate-200 object-cover"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setStaffPhoto(i, null)}
+                              className="rounded-full border border-slate-200 px-3 py-1.5 text-[12px] text-slate-600 hover:bg-slate-50"
+                            >
+                              写真を削除
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => {
+                                setStaffPhoto(i, e.target.files?.[0] ?? null);
+                                e.target.value = "";
+                              }}
+                              className="mt-2 block w-full text-[13px] text-slate-700 file:mr-3 file:rounded-full file:border-0 file:bg-sky-600 file:px-4 file:py-2 file:text-[13px] file:text-white"
+                            />
+                            <div className="mt-2 flex gap-2">
+                              <input
+                                type="url"
+                                placeholder="画像URLを入力して登録"
+                                value={member.photoUrlDraft}
+                                onChange={(e) => updateStaffPhotoUrlDraft(i, e.target.value)}
+                                className={`${inputClassName} mt-0`}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => registerStaffPhotoUrl(i)}
+                                className="mt-0 shrink-0 rounded-lg border border-sky-200 px-4 py-2 text-[13px] font-medium text-sky-700 hover:bg-sky-50"
+                              >
+                                URLから登録
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </label>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeStaffMember(i)}
+                      className="mt-6 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 text-[13px] text-slate-500 hover:bg-slate-50"
+                      aria-label="このスタッフを削除"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <button
+            type="button"
+            onClick={addStaffMember}
+            className="mt-4 rounded-full border border-sky-200 px-4 py-2 text-[13px] font-medium text-sky-700 hover:bg-sky-50"
+          >
+            + スタッフを追加
+          </button>
+        </div>
+      </div>
+
+      {/* Step 7: 料金表 */}
+      <div style={stepStyle(7)} className="space-y-6">
+        <div className={cardClassName}>
+          <p className="text-[13px] font-medium text-slate-700">料金表（任意）</p>
+          <p className="mt-1 text-[12px] leading-relaxed text-slate-400">
+            金額は創作しないため、実際の料金がある場合のみ入力してください。未入力の場合、料金表セクションは非表示になります。
+          </p>
+
+          {priceItems.length > 0 && (
+            <ul className="mt-4 space-y-4">
+              {priceItems.map((item, i) => (
+                <li key={i} className="rounded-lg border border-slate-200 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="grid flex-1 gap-3 sm:grid-cols-2">
+                      <label className="block">
+                        <span className="text-[12px] font-medium text-slate-700">項目名</span>
+                        <input
+                          type="text"
+                          name="priceName"
+                          placeholder="例: 初診料"
+                          value={item.name}
+                          onChange={(e) => updatePriceItem(i, "name", e.target.value)}
+                          className={inputClassName}
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-[12px] font-medium text-slate-700">金額</span>
+                        <input
+                          type="text"
+                          name="pricePrice"
+                          placeholder="例: ¥3,000（税込）"
+                          value={item.price}
+                          onChange={(e) => updatePriceItem(i, "price", e.target.value)}
+                          className={inputClassName}
+                        />
+                      </label>
+                      <label className="block sm:col-span-2">
+                        <span className="text-[12px] font-medium text-slate-700">備考（任意）</span>
+                        <input
+                          type="text"
+                          name="priceNote"
+                          placeholder="例: 保険適用外"
+                          value={item.note}
+                          onChange={(e) => updatePriceItem(i, "note", e.target.value)}
+                          className={inputClassName}
+                        />
+                      </label>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removePriceItem(i)}
+                      className="mt-6 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 text-[13px] text-slate-500 hover:bg-slate-50"
+                      aria-label="この料金項目を削除"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <button
+            type="button"
+            onClick={addPriceItem}
+            className="mt-4 rounded-full border border-sky-200 px-4 py-2 text-[13px] font-medium text-sky-700 hover:bg-sky-50"
+          >
+            + 料金項目を追加
+          </button>
+        </div>
+      </div>
+
+      {/* Step 8: 確認・申請 */}
+      <div style={stepStyle(8)} className="space-y-6">
         <div className={cardClassName}>
           <p className="text-[13px] font-medium text-slate-700">この内容で申請します</p>
           <dl className="mt-4 space-y-3 text-[13px]">
@@ -448,6 +753,24 @@ export function ApplyForm({
               <dt className="shrink-0 text-slate-400">ターゲット</dt>
               <dd className="text-right text-slate-800">
                 {targets.filter((t) => selectedTargetIds.has(t.id)).map((t) => t.name).join("・") || "（なし）"}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="shrink-0 text-slate-400">診療時間</dt>
+              <dd className="whitespace-pre-line text-right text-slate-800">{hours || "（なし）"}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="shrink-0 text-slate-400">スタッフ紹介</dt>
+              <dd className="text-right text-slate-800">
+                {staffMembers.filter((m) => m.name.trim()).map((m) => m.name).join("・") || "（なし）"}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="shrink-0 text-slate-400">料金表</dt>
+              <dd className="text-right text-slate-800">
+                {priceItems.filter((p) => p.name.trim()).length > 0
+                  ? `${priceItems.filter((p) => p.name.trim()).length}件`
+                  : "（なし）"}
               </dd>
             </div>
           </dl>

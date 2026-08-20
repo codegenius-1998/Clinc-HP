@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { navBlocks, type Block, type BlockOf, type DesignTokens, type SiteDocument } from "@/lib/site/document";
 import { readableOn } from "@/lib/site/color";
+import { blockSupportsPadding } from "@/lib/site/blocks";
 
 /** Renders a SiteDocument to a static page. The page is driven entirely by `doc.blocks` in array
  * order — there is no fixed section list and no per-type visibility logic left in here, because a
@@ -60,6 +61,42 @@ function themeStyle(design: DesignTokens): CSSProperties {
 
     "--reveal-duration": `${design.animation.duration}ms`,
   } as CSSProperties;
+}
+
+// --- per-field/per-block style overrides (visual editor) -----------------------------------------
+
+/** Turns one field's `textStyles` override (see document.ts) into inline CSS, or `undefined` when the
+ * field has no override — so the element falls through to the design's global font/color exactly as
+ * before this feature existed. `path` is the same field-path string emitted as `data-field` below;
+ * the visual editor's canvas resolves clicks back to a path the same way it was written here. */
+function textStyleCss(block: Block, path: string): CSSProperties | undefined {
+  const style = block.textStyles?.[path];
+  if (!style) return undefined;
+  return {
+    color: style.color,
+    fontFamily: style.fontFamily,
+    fontSize: style.fontSize !== undefined ? `${style.fontSize}px` : undefined,
+    fontWeight: style.fontWeight,
+  };
+}
+
+/** Turns a block's `spacing` override into inline CSS for its outer element. Padding is a longhand
+ * (`padding-top`/`padding-bottom`), so it overrides `.section`'s shorthand `padding` per normal
+ * cascade rules without needing any site.css change. Omitted entirely for `hero`/`imageBanner` (see
+ * blockSupportsPadding) — those two put their image directly in the outer box with no inner padded
+ * wrapper, so outer padding would inset the image itself. Margin is always safe: `.section` sets none
+ * today, so this is purely additive for every block type. */
+function spacingCss(block: Block): CSSProperties | undefined {
+  const spacing = block.spacing;
+  if (!spacing) return undefined;
+  const style: CSSProperties = {};
+  if (blockSupportsPadding(block.type)) {
+    if (spacing.paddingTop !== undefined) style.paddingTop = `${spacing.paddingTop}px`;
+    if (spacing.paddingBottom !== undefined) style.paddingBottom = `${spacing.paddingBottom}px`;
+  }
+  if (spacing.marginTop !== undefined) style.marginTop = `${spacing.marginTop}px`;
+  if (spacing.marginBottom !== undefined) style.marginBottom = `${spacing.marginBottom}px`;
+  return Object.keys(style).length > 0 ? style : undefined;
 }
 
 // --- structural chrome ---------------------------------------------------------------------------
@@ -171,14 +208,16 @@ function Footer({ doc }: { doc: SiteDocument }) {
 function Section({
   id,
   className,
+  style,
   children,
 }: {
   id: string;
   className?: string;
+  style?: CSSProperties;
   children: React.ReactNode;
 }) {
   return (
-    <section id={id} className={`section${className ? ` ${className}` : ""}`}>
+    <section id={id} className={`section${className ? ` ${className}` : ""}`} style={style}>
       <div className="section-inner reveal">{children}</div>
     </section>
   );
@@ -186,11 +225,17 @@ function Section({
 
 function HeroBlock({ block, doc }: { block: BlockOf<"hero">; doc: SiteDocument }) {
   return (
-    <section id={block.id} className={`hero hero-${doc.design.layout.heroLayout}`}>
-      <img className="hero-image" src={block.data.image} alt="" />
+    <section id={block.id} className={`hero hero-${doc.design.layout.heroLayout}`} style={spacingCss(block)}>
+      <img className="hero-image" src={block.data.image} alt="" data-block-id={block.id} data-field="image" />
       <div className="hero-copy reveal">
-        <h1>{block.data.headline}</h1>
-        {block.data.subheadline && <p>{block.data.subheadline}</p>}
+        <h1 data-block-id={block.id} data-field="headline" style={textStyleCss(block, "headline")}>
+          {block.data.headline}
+        </h1>
+        {block.data.subheadline && (
+          <p data-block-id={block.id} data-field="subheadline" style={textStyleCss(block, "subheadline")}>
+            {block.data.subheadline}
+          </p>
+        )}
         <CtaButtons tel={doc.meta.phone} line={doc.meta.line} />
       </div>
     </section>
@@ -206,15 +251,27 @@ function RichBlock({ block, doc }: { block: BlockOf<"rich">; doc: SiteDocument }
   const layout = doc.design.block.cardLayout;
   const showCardImages = layout !== "minimal";
   return (
-    <Section id={block.id}>
-      <h2>{block.data.heading}</h2>
+    <Section id={block.id} style={spacingCss(block)}>
+      <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
+        {block.data.heading}
+      </h2>
       {block.data.image ? (
         <div className="split">
-          <img src={block.data.image} alt="" />
-          <div className="text">{block.data.body && <p className="lead">{block.data.body}</p>}</div>
+          <img src={block.data.image} alt="" data-block-id={block.id} data-field="image" />
+          <div className="text">
+            {block.data.body && (
+              <p className="lead" data-block-id={block.id} data-field="body" style={textStyleCss(block, "body")}>
+                {block.data.body}
+              </p>
+            )}
+          </div>
         </div>
       ) : (
-        block.data.body && <p className="lead">{block.data.body}</p>
+        block.data.body && (
+          <p className="lead" data-block-id={block.id} data-field="body" style={textStyleCss(block, "body")}>
+            {block.data.body}
+          </p>
+        )
       )}
       {block.data.cards.length > 0 && (
         <div className={`cards cards-${layout}`}>
@@ -225,11 +282,15 @@ function RichBlock({ block, doc }: { block: BlockOf<"rich">; doc: SiteDocument }
                   {String(i + 1).padStart(2, "0")}
                 </span>
               ) : (
-                showCardImages && card.image && <img src={card.image} alt="" />
+                showCardImages && card.image && <img src={card.image} alt="" data-block-id={block.id} data-field={`cards.${i}.image`} />
               )}
               <div className="card-body">
-                <h3>{card.heading}</h3>
-                <p>{card.body}</p>
+                <h3 data-block-id={block.id} data-field={`cards.${i}.heading`} style={textStyleCss(block, `cards.${i}.heading`)}>
+                  {card.heading}
+                </h3>
+                <p data-block-id={block.id} data-field={`cards.${i}.body`} style={textStyleCss(block, `cards.${i}.body`)}>
+                  {card.body}
+                </p>
               </div>
             </div>
           ))}
@@ -241,29 +302,48 @@ function RichBlock({ block, doc }: { block: BlockOf<"rich">; doc: SiteDocument }
 
 function HoursBlock({ block }: { block: BlockOf<"hours"> }) {
   return (
-    <Section id={block.id} className="section-alt">
-      <h2>{block.data.heading}</h2>
+    <Section id={block.id} className="section-alt" style={spacingCss(block)}>
+      <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
+        {block.data.heading}
+      </h2>
       <table className="info-table">
         <tbody>
           {block.data.rows.map((row, i) => (
             <tr key={i}>
-              <th>{row.label}</th>
-              <td>{row.value}</td>
+              <th data-block-id={block.id} data-field={`rows.${i}.label`} style={textStyleCss(block, `rows.${i}.label`)}>
+                {row.label}
+              </th>
+              <td data-block-id={block.id} data-field={`rows.${i}.value`} style={textStyleCss(block, `rows.${i}.value`)}>
+                {row.value}
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
-      {block.data.note && <p className="note">{block.data.note}</p>}
+      {block.data.note && (
+        <p className="note" data-block-id={block.id} data-field="note" style={textStyleCss(block, "note")}>
+          {block.data.note}
+        </p>
+      )}
     </Section>
   );
 }
 
+/** `mapQuery` has no `data-field` — it never renders as visible text (it only feeds the embedded
+ * map's URL), so there's nothing on the page a click could land on. It stays editable only via the
+ * sidebar's BlockEditor form. */
 function AccessBlock({ block }: { block: BlockOf<"access"> }) {
   const query = block.data.mapQuery || encodeURIComponent(block.data.address);
   return (
-    <Section id={block.id}>
-      <h2>{block.data.heading}</h2>
-      {block.data.address && <p className="lead">{block.data.address}</p>}
+    <Section id={block.id} style={spacingCss(block)}>
+      <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
+        {block.data.heading}
+      </h2>
+      {block.data.address && (
+        <p className="lead" data-block-id={block.id} data-field="address" style={textStyleCss(block, "address")}>
+          {block.data.address}
+        </p>
+      )}
       {query && (
         <div className="map-frame">
           <iframe
@@ -274,22 +354,36 @@ function AccessBlock({ block }: { block: BlockOf<"access"> }) {
           />
         </div>
       )}
-      {block.data.note && <p className="note">{block.data.note}</p>}
+      {block.data.note && (
+        <p className="note" data-block-id={block.id} data-field="note" style={textStyleCss(block, "note")}>
+          {block.data.note}
+        </p>
+      )}
     </Section>
   );
 }
 
 function NewsBlock({ block }: { block: BlockOf<"news"> }) {
   return (
-    <Section id={block.id} className="section-alt">
-      <h2>{block.data.heading}</h2>
+    <Section id={block.id} className="section-alt" style={spacingCss(block)}>
+      <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
+        {block.data.heading}
+      </h2>
       <ul className="news-list">
         {block.data.items.map((item, i) => (
           <li key={i}>
-            <time>{item.date}</time>
+            <time data-block-id={block.id} data-field={`items.${i}.date`} style={textStyleCss(block, `items.${i}.date`)}>
+              {item.date}
+            </time>
             <div>
-              <p>{item.title}</p>
-              {item.body && <p className="news-body">{item.body}</p>}
+              <p data-block-id={block.id} data-field={`items.${i}.title`} style={textStyleCss(block, `items.${i}.title`)}>
+                {item.title}
+              </p>
+              {item.body && (
+                <p className="news-body" data-block-id={block.id} data-field={`items.${i}.body`} style={textStyleCss(block, `items.${i}.body`)}>
+                  {item.body}
+                </p>
+              )}
             </div>
           </li>
         ))}
@@ -300,15 +394,25 @@ function NewsBlock({ block }: { block: BlockOf<"news"> }) {
 
 function StaffBlock({ block }: { block: BlockOf<"staff"> }) {
   return (
-    <Section id={block.id}>
-      <h2>{block.data.heading}</h2>
+    <Section id={block.id} style={spacingCss(block)}>
+      <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
+        {block.data.heading}
+      </h2>
       <div className="staff-grid">
         {block.data.members.map((member, i) => (
           <div className="staff-card" key={i}>
-            {member.image && <img src={member.image} alt={member.name} />}
-            <h3>{member.name}</h3>
-            {member.role && <p className="role">{member.role}</p>}
-            <p>{member.comment}</p>
+            {member.image && <img src={member.image} alt={member.name} data-block-id={block.id} data-field={`members.${i}.image`} />}
+            <h3 data-block-id={block.id} data-field={`members.${i}.name`} style={textStyleCss(block, `members.${i}.name`)}>
+              {member.name}
+            </h3>
+            {member.role && (
+              <p className="role" data-block-id={block.id} data-field={`members.${i}.role`} style={textStyleCss(block, `members.${i}.role`)}>
+                {member.role}
+              </p>
+            )}
+            <p data-block-id={block.id} data-field={`members.${i}.comment`} style={textStyleCss(block, `members.${i}.comment`)}>
+              {member.comment}
+            </p>
           </div>
         ))}
       </div>
@@ -318,19 +422,25 @@ function StaffBlock({ block }: { block: BlockOf<"staff"> }) {
 
 function FaqBlock({ block }: { block: BlockOf<"faq"> }) {
   return (
-    <Section id={block.id} className="section-alt">
-      <h2>{block.data.heading}</h2>
+    <Section id={block.id} className="section-alt" style={spacingCss(block)}>
+      <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
+        {block.data.heading}
+      </h2>
       <div className="faq-list">
         {block.data.items.map((item, i) => (
           <div className="faq-item" key={i}>
             <button type="button" className="faq-q" aria-expanded="false">
-              <span>{item.question}</span>
+              <span data-block-id={block.id} data-field={`items.${i}.question`} style={textStyleCss(block, `items.${i}.question`)}>
+                {item.question}
+              </span>
               <span className="faq-icon" aria-hidden>
                 +
               </span>
             </button>
             <div className="faq-a">
-              <p>{item.answer}</p>
+              <p data-block-id={block.id} data-field={`items.${i}.answer`} style={textStyleCss(block, `items.${i}.answer`)}>
+                {item.answer}
+              </p>
             </div>
           </div>
         ))}
@@ -341,29 +451,49 @@ function FaqBlock({ block }: { block: BlockOf<"faq"> }) {
 
 function PricingBlock({ block }: { block: BlockOf<"pricing"> }) {
   return (
-    <Section id={block.id}>
-      <h2>{block.data.heading}</h2>
+    <Section id={block.id} style={spacingCss(block)}>
+      <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
+        {block.data.heading}
+      </h2>
       <table className="info-table">
         <tbody>
           {block.data.items.map((item, i) => (
             <tr key={i}>
-              <th>{item.name}</th>
-              <td className="price">{item.price}</td>
-              {item.note && <td className="price-note">{item.note}</td>}
+              <th data-block-id={block.id} data-field={`items.${i}.name`} style={textStyleCss(block, `items.${i}.name`)}>
+                {item.name}
+              </th>
+              <td className="price" data-block-id={block.id} data-field={`items.${i}.price`} style={textStyleCss(block, `items.${i}.price`)}>
+                {item.price}
+              </td>
+              {item.note && (
+                <td className="price-note" data-block-id={block.id} data-field={`items.${i}.note`} style={textStyleCss(block, `items.${i}.note`)}>
+                  {item.note}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
       </table>
-      {block.data.note && <p className="note">{block.data.note}</p>}
+      {block.data.note && (
+        <p className="note" data-block-id={block.id} data-field="note" style={textStyleCss(block, "note")}>
+          {block.data.note}
+        </p>
+      )}
     </Section>
   );
 }
 
 function ContactBlock({ block, doc }: { block: BlockOf<"contact">; doc: SiteDocument }) {
   return (
-    <Section id={block.id} className="contact-section">
-      <h2>{block.data.heading}</h2>
-      {block.data.lead && <p className="lead">{block.data.lead}</p>}
+    <Section id={block.id} className="contact-section" style={spacingCss(block)}>
+      <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
+        {block.data.heading}
+      </h2>
+      {block.data.lead && (
+        <p className="lead" data-block-id={block.id} data-field="lead" style={textStyleCss(block, "lead")}>
+          {block.data.lead}
+        </p>
+      )}
       <CtaButtons tel={doc.meta.phone} line={doc.meta.line} />
     </Section>
   );
@@ -371,22 +501,34 @@ function ContactBlock({ block, doc }: { block: BlockOf<"contact">; doc: SiteDocu
 
 function FreeTextBlock({ block }: { block: BlockOf<"freeText"> }) {
   return (
-    <Section id={block.id} className={`free-text align-${block.data.align}`}>
-      {block.data.heading && <h2>{block.data.heading}</h2>}
-      <p className="lead">{block.data.body}</p>
+    <Section id={block.id} className={`free-text align-${block.data.align}`} style={spacingCss(block)}>
+      {block.data.heading && (
+        <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
+          {block.data.heading}
+        </h2>
+      )}
+      <p className="lead" data-block-id={block.id} data-field="body" style={textStyleCss(block, "body")}>
+        {block.data.body}
+      </p>
     </Section>
   );
 }
 
+/** `href` has no `data-field` — a link target isn't a piece of visible text to click on; it stays
+ * sidebar-only, same reasoning as `mapQuery` above. */
 function ImageBannerBlock({ block }: { block: BlockOf<"imageBanner"> }) {
   const inner = (
     <>
-      <img src={block.data.image} alt={block.data.caption ?? ""} />
-      {block.data.caption && <span className="banner-caption">{block.data.caption}</span>}
+      <img src={block.data.image} alt={block.data.caption ?? ""} data-block-id={block.id} data-field="image" />
+      {block.data.caption && (
+        <span className="banner-caption" data-block-id={block.id} data-field="caption" style={textStyleCss(block, "caption")}>
+          {block.data.caption}
+        </span>
+      )}
     </>
   );
   return (
-    <section id={block.id} className={`image-banner banner-${block.data.height} reveal`}>
+    <section id={block.id} className={`image-banner banner-${block.data.height} reveal`} style={spacingCss(block)}>
       {block.data.href ? (
         <a href={block.data.href} target="_blank" rel="noreferrer">
           {inner}
@@ -400,13 +542,19 @@ function ImageBannerBlock({ block }: { block: BlockOf<"imageBanner"> }) {
 
 function GalleryBlock({ block }: { block: BlockOf<"gallery"> }) {
   return (
-    <Section id={block.id}>
-      <h2>{block.data.heading}</h2>
+    <Section id={block.id} style={spacingCss(block)}>
+      <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
+        {block.data.heading}
+      </h2>
       <div className={`gallery gallery-${block.data.columns}`}>
         {block.data.images.map((image, i) => (
           <figure key={i}>
-            <img src={image.src} alt={image.caption ?? ""} loading="lazy" />
-            {image.caption && <figcaption>{image.caption}</figcaption>}
+            <img src={image.src} alt={image.caption ?? ""} loading="lazy" data-block-id={block.id} data-field={`images.${i}.src`} />
+            {image.caption && (
+              <figcaption data-block-id={block.id} data-field={`images.${i}.caption`} style={textStyleCss(block, `images.${i}.caption`)}>
+                {image.caption}
+              </figcaption>
+            )}
           </figure>
         ))}
       </div>

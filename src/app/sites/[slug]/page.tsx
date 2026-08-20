@@ -76,7 +76,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ slu
                 type="submit"
                 className="text-[12px] text-sky-600 underline decoration-dotted underline-offset-4 hover:text-sky-700"
               >
-                AIで再生成する
+                {hearing.previewUrl ? "AIで再生成する" : "AIで生成する"}
               </button>
             </form>
           </div>
@@ -151,7 +151,67 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ slu
               </span>
             </div>
           ))}
+          {hearing.serviceNames && hearing.serviceNames.length > 0 && (
+            <div className="grid gap-1 px-6 py-4 sm:grid-cols-[140px_1fr] sm:gap-4">
+              <span className="text-[13px] font-medium text-slate-500">診療科・サービス</span>
+              <span className="text-[14px] text-slate-900">{hearing.serviceNames.join("・")}</span>
+            </div>
+          )}
+          {hearing.targetNames && hearing.targetNames.length > 0 && (
+            <div className="grid gap-1 px-6 py-4 sm:grid-cols-[140px_1fr] sm:gap-4">
+              <span className="text-[13px] font-medium text-slate-500">ターゲット</span>
+              <span className="text-[14px] text-slate-900">{hearing.targetNames.join("・")}</span>
+            </div>
+          )}
         </div>
+
+        {hearing.staffMembers && hearing.staffMembers.length > 0 && (
+          <div className={`mt-6 ${cardClassName}`}>
+            <p className="text-[13px] font-medium text-slate-700">スタッフ紹介</p>
+            <ul className="mt-4 space-y-3">
+              {hearing.staffMembers.map((member, i) => (
+                <li key={i} className="rounded-xl border border-slate-100 px-4 py-3 text-[14px]">
+                  <p className="font-medium text-slate-900">
+                    {member.name}
+                    {member.role && <span className="ml-2 text-[12px] font-normal text-slate-400">{member.role}</span>}
+                  </p>
+                  {member.comment && <p className="mt-1 text-[13px] text-slate-500">{member.comment}</p>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {hearing.priceItems && hearing.priceItems.length > 0 && (
+          <div className={`mt-6 ${cardClassName}`}>
+            <p className="text-[13px] font-medium text-slate-700">料金表</p>
+            <ul className="mt-4 divide-y divide-slate-100">
+              {hearing.priceItems.map((item, i) => (
+                <li key={i} className="flex items-baseline justify-between gap-4 py-2.5 text-[14px]">
+                  <span className="text-slate-900">
+                    {item.name}
+                    {item.note && <span className="ml-2 text-[12px] text-slate-400">{item.note}</span>}
+                  </span>
+                  <span className="shrink-0 text-slate-700">{item.price}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {hearing.uploadedImages && Object.values(hearing.uploadedImages).some((urls) => (urls?.length ?? 0) > 0) && (
+          <div className={`mt-6 ${cardClassName}`}>
+            <p className="text-[13px] font-medium text-slate-700">アップロードされた写真</p>
+            <div className="mt-4 grid grid-cols-4 gap-3 sm:grid-cols-6">
+              {Object.values(hearing.uploadedImages)
+                .flatMap((urls) => urls ?? [])
+                .map((url, i) => (
+                  // eslint-disable-next-line @next/next/no-img-element -- Supabase-hosted photo, outside Next's image pipeline
+                  <img key={i} src={url} alt="" className="aspect-square w-full rounded-lg border border-slate-200 object-cover" />
+                ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

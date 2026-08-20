@@ -47,15 +47,7 @@ export default async function MypageRequestsPage() {
               const status = hearingStatus(hearing);
               return (
                 <tr key={hearing.slug} className="border-b border-slate-50 last:border-0">
-                  <td className="px-4 py-3">
-                    {status.key === "generated" ? (
-                      <Link href={`/sites/${hearing.slug}`} className="text-slate-900 underline-offset-4 hover:underline">
-                        {hearing.clinicName}
-                      </Link>
-                    ) : (
-                      <span className="text-slate-900">{hearing.clinicName}</span>
-                    )}
-                  </td>
+                  <td className="px-4 py-3 text-slate-900">{hearing.clinicName}</td>
                   <td className="px-4 py-3">
                     <span className={`rounded-full px-2.5 py-1 text-[13px] font-medium ${status.className}`}>
                       {status.label}
@@ -63,10 +55,18 @@ export default async function MypageRequestsPage() {
                   </td>
                   <td className="px-4 py-3 text-slate-400">{formatDate(hearing.createdAt)}</td>
                   <td className="px-4 py-3 text-right">
-                    <ConfirmDeleteButton
-                      action={deleteOwnApplicationAction.bind(null, hearing.slug)}
-                      confirmText={`「${hearing.clinicName}」の申請を削除しますか？`}
-                    />
+                    <div className="flex items-center justify-end gap-3">
+                      <Link
+                        href={`/sites/${hearing.slug}`}
+                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-[13px] text-slate-700 hover:bg-slate-50"
+                      >
+                        詳細を確認
+                      </Link>
+                      <ConfirmDeleteButton
+                        action={deleteOwnApplicationAction.bind(null, hearing.slug)}
+                        confirmText={`「${hearing.clinicName}」の申請を削除しますか？`}
+                      />
+                    </div>
                   </td>
                 </tr>
               );

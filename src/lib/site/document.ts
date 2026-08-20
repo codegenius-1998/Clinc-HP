@@ -190,6 +190,41 @@ export const galleryDataSchema = z.object({
   columns: z.union([z.literal(2), z.literal(3), z.literal(4)]),
 });
 
+// --- per-field text style + per-block spacing overrides -------------------------------------------
+
+/** A "field path" addresses one editable value inside a block's `data`: the bare key for a top-level
+ * field ("heading"), or "<listKey>.<index>.<subKey>" for one item inside a list field ("cards.1.heading")
+ * — the same indexing ListEditor already uses for array items. This is the join key between the visual
+ * editor's click target (a `data-field` attribute, see components.tsx) and `Block.textStyles`. */
+const fieldPathPattern = /^[a-zA-Z][a-zA-Z0-9]*(\.\d+\.[a-zA-Z][a-zA-Z0-9]*)?$/;
+
+/** Per-field font/color override, written by the visual editor's right-hand panel. Absent (the common
+ * case) means "inherit the document's global `design.font`/`design.colors.text`" — this is deliberately
+ * a small, flat set of properties rather than rich text, because block `data` is plain strings with no
+ * run-level formatting anywhere in the render pipeline; adding that would need a different content model
+ * entirely (see the plan this shipped under). */
+export const textStyleSchema = z.object({
+  color: hexColor.optional(),
+  fontFamily: z.string().min(1).optional(),
+  fontSize: z.number().min(10).max(96).optional(),
+  fontWeight: z.number().int().min(300).max(900).optional(),
+});
+export type TextStyle = z.infer<typeof textStyleSchema>;
+
+/** Per-block spacing override. Deliberately block-scoped, not per-field: padding/margin around a single
+ * clicked headline isn't a concept most users have, but "more space above/below this section" is exactly
+ * what a page-builder's spacing controls mean. `paddingTop`/`paddingBottom` are ignored by the renderer
+ * for `hero` and `imageBanner` (see components.tsx) — those two block types put their image directly in
+ * the outer element's grid/flex box with no inner padded wrapper, so outer padding would inset the image
+ * itself and break the edge-to-edge layout; margin is safe for all 12 types. */
+export const blockSpacingSchema = z.object({
+  paddingTop: z.number().min(0).max(200).optional(),
+  paddingBottom: z.number().min(0).max(200).optional(),
+  marginTop: z.number().min(0).max(200).optional(),
+  marginBottom: z.number().min(0).max(200).optional(),
+});
+export type BlockSpacing = z.infer<typeof blockSpacingSchema>;
+
 // --- block ---------------------------------------------------------------------------------------
 
 /** Every block carries a unique instance `id` rather than being keyed by its type. That is what lets
@@ -201,6 +236,12 @@ const blockCommon = {
   /** Label shown in the page's nav. Empty string means "render the block but keep it out of the nav"
    * — correct for hero and for decorative banners. */
   navLabel: z.string(),
+  spacing: blockSpacingSchema.optional(),
+  /** Keyed by field path (see above). The regex is cheap defense-in-depth against garbage keys; it
+   * can't know which paths are actually valid for a given block *type* (that needs BLOCK_DEFINITIONS,
+   * see src/lib/site/blocks.ts's resolveFieldDefinition), so saveDocumentAction additionally prunes
+   * keys that no longer resolve to a real field — see pruneOrphanedStyles in src/lib/site/fieldPath.ts. */
+  textStyles: z.record(z.string().regex(fieldPathPattern), textStyleSchema).optional(),
 };
 
 export const blockSchema = z.discriminatedUnion("type", [
@@ -260,6 +301,14 @@ export const siteMetaSchema = z.object({
     ogSiteName: z.string(),
   }),
   snsLinks: z.array(z.object({ label: z.string(), href: z.string() })),
+  /** The LINE/tel CTA buttons' own label text (rendered by CtaButtons in hero AND contact — both
+   * instances share these, since they're meant to say the same thing everywhere on the page). Was a
+   * hard-coded literal in components.tsx before the visual editor could reach it; optional so existing
+   * documents fall back to that same literal at render time (see components.tsx's CtaButtons). */
+  ctaLineLabel: z.string().optional(),
+  ctaTelLabel: z.string().optional(),
+  /** The nav/footer's first "ホーム" link. Same optional-with-literal-fallback reasoning as above. */
+  homeLabel: z.string().optional(),
 });
 
 export type SiteMeta = z.infer<typeof siteMetaSchema>;
@@ -276,6 +325,21 @@ export const siteDocumentSchema = z.object({
   ownerEmail: z.string().optional(),
   design: designTokensSchema,
   meta: siteMetaSchema,
+  /** Same idea as a block's `textStyles`, but for the header/footer/CTA text that lives in `meta`
+   * rather than in any block's `data` — those aren't addressed by a block id, so they share this one
+   * document-level record instead. Keyed the same way ("clinicName", "snsLinks.0.label", ...) via the
+   * "meta." path prefix the visual editor uses to tell a meta field apart from a block field — see
+   * resolveSelectionField in src/lib/site/blocks.ts. */
+  metaTextStyles: z.record(z.string().regex(fieldPathPattern), textStyleSchema).optional(),
+  /** Spacing for the header/footer chrome, which (unlike every block) isn't inside `blocks` at all —
+   * this is where their spacing override lives instead. Same shape and same "unify with the
+   * section/region as a whole" reasoning as a block's own `spacing`. */
+  chromeSpacing: z
+    .object({
+      header: blockSpacingSchema.optional(),
+      footer: blockSpacingSchema.optional(),
+    })
+    .optional(),
   blocks: z.array(blockSchema),
   /** Templates only: prose describing the atmosphere. This is what selectTemplate.ts shows the model,
    * so it must read as mood ("落ち着いた和モダン、年配の患者向け") and never as markup. */

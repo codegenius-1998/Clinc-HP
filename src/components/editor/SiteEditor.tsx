@@ -2,12 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { publishDocumentAction, saveDocumentAction } from "@/lib/site/editorActions";
+import { setFieldValue } from "@/lib/site/fieldPath";
 import type { Block, SiteDocument } from "@/lib/site/document";
 import { AddBlockPalette } from "./AddBlockPalette";
 import { BlockEditor } from "./BlockEditor";
 import { BlockList } from "./BlockList";
 import { DesignPanel } from "./DesignPanel";
+import { GuidelineCheckButton } from "./GuidelineCheckButton";
+import { Inspector, type Selection } from "./Inspector";
 import { MetaPanel } from "./MetaPanel";
+import { VisualCanvas } from "./VisualCanvas";
 
 /** The one editor, used for both design templates and generated clinic sites — they are the same
  * document shape, so there is nothing to specialise beyond hiding 公開 on a template.
@@ -40,6 +44,9 @@ export function SiteEditor({
   const [dirty, setDirty] = useState(false);
   const [tab, setTab] = useState<Tab>("blocks");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Separate from `selectedId` (which block is open in the left sidebar's form) — this is what was
+  // last clicked directly on the canvas, addressed down to the individual field.
+  const [canvasSelection, setCanvasSelection] = useState<Selection | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewVersion, setPreviewVersion] = useState(initialDocument.updatedAt);
@@ -79,6 +86,15 @@ export function SiteEditor({
     }));
   }
 
+  /** Commits an in-place canvas edit (VisualCanvas's `onTextEdit`) into `doc.blocks` by field path —
+   * the same state update BlockEditor's form fields go through, just addressed by path instead of a
+   * form's own local key, so the two editing surfaces can never disagree about what's stored. */
+  function handleCanvasTextEdit(edit: Selection & { value: string }) {
+    const block = doc.blocks.find((b) => b.id === edit.blockId);
+    if (!block) return;
+    replaceBlock({ ...block, data: setFieldValue(block.data, edit.fieldPath, edit.value) } as Block);
+  }
+
   async function save() {
     setSaving(true);
     setError(null);
@@ -114,6 +130,7 @@ export function SiteEditor({
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
+          <GuidelineCheckButton doc={doc} documentId={doc.id} />
           <a
             href={`${previewUrl}?v=${encodeURIComponent(previewVersion)}`}
             target="_blank"
@@ -159,8 +176,10 @@ export function SiteEditor({
       )}
 
       <div className="flex flex-col gap-4 lg:flex-row">
-        {/* --- left: controls --- */}
-        <div className="flex w-full shrink-0 flex-col gap-3 lg:max-h-[calc(100vh-9rem)] lg:w-[420px] lg:overflow-y-auto lg:pr-1">
+        {/* --- left: structure (unchanged) — add/reorder/delete blocks, list items, global design, SEO.
+             These stay form-based because there's nothing on the page yet to click for them: adding a
+             block, or a new FAQ item, has no "existing text" to select. --- */}
+        <div className="flex w-full shrink-0 flex-col gap-3 lg:max-h-[calc(100vh-9rem)] lg:w-[300px] lg:overflow-y-auto lg:pr-1">
           <div className="flex gap-1 rounded-xl bg-slate-100 p-1">
             {TABS.map((item) => (
               <button
@@ -199,7 +218,7 @@ export function SiteEditor({
             ) : (
               <div className="flex flex-col gap-3">
                 <p className="text-[12px] leading-relaxed text-slate-400">
-                  ドラッグ（または ↑↓）で並べ替え、👁 で表示・非表示を切り替えます。ブロックをクリックすると中身を編集できます。
+                  文章や画像は、右のプレビューを直接クリックして編集できます。ここでは、ブロックの追加・並べ替え・削除、リスト項目（FAQ・スタッフなど）の追加・削除を行います。
                 </p>
                 <BlockList
                   blocks={doc.blocks}
@@ -214,6 +233,7 @@ export function SiteEditor({
                   }
                   onDelete={(id) => {
                     if (selectedId === id) setSelectedId(null);
+                    if (canvasSelection?.blockId === id) setCanvasSelection(null);
                     update((current) => ({ ...current, blocks: current.blocks.filter((b) => b.id !== id) }));
                   }}
                 />
@@ -242,18 +262,36 @@ export function SiteEditor({
           )}
         </div>
 
-        {/* --- right: preview --- */}
+        {/* --- center: the live, clickable canvas --- */}
         <div className="min-w-0 flex-1">
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white lg:sticky lg:top-[4.5rem]">
             <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
-              <span className="text-[12px] text-slate-400">プレビュー（実際に公開されるページと同じものです）</span>
-              {dirty && <span className="text-[12px] text-amber-600">保存すると反映されます</span>}
+              <span className="text-[12px] text-slate-400">テキストや画像をクリックすると編集できます</span>
+              {dirty && <span className="text-[12px] text-amber-600">保存すると構成の変更が反映されます</span>}
             </div>
-            <iframe
-              key={previewVersion}
-              src={`${previewUrl}?v=${encodeURIComponent(previewVersion)}`}
-              title="プレビュー"
-              className="h-[calc(100vh-12rem)] min-h-[520px] w-full"
+            <div className="h-[calc(100vh-12rem)] min-h-[520px] w-full">
+              <VisualCanvas
+                doc={doc}
+                previewUrl={previewUrl}
+                previewVersion={previewVersion}
+                assetBase={assetBase}
+                selection={canvasSelection}
+                onSelect={setCanvasSelection}
+                onTextEdit={handleCanvasTextEdit}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* --- right: the new contextual editing panel (Font/Color/Image/Padding/Margin) --- */}
+        <div className="w-full shrink-0 lg:max-h-[calc(100vh-9rem)] lg:w-[340px] lg:overflow-y-auto">
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 lg:sticky lg:top-[4.5rem]">
+            <Inspector
+              doc={doc}
+              selection={canvasSelection}
+              documentId={doc.id}
+              assetBase={assetBase}
+              onChangeBlock={replaceBlock}
             />
           </div>
         </div>

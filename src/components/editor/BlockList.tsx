@@ -75,10 +75,12 @@ export function BlockList({
               onClick={() => onSelect(block.id)}
               className="flex min-w-0 flex-1 flex-col items-start text-left"
             >
-              <span className={`truncate text-[13px] ${block.visible ? "text-slate-800" : "text-slate-400 line-through"}`}>
+              <span
+                className={`w-full truncate text-[13px] ${block.visible ? "text-slate-800" : "text-slate-400 line-through"}`}
+              >
                 {definition.icon} {blockSummary(block)}
               </span>
-              <span className="truncate text-[11px] text-slate-400">{definition.label}</span>
+              <span className="w-full truncate text-[11px] text-slate-400">{definition.label}</span>
             </button>
 
             <div className="flex shrink-0 items-center gap-0.5">
