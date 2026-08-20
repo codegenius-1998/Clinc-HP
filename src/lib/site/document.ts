@@ -53,13 +53,28 @@ export const designTokensSchema = z.object({
     maxWidth: z.number().min(880).max(1440),
     spacingScale: z.number().min(0.7).max(2),
     sectionDivider: z.enum(["none", "wave", "diagonal"]),
+    /** Page-wide background treatment. "plain" is the original flat white / pale-tint alternation;
+     * the rest add texture so the page doesn't read as a stack of identical white boxes.
+     *
+     * .default() is load-bearing, not tidiness: getDocument() runs safeParse over the stored JSON and
+     * falls back to DEFAULT_DESIGN_TOKENS *in full* when it fails. A newly-required field would make
+     * every document written before this change fail that parse and silently lose its real colours
+     * and fonts. With a default, old JSON still parses and simply arrives with the feature off. */
+    background: z.enum(["plain", "gradient", "blobs", "dots", "grid"]).default("plain"),
+    /** Ornament level: section numbers, heading marks, corner shapes. Purely decorative — nothing
+     * here changes what the page says, only how furnished it looks. */
+    decoration: z.enum(["none", "accent", "rich"]).default("none"),
   }),
   animation: z.object({
-    reveal: z.enum(["none", "fade", "slide-up", "zoom"]),
+    reveal: z.enum(["none", "fade", "slide-up", "slide-left", "slide-right", "zoom", "pop", "flip", "blur"]),
     /** Milliseconds. 0 with reveal "none" means the page ships with no motion at all. */
     duration: z.number().min(0).max(2000),
     stagger: z.boolean(),
     parallaxHero: z.boolean(),
+    /** Cycles the reveal direction and the card arrangement across consecutive sections, so a long
+     * page doesn't repeat one identical entrance a dozen times. `reveal` above stays the base.
+     * Defaulted for the same back-compat reason as layout.background. */
+    variety: z.boolean().default(false),
   }),
 });
 
@@ -97,12 +112,15 @@ export const DEFAULT_DESIGN_TOKENS: DesignTokens = {
     maxWidth: 1080,
     spacingScale: 1,
     sectionDivider: "none",
+    background: "plain",
+    decoration: "none",
   },
   animation: {
     reveal: "slide-up",
     duration: 700,
     stagger: true,
     parallaxHero: false,
+    variety: false,
   },
 };
 

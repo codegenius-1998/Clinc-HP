@@ -78,7 +78,10 @@
    * どんどん遅れて表示され、読み込みが遅いように見えてしまうため。 */
   function applyStagger() {
     if (!staggerEnabled) return;
-    document.querySelectorAll(".cards, .gallery, .staff-grid").forEach(function (group) {
+    // 対象は「同じ見た目の要素が並んでいる集まり」だけ。表の <tr> を入れていないのは、
+    // 行に transform を掛けると列の位置合わせが崩れる実装のブラウザがあるため。
+    var GROUPS = ".cards, .gallery, .staff-grid, .news-list, .faq-list";
+    document.querySelectorAll(GROUPS).forEach(function (group) {
       var children = group.children;
       for (var i = 0; i < children.length; i++) {
         children[i].classList.add("reveal");
@@ -127,13 +130,18 @@
    * 1フレームに何度も飛んでくるため）。 */
   function setupParallaxHero() {
     if (!parallaxEnabled || prefersReducedMotion) return;
-    var hero = document.querySelector(".hero-full-bleed .hero-image");
+    var section = document.querySelector(".hero-full-bleed");
+    var hero = section && section.querySelector(".hero-image");
     if (!hero) return;
 
     var ticking = false;
     var update = function () {
-      var offset = Math.min(window.scrollY, window.innerHeight) * 0.25;
-      hero.style.setProperty("--parallax-y", offset + "px");
+      // 移動量はヒーロー自身の高さを基準にする。ビューポート基準（旧実装）だと、画面の高いPCでは
+      // 移動量がヒーローの高さを超え、拡大で稼いだ余白から画像がずれて端に隙間が出る。
+      // 0.11 は CSS 側の scale(1.3)（＝上下 15% ずつの余白）に収まる値。
+      var heroHeight = section.getBoundingClientRect().height || 1;
+      var progress = Math.min(window.scrollY / heroHeight, 1);
+      hero.style.setProperty("--parallax-y", progress * heroHeight * 0.11 + "px");
       ticking = false;
     };
     window.addEventListener(

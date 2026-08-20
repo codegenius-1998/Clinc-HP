@@ -122,9 +122,14 @@ function tokensFromPage(html: string): DesignTokens {
       maxWidth: 1080,
       spacingScale: Number.isFinite(spacing) ? Math.min(2, Math.max(0.7, spacing)) : 1,
       sectionDivider: "none",
+      // This importer reproduces a page that already exists, so the decorative knobs start off —
+      // turning them on here would make the template differ from the site it was read from. They are
+      // meant to be dialled in afterwards, in the editor's デザイン tab.
+      background: "plain",
+      decoration: "none",
     },
     // What the old main.js/site.css did for every site: a 0.7s fade-and-rise, no stagger, no parallax.
-    animation: { reveal: "slide-up", duration: 700, stagger: false, parallaxHero: false },
+    animation: { reveal: "slide-up", duration: 700, stagger: false, parallaxHero: false, variety: false },
   });
 }
 

@@ -51,18 +51,36 @@ html { scroll-behavior: smooth; }
  * JSが読み込めない/無効な環境でも本文は最初から普通に表示される。 */
 .js .reveal {
   opacity: 0;
-  transition: opacity var(--reveal-duration) ease, transform var(--reveal-duration) ease;
+  transition:
+    opacity var(--reveal-duration) ease,
+    transform var(--reveal-duration) cubic-bezier(0.22, 0.68, 0.3, 1),
+    filter var(--reveal-duration) ease;
   /* 段差表示。main.js が同じ並びの中の順番に応じて書き込む（未設定なら遅延なし）。 */
   transition-delay: var(--reveal-delay, 0ms);
+  will-change: opacity, transform;
 }
 /* 演出の「形」はテンプレートが決める（<html data-reveal>）。 */
 html.js[data-reveal="slide-up"] .reveal { transform: translateY(28px); }
+html.js[data-reveal="slide-left"] .reveal { transform: translateX(-40px); }
+html.js[data-reveal="slide-right"] .reveal { transform: translateX(40px); }
 html.js[data-reveal="zoom"] .reveal { transform: scale(0.94); }
 html.js[data-reveal="fade"] .reveal { transform: none; }
-/* 表示後の解除ルールは、上の3つより詳細度を高くしておく必要がある
+/* 行き過ぎてから戻る（オーバーシュート）。cubic-bezier の 3 番目の値が 1 を超えると跳ねる。 */
+html.js[data-reveal="pop"] .reveal {
+  transform: scale(0.8);
+  transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+/* 奥から起き上がる。transform-origin を上端にすることで「めくれ上がる」動きになる。 */
+html.js[data-reveal="flip"] .reveal {
+  transform: perspective(1000px) rotateX(16deg) translateY(26px);
+  transform-origin: top center;
+}
+/* ぼけた状態から像を結ぶ。filter は transform と別プロパティなので上の transition に足してある。 */
+html.js[data-reveal="blur"] .reveal { transform: translateY(16px) scale(0.98); filter: blur(12px); }
+/* 表示後の解除ルールは、上の各指定より詳細度を高くしておく必要がある
  * （`.js .reveal.is-visible` ではクラス3つで data-reveal 側と同点になり、
  *   後勝ちで translateY が残ったまま = 常に28pxずれた位置で止まる）。 */
-html.js[data-reveal] .reveal.is-visible { opacity: 1; transform: none; }
+html.js[data-reveal] .reveal.is-visible { opacity: 1; transform: none; filter: none; }
 /* "none" opts the template out of motion entirely — including for readers whose browsers do run JS. */
 html[data-reveal="none"] .reveal { opacity: 1; transform: none; transition: none; }
 body {
@@ -123,6 +141,11 @@ nav.site-nav a:hover { background: var(--accent); }
 
 @media (max-width: 760px) {
   .nav-toggle-label { display: block; }
+
+  /* SP ではヘッダーの電話番号を出さない。ロゴ＋医院名＋電話番号＋ハンバーガーが 1 行に収まらず、
+     医院名が折り返してヘッダーが 2 段になる（= 固定ヘッダーが画面を圧迫する）ため。
+     電話をかける導線は、ヒーロー直下と最下部の「お電話で相談・予約する」ボタンが担う。 */
+  .header-tel { display: none; }
 
   /* `fixed`, not `absolute`: <nav> is a child of <body>, and nothing between it and the viewport is
      positioned, so `absolute; top: 100%` resolved against the initial containing block and dropped
@@ -232,7 +255,9 @@ nav.site-nav a:hover { background: var(--accent); }
 
 /* セクション共通
 ---------------------------------------------------------------------------*/
-.section { padding: calc(4rem * var(--space-scale)) var(--space); }
+/* 上下 2rem（= 従来の半分）。--space-scale はテンプレート側の「余白の広さ」で、
+ * さらに広く/狭くしたい場合はブロックごとの余白設定（Inspector）で上書きできる。 */
+.section { padding: calc(2rem * var(--space-scale)) var(--space); }
 .section-alt { background: var(--light); }
 .section-inner { max-width: var(--max-width); margin: 0 auto; }
 .section h2 { font-size: 1.5rem; margin-bottom: 0.5rem; border-bottom: 3px solid #ddd; padding-bottom: 0.7rem; position: relative; }
@@ -281,13 +306,58 @@ nav.site-nav a:hover { background: var(--accent); }
 .split img { border-radius: var(--radius); aspect-ratio: 1 / 1; object-fit: cover; }
 .split .text { white-space: pre-line; }
 
-/* 表（診療時間・料金表・アクセス）
+/* 表（診療時間・アクセス）— 料金表は専用の .price-table を使う（すぐ下）
 ---------------------------------------------------------------------------*/
 table.info-table { width: 100%; border-collapse: collapse; margin-top: 1rem; background: var(--bg); border-radius: var(--radius); overflow: hidden; }
 table.info-table th, table.info-table td { padding: 0.9rem 1rem; border-bottom: 1px solid #e5e5e5; text-align: left; font-size: 0.92rem; }
 table.info-table th { background: var(--light); width: 32%; white-space: pre-line; }
 table.info-table td { white-space: pre-line; }
-table.info-table td.price { text-align: right; font-weight: 700; white-space: nowrap; }
+
+/* 料金表
+---------------------------------------------------------------------------*/
+/* 診療時間などの info-table とは別の指定にしてある。料金表は「項目名（＋小さな注記）」と
+ * 「金額」の 2 列で固定だが、info-table は th を 32% で固定するため、項目名が詰まって
+ * 金額との間が大きく空いてしまう。また注記を 3 列目の <td> として出していたため、
+ * 注記のある行だけ列数が 3 になり、行ごとに列幅がずれていた（＝崩れの原因）。
+ * 現在は注記を項目名セルの中に入れ、どの行も必ず 2 列になる。 */
+table.price-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-top: 1.4rem;
+  background: var(--bg);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+table.price-table th,
+table.price-table td {
+  padding: 1rem 1.2rem;
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
+  vertical-align: top;
+}
+table.price-table tr:last-child th,
+table.price-table tr:last-child td { border-bottom: 0; }
+table.price-table th { font-weight: 700; font-size: 0.95rem; }
+.price-name { display: block; }
+/* 注記は項目名の下に小さく。<th> の太字を継がないよう font-weight を戻す。 */
+.price-note { display: block; margin-top: 0.3rem; font-size: 0.78rem; font-weight: 400; color: #777; }
+/* width: 1% + nowrap で「金額に必要な幅だけ」を取り、残りを項目名に渡す。 */
+table.price-table td.price {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--primary-text);
+}
+@media (max-width: 480px) {
+  table.price-table th, table.price-table td { padding: 0.85rem 0.9rem; }
+  table.price-table td.price { font-size: 1rem; }
+}
 
 .map-frame { border-radius: var(--radius); overflow: hidden; margin-top: 1.2rem; }
 .map-frame iframe { width: 100%; height: 320px; border: 0; display: block; }
@@ -296,6 +366,12 @@ table.info-table td.price { text-align: right; font-weight: 700; white-space: no
 ---------------------------------------------------------------------------*/
 .news-list li { display: flex; gap: 1rem; padding: 0.9rem 0; border-bottom: 1px solid #e5e5e5; flex-wrap: wrap; }
 .news-list time { flex-shrink: 0; width: 7rem; color: var(--primary-text); font-weight: 700; }
+/* SP: 日付と本文を必ず縦に積む。flex-wrap 任せだと、短いタイトルは日付の右に収まり、
+ * 長いタイトルだけ次の行へ折り返すため、項目ごとに配置が変わって不揃いに見える。 */
+@media (max-width: 560px) {
+  .news-list li { flex-direction: column; gap: 0.3rem; }
+  .news-list time { width: auto; }
+}
 
 /* FAQ（アコーディオン開閉。JS未実行時は全件開いたまま表示されるフォールバック付き）
 ---------------------------------------------------------------------------*/
@@ -364,7 +440,10 @@ footer.site-footer { background: #2b2f36; color: #dcdfe4; padding: 3rem var(--sp
 ---------------------------------------------------------------------------*/
 @media (min-width: 860px) {
   .cards-overlap { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); align-items: start; }
+  /* 偶数枚目を下げ、奇数枚目に同じ量の下マージンを入れる。片側だけにマージンを付けると、
+     グリッドの子は「行の高さ − 自分のマージン」に伸びるため、下げたカードだけが低くなる。 */
   .cards-overlap .card:nth-child(even) { margin-top: calc(2.5rem * var(--space-scale)); }
+  .cards-overlap .card:nth-child(odd) { margin-bottom: calc(2.5rem * var(--space-scale)); }
   .cards-overlap .card { transition: transform 0.3s ease; }
   .cards-overlap .card:hover { transform: translateY(-6px); }
 }
@@ -427,5 +506,359 @@ html[data-divider="wave"] .section-alt::after { bottom: -2.2vw; transform: rotat
 .gallery img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--radius); }
 .gallery figcaption { margin-top: 0.4rem; font-size: 0.8rem; color: #666; text-align: center; }
 
-/* ヒーローのパララックス（main.js が --parallax-y を書き込む） */
-html[data-parallax="1"] .hero.hero-full-bleed .hero-image { transform: translate3d(0, var(--parallax-y, 0px), 0) scale(1.08); }
+/* 細かな動きの演出
+---------------------------------------------------------------------------*/
+/* ここは data-reveal（スクロールで現れる演出）とは別系統で、常に効く「触ったときの反応」。
+ * すべて transform / opacity / filter だけで作ってあり、レイアウトを再計算させないので
+ * スクロール中でも重くならない。prefers-reduced-motion の一括無効化は冒頭の指定が拾う。 */
+
+/* カード: 浮き上がり＋写真のゆっくりズーム。.card は overflow: hidden なので枠から出ない。 */
+.card { transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.3, 1), box-shadow 0.35s ease; }
+.card:hover { transform: translateY(-6px); box-shadow: 0 14px 32px rgba(0, 0, 0, 0.13); }
+.card img { transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.3, 1); }
+.card:hover img { transform: scale(1.06); }
+
+/* スタッフ写真・ギャラリー写真も同じ手触りに揃える。
+ * .staff-card 自体は背景も枠も持たない素の箱なので、カード全体に影を付けると
+ * 何も無いところに影の矩形だけが浮く。動かすのは写真だけにしてある。 */
+.staff-card img { transition: transform 0.45s cubic-bezier(0.2, 0.7, 0.3, 1), box-shadow 0.35s ease; }
+.staff-card:hover img { transform: translateY(-5px); box-shadow: 0 12px 26px rgba(0, 0, 0, 0.16); }
+.gallery figure { overflow: hidden; border-radius: var(--radius); }
+.gallery img { transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.3, 1); }
+.gallery figure:hover img { transform: scale(1.08); }
+
+/* ボタン: 浮き上がり＋光が横切る（いわゆるシャイン）。
+ * ::after を skew した細い帯にして left を animate する。overflow: hidden で外へは出ない。 */
+.btn { position: relative; overflow: hidden; transition: transform 0.25s ease, box-shadow 0.25s ease, filter 0.25s ease; }
+.btn::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -140%;
+  width: 55%;
+  height: 100%;
+  background: linear-gradient(115deg, transparent 0%, rgba(255, 255, 255, 0.55) 50%, transparent 100%);
+  transform: skewX(-20deg);
+  pointer-events: none;
+}
+.btn:hover { transform: translateY(-2px); box-shadow: 0 10px 22px rgba(0, 0, 0, 0.18); filter: brightness(1.05); }
+.btn:hover::after { animation: btn-shine 0.85s ease; }
+@keyframes btn-shine { from { left: -140%; } to { left: 140%; } }
+
+/* 見出しの下線: セクションが現れるのに少し遅れて、左から伸びる。
+ * .section-inner が .reveal を持つので、その表示完了に合わせて走る。 */
+.section h2::after { transform-origin: left center; }
+html.js .reveal h2::after { transform: scaleX(0); transition: transform 0.7s cubic-bezier(0.2, 0.7, 0.3, 1); }
+html.js .reveal.is-visible h2::after { transform: scaleX(1); transition-delay: 0.25s; }
+
+/* 表の行: なぞっている行を淡く塗る。どの行を見ているか分かりやすくする。 */
+table.info-table tbody tr,
+table.price-table tbody tr { transition: background-color 0.2s ease; }
+table.info-table tbody tr:hover,
+table.price-table tbody tr:hover { background-color: rgba(0, 0, 0, 0.025); }
+
+/* よくある質問: 開閉の +/× をなめらかに回し、回答は高さも一緒に動かす。 */
+.faq-q { transition: background-color 0.2s ease; }
+.faq-q:hover { background-color: rgba(0, 0, 0, 0.025); }
+
+/* ナビ: 現在位置を示す下線が中央から伸びる。 */
+nav.site-nav a { position: relative; }
+nav.site-nav a::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 0.35rem;
+  width: 0;
+  height: 2px;
+  background: currentColor;
+  transform: translateX(-50%);
+  transition: width 0.25s ease;
+}
+nav.site-nav a:hover::after { width: calc(100% - 1.6rem); }
+
+/* ヘッダー: スクロールすると少しだけ縮んで、ページ本体に場所を譲る。 */
+header.site-header { transition: box-shadow 0.25s ease, padding 0.25s ease; }
+
+/* ページ背景の演出（<html data-bg>）
+---------------------------------------------------------------------------*/
+/* すべて body の background-image として重ねる。疑似要素を敷く方法だと、body 自身の
+ * 背景色より後ろ（z-index: -1）に回って見えなくなるか、前に出して本文を覆うかの
+ * どちらかになり、どちらの回避策も本文の重なり順に手を入れることになる。
+ * background-image なら背景色の「上」かつ本文の「下」に必ず入る。 */
+
+/* "plain" は何も足さない（従来どおり）。 */
+
+/* 上下から淡色が差し込むグラデーション。fixed でスクロールしても位置が動かない。 */
+html[data-bg="gradient"] body {
+  background-image: linear-gradient(168deg, var(--light) 0%, var(--bg) 26%, var(--bg) 74%, var(--light) 100%);
+  background-attachment: fixed;
+}
+
+/* ぼかした色の塊を 3 つ。vw 指定なので画面幅に対して常に同じ比率で置かれる。 */
+html[data-bg="blobs"] body {
+  background-image:
+    radial-gradient(38vw 38vw at 10% 6%, var(--light) 0%, transparent 62%),
+    radial-gradient(32vw 32vw at 92% 30%, var(--light) 0%, transparent 60%),
+    radial-gradient(42vw 42vw at 20% 78%, var(--light) 0%, transparent 64%);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+}
+/* 背景の塊を隠さないよう、淡色セクションは不透明のベタ塗りをやめて半透明の白にする。 */
+html[data-bg="blobs"] .section-alt { background: rgba(255, 255, 255, 0.62); }
+
+/* ドット柄・方眼柄。色は黒の低不透明度にしてある（配色に依存せず、どのテンプレートでも
+ * 沈んで見えるため）。淡色セクションは濃いめ、白セクションは薄めと差をつけ、
+ * 「同じ柄が延々続く」印象にならないようにしている。 */
+html[data-bg="dots"] .section-alt {
+  background-image: radial-gradient(rgba(0, 0, 0, 0.07) 1.2px, transparent 1.2px);
+  background-size: 16px 16px;
+}
+html[data-bg="dots"] .section:not(.section-alt) {
+  background-image: radial-gradient(rgba(0, 0, 0, 0.035) 1.2px, transparent 1.2px);
+  background-size: 24px 24px;
+}
+html[data-bg="grid"] .section-alt {
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.055) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+html[data-bg="grid"] .section:not(.section-alt) {
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* 装飾（<html data-decoration>）
+---------------------------------------------------------------------------*/
+/* 見出しの下線をグラデーションの太い帯にする（"accent" 以上）。 */
+html[data-decoration="accent"] .section h2,
+html[data-decoration="rich"] .section h2 { border-bottom-color: rgba(0, 0, 0, 0.07); }
+html[data-decoration="accent"] .section h2::after,
+html[data-decoration="rich"] .section h2::after {
+  height: 4px;
+  width: 5.5rem;
+  bottom: -4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--primary), var(--accent));
+}
+
+/* セクション番号（"rich" のみ）。CSS カウンタなので、ブロックを増やしても消しても
+ * 採番が自動で追従する（HTML 側に番号を持たせると編集のたびに振り直しが要る）。
+ * ヒーローは .section を持たないため数に入らない。 */
+main { counter-reset: sectionnum; }
+.section { counter-increment: sectionnum; }
+html[data-decoration="rich"] .section h2::before {
+  content: counter(sectionnum, decimal-leading-zero);
+  display: block;
+  font-family: var(--font-heading);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  color: var(--primary-text);
+  opacity: 0.5;
+  margin-bottom: 0.35rem;
+}
+
+/* 角のふわふわした丸（"rich" のみ）。
+ * data-divider="none" に限定しているのは、"wave" / "diagonal" が同じ .section-alt::after を
+ * 区切り形状に使っているため（両方が効くと区切りが消える）。 */
+html[data-decoration="rich"][data-divider="none"] .section-alt { position: relative; overflow: hidden; }
+html[data-decoration="rich"][data-divider="none"] .section-alt::after {
+  content: "";
+  position: absolute;
+  right: -7vw;
+  top: -7vw;
+  width: 24vw;
+  height: 24vw;
+  border-radius: 50%;
+  background: var(--primary);
+  opacity: 0.08;
+  pointer-events: none;
+  animation: decor-float 9s ease-in-out infinite;
+}
+@keyframes decor-float {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(0, -16px, 0) scale(1.05); }
+}
+
+/* セクションごとの変化（<html data-variety>）
+---------------------------------------------------------------------------*/
+/* nth-of-type は「同じ種類の要素の中で何番目か」を数えるので、:not() や class では絞れない。
+ * ここで `.section` を併記しているのは絞り込みではなく除外のため — ヒーローは <section> だが
+ * .section を持たないので、位置 1 に居ても、どのルールにもマッチしない。
+ *
+ * ⚠ 詳細度に注意。ここは (0,5,2) で、基本の
+ *   html.js[data-reveal="…"] .reveal            = (0,3,1)
+ * を上書きする。そのため表示後の解除ルールも、基本の
+ *   html.js[data-reveal] .reveal.is-visible     = (0,4,1)
+ * では足りず、下のように (0,6,2) で書き直す必要がある。これを怠ると、要素が
+ * ずれた位置のまま止まって二度と戻らない。 */
+html.js[data-variety="1"] main > .section:nth-of-type(4n + 2) .reveal { transform: translateY(34px); }
+html.js[data-variety="1"] main > .section:nth-of-type(4n + 3) .reveal { transform: translateX(-46px); }
+html.js[data-variety="1"] main > .section:nth-of-type(4n + 4) .reveal { transform: scale(0.9); }
+html.js[data-variety="1"] main > .section:nth-of-type(4n + 5) .reveal { transform: translateX(46px); }
+html.js[data-variety="1"] main > .section:nth-of-type(n) .reveal.is-visible {
+  opacity: 1;
+  transform: none;
+  filter: none;
+}
+
+/* カードの並びもセクションごとに変える。 */
+/* 2 番目の周期: 大きめのカードを 2 列で。 */
+html[data-variety="1"] main > .section:nth-of-type(4n + 2) .cards {
+  grid-template-columns: 1fr;
+}
+@media (min-width: 760px) {
+  html[data-variety="1"] main > .section:nth-of-type(4n + 2) .cards {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  }
+  /* 3 番目の周期: 偶数枚目を下げて段違いにする。
+     transform ではなく margin を使うのは、:hover の浮き上がり（transform）と打ち消し合うため。
+     ⚠ 偶数枚目に margin-top を足すだけでは、カードの高さが揃わない。グリッドの子は既定で
+     align-self: stretch、つまり「行の高さ から 自分のマージン を引いた高さ」に伸びるので、
+     下げたカードだけがその分（2.4rem）低くなる。奇数枚目に同じ量の margin-bottom を入れて
+     両者のマージン合計を揃えると、高さが一致したまま段差だけが残る。 */
+  html[data-variety="1"] main > .section:nth-of-type(4n + 3) .cards .card:nth-child(even) { margin-top: 2.4rem; }
+  html[data-variety="1"] main > .section:nth-of-type(4n + 3) .cards .card:nth-child(odd) { margin-bottom: 2.4rem; }
+  /* 4 番目の周期: 写真を左、文章を右に置いた横長の並び。 */
+  html[data-variety="1"] main > .section:nth-of-type(4n + 4) .cards { grid-template-columns: 1fr; }
+  html[data-variety="1"] main > .section:nth-of-type(4n + 4) .cards .card {
+    display: grid;
+    grid-template-columns: 34% 1fr;
+    align-items: center;
+  }
+  html[data-variety="1"] main > .section:nth-of-type(4n + 4) .cards .card img { height: 100%; aspect-ratio: auto; }
+}
+/* list レイアウト（.cards-list）は grid ではなく flex なので、上の grid-template-columns 系の
+ * 指定はそもそも効かない。列数の代わりに「写真の左右」と「写真の大きさ」を周期で入れ替える。 */
+@media (min-width: 760px) {
+  html[data-variety="1"] main > .section:nth-of-type(4n + 3) .cards-list .card { flex-direction: row-reverse; }
+  html[data-variety="1"] main > .section:nth-of-type(4n + 4) .cards-list .card img { width: 200px; height: 200px; }
+  html[data-variety="1"] main > .section:nth-of-type(4n + 2) .cards-list .card { gap: 2.4rem; }
+}
+
+/* 白いセクションが続くときに、ごく薄い落ち込みを付けて境目を作る。 */
+html[data-variety="1"] main > .section:nth-of-type(4n + 3):not(.section-alt) {
+  background-image: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.022) 100%);
+}
+
+/* 環境の動き — 常にゆっくり流れている演出
+---------------------------------------------------------------------------*/
+/* 方針：「見て気づく動き」ではなく「気づかないが流れは感じる動き」。
+ * ・振れ幅は小さく、周期は長く（14〜70秒）。目で追える速さにはしない。
+ * ・ホーム画面（ヒーロー）にかかるものは特に控えめに（白の重ねは不透明度 0.08）。
+ * ・reveal を "none" にしたテンプレートは「動かさない」という選択なので、ここも全部止める。
+ * ・OS の「視差効果を減らす」設定は、冒頭の一括指定がまとめて無効化する。 */
+
+/* 1. 背景そのものがゆっくり流れる（blobs / gradient のみ）。
+ * background-size を 100% より大きくしておかないと、background-position の % に動く余地が
+ * 生まれず（移動量 = コンテナ − 画像 = 0）、アニメーションを書いても一切動かない。 */
+html:not([data-reveal="none"])[data-bg="blobs"] body {
+  background-size: 150% 150%;
+  animation: ambient-drift 70s ease-in-out infinite alternate;
+}
+html:not([data-reveal="none"])[data-bg="gradient"] body {
+  background-size: 100% 170%;
+  animation: ambient-drift 60s ease-in-out infinite alternate;
+}
+@keyframes ambient-drift {
+  from { background-position: 18% 24%; }
+  to { background-position: 62% 70%; }
+}
+
+/* 2. ヒーローの下端で、細い線を光が一定間隔で降りていく。
+ * 「次があります」という誘導と「流れ」の両方をこれ一つで担う。矢印を点滅させるより静か。 */
+/* 共通部分。置き場所と色だけがヒーローの型ごとに変わる。 */
+.hero-scroll {
+  width: 1px;
+  border-radius: 1px;
+  position: relative;
+  overflow: hidden;
+  pointer-events: none;
+}
+.hero-scroll::after {
+  content: "";
+  position: absolute;
+  left: -1px;
+  width: 3px;
+  height: 55%;
+  border-radius: 2px;
+  animation: hero-scroll-flow 2.8s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+}
+html[data-reveal="none"] .hero-scroll::after { animation: none; }
+
+/* "full-bleed": 写真の上に重なるので白。grid の同じセルに置いて下端中央へ寄せる。 */
+html[data-hero="full-bleed"] .hero-scroll {
+  grid-area: 1 / 1;
+  align-self: end;
+  justify-self: center;
+  margin-bottom: 1.4rem;
+  height: 46px;
+  background: rgba(255, 255, 255, 0.4);
+}
+html[data-hero="full-bleed"] .hero-scroll::after { background: #fff; }
+
+/* "split" / "centered": 淡色の地に濃い文字が乗るレイアウトなので、白い線では見えない。
+ * ヒーローは flex（split）なので、子として並べると列や行を1つ余計に作ってしまう。
+ * .hero は position: relative なので、絶対配置で下端中央に置く方が構造を乱さない。
+ * 高さを 34px に抑えてあるのは、ヒーローの下パディング（3rem × 余白倍率 = 最小 48px）に
+ * 収めて、CTAボタンと重ならないようにするため。 */
+html[data-hero="split"] .hero-scroll,
+html[data-hero="centered"] .hero-scroll {
+  position: absolute;
+  left: 50%;
+  bottom: 0.7rem;
+  transform: translateX(-50%);
+  height: 34px;
+  background: rgba(0, 0, 0, 0.16);
+}
+html[data-hero="split"] .hero-scroll::after,
+html[data-hero="centered"] .hero-scroll::after { background: var(--primary); }
+@keyframes hero-scroll-flow {
+  0% { top: -55%; opacity: 0; }
+  20% { opacity: 0.9; }
+  70% { opacity: 0.9; }
+  100% { top: 100%; opacity: 0; }
+}
+
+/* 3. ヒーローに、ごくうっすらとした光が斜めに流れる。
+ * 1 周 16 秒のうち実際に動くのは最初の 3 割ほどで、残りは止まっている。ずっと動き続けると
+ * 視界の端でちらつき続けて疲れるため、「たまに流れる」形にしてある。 */
+html:not([data-reveal="none"])[data-decoration="accent"] .hero-copy::after,
+html:not([data-reveal="none"])[data-decoration="rich"] .hero-copy::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 42%, rgba(255, 255, 255, 0.08) 50%, transparent 58%);
+  background-size: 260% 100%;
+  background-repeat: no-repeat;
+  animation: hero-sheen 16s ease-in-out infinite;
+}
+@keyframes hero-sheen {
+  0% { background-position: 130% 0; }
+  30%, 100% { background-position: -70% 0; }
+}
+
+/* 4. 見出しの下線の中を、色がゆっくり行き来する。
+ * transform（登場時に左から伸びる演出）とは別プロパティなので、両方が同時に効く。 */
+html:not([data-reveal="none"])[data-decoration="accent"] .section h2::after,
+html:not([data-reveal="none"])[data-decoration="rich"] .section h2::after {
+  background: linear-gradient(90deg, var(--primary), var(--accent), var(--primary));
+  background-size: 220% 100%;
+  animation: underline-flow 11s ease-in-out infinite;
+}
+@keyframes underline-flow {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* ヒーローのパララックス（main.js が --parallax-y を書き込む）
+ * overflow: hidden は必須。これが無いと、拡大＋移動した画像がヒーローの箱からはみ出し、
+ * 直下のセクション（お知らせなど）の上に覆いかぶさる。
+ * scale は「動かせる余白」でもある。1.3 倍なら上下に 15% ずつ余るので、main.js 側の
+ * 移動量（ヒーロー高さの 11%）が余白を超えず、画像の端が見えてしまうことがない。 */
+html[data-parallax="1"] .hero.hero-full-bleed { overflow: hidden; }
+html[data-parallax="1"] .hero.hero-full-bleed .hero-image { transform: translate3d(0, var(--parallax-y, 0px), 0) scale(1.3); }

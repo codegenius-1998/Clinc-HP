@@ -230,7 +230,10 @@ type SiteMeta = {
 | | `maxWidth` | 880〜1440 |
 | | `spacingScale` | 0.7〜2 |
 | | `sectionDivider` | `none` \| `wave` \| `diagonal` |
-| `animation` | `reveal` | `none` \| `fade` \| `slide-up` \| `zoom` |
+| `layout` | `background` | `plain` \| `gradient` \| `blobs` \| `dots` \| `grid`（ページ全体の背景の作り） |
+| `layout` | `decoration` | `none` \| `accent` \| `rich`（見出し記号・セクション番号・角の飾り） |
+| `animation` | `reveal` | `none` \| `fade` \| `slide-up` \| `slide-left` \| `slide-right` \| `zoom` \| `pop` \| `flip` \| `blur` |
+| `animation` | `variety` | `boolean`（4セクション周期で登場の向きとカードの並びを変える） |
 | | `duration` | 0〜2000（ms） |
 | | `stagger` `parallaxHero` | boolean |
 
@@ -587,6 +590,8 @@ npx wrangler pages deploy public/generated/<slug> \
 
 ## 7. 画面一覧
 
+> 各画面の詳細（目的・画面要素・操作と結果・遷移・エラー文言）は **[画面設計書 SCREENS.md](./SCREENS.md)** を参照してください。ここでは一覧のみ示します。
+
 ### 7.1 クリニックオーナー向け
 
 | ルート | 画面 |
@@ -595,7 +600,7 @@ npx wrangler pages deploy public/generated/<slug> \
 | `/signup` | アカウント登録（`clinic_owner` 固定） |
 | `/home` | ホーム（サイドバー＋トップバー） |
 | `/mypage` | マイページ |
-| `/mypage/apply` | 新規申請ウィザード（6 ステップ） |
+| `/mypage/apply` | 新規申請ウィザード（9 ステップ：基本情報／写真／診療科／特徴／ターゲット／診療時間／スタッフ紹介／料金表／申請） |
 | `/mypage/requests` | 申請一覧（自分の分のみ） |
 | `/mypage/sites` | サイト一覧（生成完了分のみ）＋「編集する」 |
 | `/sites` | 全サイト一覧 |
@@ -645,6 +650,31 @@ npx wrangler pages deploy public/generated/<slug> \
 ---
 
 ## 9. セキュリティ
+
+### 8.2 後方互換のための zod `.default()`
+
+`layout.background` / `layout.decoration` / `animation.variety` は `designTokensSchema` で `.default()` を付けています。これは整形上の都合ではなく**データ保全のため**です。
+
+`getDocument()` は保存済み JSON を `safeParse` し、**失敗すると `DEFAULT_DESIGN_TOKENS` を丸ごと当てます**（`src/lib/site/store.ts:156`）。フィールドを必須で足すと、追加前に保存された全ドキュメントがその検証に落ち、**実際の配色とフォントを失って既定値に戻ります**。`.default()` があれば旧 JSON もそのまま通り、新機能だけが「オフ」の状態で読み込まれます。
+
+---
+
+### 9.0 プレビュー用 Basic 認証（`src/proxy.ts`）
+
+ローカル起動のインスタンスをトンネル（cloudflared 等）経由でクライアントに見せるための、アプリ全体の前段ゲートです。
+
+| 項目 | 内容 |
+|---|---|
+| ファイル | `src/proxy.ts`（Next.js 16 では `middleware` は非推奨、`proxy` に改名） |
+| 有効化 | 環境変数 `PREVIEW_BASIC_AUTH="user:password"` が設定されているときのみ。未設定なら素通し |
+| 適用範囲 | `_next/static` / `_next/image` を除く**全経路**（`/api/*`、`/generated/*` を含む） |
+| 実行環境 | Node.js ランタイム（Next.js 16 の proxy 既定。`runtime` 指定は不可） |
+| 比較 | `timingSafeEqual` による定数時間比較 |
+| 付加ヘッダ | `X-Robots-Tag: noindex, nofollow` |
+
+**存在理由**：`/create`（申請送信）、`/sites`（全クリニック一覧）、`/sites/[slug]`（AI 生成・Cloudflare 公開の実行）、`POST /api/uploads`（Supabase Storage への書き込み）はいずれも**認証が無い**まま残っています。localhost では許容できても公開 URL では許容できないため、暫定的に全体を覆っています。
+
+⚠️ これは**アプリ本来のログインの代替ではありません**。`requireAdmin()` / `requireEditableDocument()` はこのゲートの内側で従来どおり機能します。恒久対応は各エントリポイントへの認可追加（13 章）。
 
 ### 9.1 SSRF 対策（`safeFetch.ts`）
 

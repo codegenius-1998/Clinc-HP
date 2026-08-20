@@ -56,12 +56,15 @@ const aiTemplateSchema = z.object({
     maxWidth: z.number(),
     spacingScale: z.number(),
     sectionDivider: z.enum(["none", "wave", "diagonal"]),
+    background: z.enum(["plain", "gradient", "blobs", "dots", "grid"]),
+    decoration: z.enum(["none", "accent", "rich"]),
   }),
   animation: z.object({
-    reveal: z.enum(["none", "fade", "slide-up", "zoom"]),
+    reveal: z.enum(["none", "fade", "slide-up", "slide-left", "slide-right", "zoom", "pop", "flip", "blur"]),
     duration: z.number(),
     stagger: z.boolean(),
     parallaxHero: z.boolean(),
+    variety: z.boolean(),
   }),
 });
 
@@ -138,6 +141,8 @@ export function normalizeDesignTokens(ai: AiTemplate): DesignTokens {
       maxWidth: Math.round(clamp(ai.layout.maxWidth, 880, 1440, d.layout.maxWidth)),
       spacingScale: Number(clamp(ai.layout.spacingScale, 0.7, 2, d.layout.spacingScale).toFixed(2)),
       sectionDivider: ai.layout.sectionDivider,
+      background: ai.layout.background,
+      decoration: ai.layout.decoration,
     },
     animation: {
       reveal: ai.animation.reveal,
@@ -151,6 +156,7 @@ export function normalizeDesignTokens(ai: AiTemplate): DesignTokens {
           : Math.round(clamp(ai.animation.duration, 200, 2000, d.animation.duration)),
       stagger: ai.animation.stagger,
       parallaxHero: ai.animation.parallaxHero,
+      variety: ai.animation.variety,
     },
   });
 }
@@ -174,7 +180,10 @@ const SYSTEM_PROMPT = `あなたはWebデザインを数値化するアシスタ
 - font.headingFamily / bodyFamily は CSSにそのまま書ける font-family の値。末尾に必ず sans-serif か serif を付けること。
 - block.cardLayout: 写真つきカードが並ぶなら "grid"、写真＋文章が横に並ぶ記事的な見た目なら "list"、写真をほとんど使わない硬派な見た目なら "minimal"、カードを少しずらして重ねる雑誌的な見た目なら "overlap"。
 - layout.heroLayout: 大きな写真に文字を重ねるなら "full-bleed"、写真と文字が左右に分かれるなら "split"、写真の下に文字を置くなら "centered"。
-- animation: @keyframes や transition が多いサイトほど動きのある設定にする。動きの気配が無ければ reveal を "fade" か "none" にすること。
+- layout.background: 参考サイトの背景の作り。真っ白/単色なら "plain"、上下や斜めのグラデーションがあるなら "gradient"、ぼかした色の塊が置いてあるなら "blobs"、ドット柄なら "dots"、方眼・罫線柄なら "grid"。
+- layout.decoration: 見出し記号・セクション番号・角の飾りなど装飾要素の量。素っ気なければ "none"、控えめにあれば "accent"、装飾が目立つサイトなら "rich"。
+- animation.variety: セクションごとに登場の向きやカードの並びが変わっているように見えるなら true。全セクションが同じ入り方なら false。
+- animation: @keyframes や transition が多いサイトほど動きのある設定にする。動きの気配が無ければ reveal を "fade" か "none" にすること。reveal は none / fade / slide-up / slide-left / slide-right / zoom / pop（弾む）/ flip（奥から起き上がる）/ blur（ぼけから像を結ぶ）から選ぶ。派手な動きの参考サイトには pop・flip・blur を積極的に使ってよい。
 - name はテンプレート名（日本語・15文字以内・「〜系」「〜調」のように雰囲気が分かる短い名前）。
 - mood は、このテンプレートがどんなクリニックに合うかを説明する日本語2〜3文。あとでAIがヒアリング内容と照らして自動選択する際の唯一の判断材料になるので、色やフォント名ではなく「誰に・どんな印象を与えるか」を書くこと。
 - tags は 3〜6個の短い日本語タグ（例: 小児科向け, 明るい, 高級感, 和モダン）。`;

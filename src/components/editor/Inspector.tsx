@@ -14,11 +14,11 @@ import { ColorField, ImageField, NumberField, SelectField } from "./fields";
 
 export type Selection = { blockId: string; fieldPath: string };
 
-/** `.section` renders `padding: calc(4rem * var(--space-scale)) ...` — this mirrors that default so
+/** `.section` renders `padding: calc(2rem * var(--space-scale)) ...` — this mirrors that default so
  * the padding sliders show the space that's ACTUALLY there before the user has touched anything,
  * rather than lying with a 0 that doesn't match what they see on the canvas. 16px is the browser's
  * un-overridden root font-size, which `rem` resolves against here since <html> never sets its own. */
-const DEFAULT_SECTION_PADDING_PX = 4 * 16;
+const DEFAULT_SECTION_PADDING_PX = 2 * 16;
 
 /** Curated font choices for the per-text override. Deliberately system/web-safe stacks rather than
  * arbitrary Google Fonts: the renderer only loads the families listed in `design.font.googleFonts`

@@ -220,6 +220,33 @@ export function DesignPanel({
             set("layout", { sectionDivider: sectionDivider as DesignTokens["layout"]["sectionDivider"] })
           }
         />
+        <SelectField
+          label="ページの背景"
+          value={design.layout.background}
+          options={[
+            { value: "plain", label: "無地（白と淡色の交互）" },
+            { value: "gradient", label: "グラデーション" },
+            { value: "blobs", label: "ぼかした色の塊" },
+            { value: "dots", label: "ドット柄" },
+            { value: "grid", label: "方眼柄" },
+          ]}
+          hint="無地のままだと、白い箱が縦に積み上がった単調な見た目になりがちです。"
+          onChange={(background) =>
+            set("layout", { background: background as DesignTokens["layout"]["background"] })
+          }
+        />
+        <SelectField
+          label="装飾の量"
+          value={design.layout.decoration}
+          options={[
+            { value: "none", label: "なし" },
+            { value: "accent", label: "控えめ（見出しの下線を強調）" },
+            { value: "rich", label: "多め（セクション番号・角の飾り）" },
+          ]}
+          onChange={(decoration) =>
+            set("layout", { decoration: decoration as DesignTokens["layout"]["decoration"] })
+          }
+        />
       </Group>
 
       <Group title="動き">
@@ -230,7 +257,12 @@ export function DesignPanel({
             { value: "none", label: "なし" },
             { value: "fade", label: "ふわっと表示" },
             { value: "slide-up", label: "下から上へ" },
+            { value: "slide-left", label: "左から流れ込む" },
+            { value: "slide-right", label: "右から流れ込む" },
             { value: "zoom", label: "少し拡大しながら" },
+            { value: "pop", label: "ぽんと弾んで出る" },
+            { value: "flip", label: "奥から起き上がる" },
+            { value: "blur", label: "ぼけから像を結ぶ" },
           ]}
           onChange={(reveal) => set("animation", { reveal: reveal as DesignTokens["animation"]["reveal"] })}
         />
@@ -247,6 +279,12 @@ export function DesignPanel({
           label="カードを1枚ずつ順番に表示する"
           value={design.animation.stagger}
           onChange={(stagger) => set("animation", { stagger })}
+        />
+        <ToggleField
+          label="セクションごとに演出を変える"
+          value={design.animation.variety}
+          hint="登場の向きとカードの並びが4セクション周期で入れ替わり、同じ動きの繰り返しになりません。"
+          onChange={(variety) => set("animation", { variety })}
         />
         <ToggleField
           label="メインビジュアルをゆっくり動かす（パララックス）"

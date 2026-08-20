@@ -227,6 +227,10 @@ function HeroBlock({ block, doc }: { block: BlockOf<"hero">; doc: SiteDocument }
   return (
     <section id={block.id} className={`hero hero-${doc.design.layout.heroLayout}`} style={spacingCss(block)}>
       <img className="hero-image" src={block.data.image} alt="" data-block-id={block.id} data-field="image" />
+      {/* Scroll cue. Outside .hero-copy on purpose: .hero-copy carries `reveal`, so anything inside it
+          starts at opacity 0 and waits on the IntersectionObserver — a "keep scrolling" hint that is
+          invisible until it scrolls into view is useless, since it sits on the first screen. */}
+      <span className="hero-scroll" aria-hidden="true" />
       <div className="hero-copy reveal">
         <h1 data-block-id={block.id} data-field="headline" style={textStyleCss(block, "headline")}>
           {block.data.headline}
@@ -455,21 +459,36 @@ function PricingBlock({ block }: { block: BlockOf<"pricing"> }) {
       <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
         {block.data.heading}
       </h2>
-      <table className="info-table">
+      {/* The note lives INSIDE the name cell, not in a third column. As its own <td> it made rows
+          with a note 3 cells wide and rows without 2, so the browser laid every row out to a
+          different column split and the prices stopped lining up — the visible "broken table". */}
+      <table className="price-table">
         <tbody>
           {block.data.items.map((item, i) => (
             <tr key={i}>
-              <th data-block-id={block.id} data-field={`items.${i}.name`} style={textStyleCss(block, `items.${i}.name`)}>
-                {item.name}
+              <th>
+                <span
+                  className="price-name"
+                  data-block-id={block.id}
+                  data-field={`items.${i}.name`}
+                  style={textStyleCss(block, `items.${i}.name`)}
+                >
+                  {item.name}
+                </span>
+                {item.note && (
+                  <span
+                    className="price-note"
+                    data-block-id={block.id}
+                    data-field={`items.${i}.note`}
+                    style={textStyleCss(block, `items.${i}.note`)}
+                  >
+                    {item.note}
+                  </span>
+                )}
               </th>
               <td className="price" data-block-id={block.id} data-field={`items.${i}.price`} style={textStyleCss(block, `items.${i}.price`)}>
                 {item.price}
               </td>
-              {item.note && (
-                <td className="price-note" data-block-id={block.id} data-field={`items.${i}.note`} style={textStyleCss(block, `items.${i}.note`)}>
-                  {item.note}
-                </td>
-              )}
             </tr>
           ))}
         </tbody>
@@ -614,6 +633,9 @@ export function SitePage({ doc }: { doc: SiteDocument }) {
       data-reveal={design.animation.reveal}
       data-stagger={design.animation.stagger ? "1" : "0"}
       data-parallax={design.animation.parallaxHero ? "1" : "0"}
+      data-bg={design.layout.background}
+      data-decoration={design.layout.decoration}
+      data-variety={design.animation.variety ? "1" : "0"}
     >
       <head>
         <meta charSet="UTF-8" />
