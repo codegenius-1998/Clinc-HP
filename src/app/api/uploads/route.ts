@@ -1,6 +1,7 @@
-import { getSupabaseClient } from "@/lib/supabase";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { getR2Client, r2PublicUrl } from "@/lib/r2";
 
-const BUCKET = "site-images";
+const BUCKET = process.env.R2_BUCKET_NAME;
 const PREFIX = "clinc-hp";
 const MAX_FILES = 10;
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
@@ -9,9 +10,9 @@ const MAX_FILE_BYTES = 8 * 1024 * 1024;
 const CATEGORY_PATTERN = /^[a-z0-9_-]{1,32}$/i;
 
 export async function POST(request: Request) {
-  const supabase = getSupabaseClient();
-  if (!supabase) {
-    return Response.json({ error: "Supabaseが設定されていないため、アップロードできませんでした。" }, { status: 500 });
+  const client = getR2Client();
+  if (!client || !BUCKET) {
+    return Response.json({ error: "Cloudflare R2が設定されていないため、アップロードできませんでした。" }, { status: 500 });
   }
 
   let formData: FormData;
@@ -44,18 +45,21 @@ export async function POST(request: Request) {
     }
 
     const ext = file.name.includes(".") ? file.name.split(".").pop() : "jpg";
-    const path = `${PREFIX}/${category}/${crypto.randomUUID()}.${ext}`;
+    const key = `${PREFIX}/${category}/${crypto.randomUUID()}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    const { error: uploadError } = await supabase.storage
-      .from(BUCKET)
-      .upload(path, buffer, { contentType: file.type, upsert: false });
-    if (uploadError) {
-      return Response.json({ error: `アップロードに失敗しました: ${uploadError.message}` }, { status: 502 });
+    try {
+      await client.send(new PutObjectCommand({ Bucket: BUCKET, Key: key, Body: buffer, ContentType: file.type }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "不明なエラー";
+      return Response.json({ error: `アップロードに失敗しました: ${message}` }, { status: 502 });
     }
 
-    const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-    urls.push(data.publicUrl);
+    const url = r2PublicUrl(key);
+    if (!url) {
+      return Response.json({ error: "R2の公開URL（R2_PUBLIC_URL）が設定されていません。" }, { status: 500 });
+    }
+    urls.push(url);
   }
 
   return Response.json({ urls });

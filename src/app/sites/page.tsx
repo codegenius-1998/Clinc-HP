@@ -2,6 +2,10 @@ import Link from "next/link";
 import { listHearings } from "@/lib/hearing";
 import { generatedSlugExists } from "@/lib/render/renderSiteFiles";
 
+// Without this, Next prerenders the list at BUILD time and serves that exact snapshot forever after —
+// a newly submitted or newly generated site would never appear without a fresh deploy.
+export const dynamic = "force-dynamic";
+
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString("ja-JP", {
     year: "numeric",

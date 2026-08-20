@@ -206,7 +206,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ slu
               {Object.values(hearing.uploadedImages)
                 .flatMap((urls) => urls ?? [])
                 .map((url, i) => (
-                  // eslint-disable-next-line @next/next/no-img-element -- Supabase-hosted photo, outside Next's image pipeline
+                  // eslint-disable-next-line @next/next/no-img-element -- R2-hosted photo, outside Next's image pipeline
                   <img key={i} src={url} alt="" className="aspect-square w-full rounded-lg border border-slate-200 object-cover" />
                 ))}
             </div>

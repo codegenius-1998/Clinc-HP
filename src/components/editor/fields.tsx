@@ -236,7 +236,7 @@ export function ImageField({
     setBusy(true);
     setError(null);
     try {
-      // Two hops on purpose: the browser uploads to Supabase Storage via /api/uploads (Server Actions
+      // Two hops on purpose: the browser uploads to Cloudflare R2 via /api/uploads (Server Actions
       // cap request bodies at 1MB, far too small for a real photo), then the server copies the object
       // into the site's own directory so the published site carries its own images.
       const body = new FormData();

@@ -1,0 +1,15 @@
+node_modules
+.next
+.git
+.claude
+*.tsbuildinfo
+next-env.d.ts
+
+# Runtime-only state (see Dockerfile) — never bake a developer's local data into the image.
+/data
+/public/generated
+
+.env
+.env*.local
+
+npm-debug.log*

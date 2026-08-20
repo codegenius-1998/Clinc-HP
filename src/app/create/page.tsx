@@ -2,6 +2,13 @@ import Link from "next/link";
 import { listDepartments, listServices, listFeatures, listTargets } from "@/lib/content";
 import { HearingSheetForm } from "@/components/create/HearingSheetForm";
 
+// Otherwise Next prerenders this at BUILD time — reading D1 (departments/services/features/targets
+// can change any time via the admin panel) once and serving that stale snapshot forever after. Worse,
+// a build with no D1 credentials available (e.g. a container image build, which deliberately excludes
+// .env.local — see .dockerignore) fails outright instead of just rendering on request like every other
+// data-backed route in this app already does.
+export const dynamic = "force-dynamic";
+
 export default async function CreateSitePage() {
   const [departments, services, features, targets] = await Promise.all([
     listDepartments(),

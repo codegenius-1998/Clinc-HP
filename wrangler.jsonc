@@ -1,0 +1,58 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "clinc-hp",
+  "main": "worker/index.ts",
+  "compatibility_date": "2024-09-23",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+  },
+
+  // The container that actually runs the Next.js app (see Dockerfile). `image` points at the
+  // Dockerfile itself, which `wrangler deploy` builds and pushes to Cloudflare's registry for you.
+  "containers": [
+    {
+      "class_name": "ClincHpContainer",
+      "image": "./Dockerfile",
+      "max_instances": 1,
+      // "basic" = 1/4 vCPU, 1 GiB memory, 4 GB disk. A Next.js server plus its node_modules can be
+      // tight in "lite" (256 MiB) — bump to a "standard-*" tier below if you see OOM restarts.
+      "instance_type": "basic",
+    },
+  ],
+
+  // The container is a Durable Object under the hood — this is what lets ONE instance (see
+  // max_instances above) stay addressable by name (see getContainer() in worker/index.ts) rather than
+  // Cloudflare picking a fresh, empty one per request.
+  "durable_objects": {
+    "bindings": [{ "name": "CLINC_HP_CONTAINER", "class_name": "ClincHpContainer" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ClincHpContainer"] }],
+
+  // --- Before your first `wrangler deploy` ---
+  //
+  // 1. Authenticate the DEPLOY itself (separate from the app's own runtime secrets below): either
+  //    `wrangler login` (OAuth), or have CLOUDFLARE_API_TOKEN set in your shell already — if it's set,
+  //    wrangler uses it automatically and `wrangler login` will actually refuse to run on top of it.
+  //
+  // 2. Set the app's runtime secrets — these become process.env.* inside the running container (see
+  //    worker/index.ts), exactly like .env.local does locally:
+  //      wrangler secret put CLOUDFLARE_ACCOUNT_ID
+  //      wrangler secret put CLOUDFLARE_API_TOKEN
+  //      wrangler secret put CLOUDFLARE_D1_DATABASE_ID
+  //      wrangler secret put OPENAI_API_KEY
+  //      wrangler secret put R2_ACCESS_KEY_ID
+  //      wrangler secret put R2_SECRET_ACCESS_KEY
+  //      wrangler secret put R2_BUCKET_NAME
+  //      wrangler secret put R2_PUBLIC_URL
+  //
+  // 3. `wrangler deploy` — builds the Dockerfile, pushes the image, and deploys the Worker + container.
+  //
+  // Known limitation worth knowing before relying on this in production: data/hearings/*.json
+  // (submitted-but-not-yet-generated applications) and public/generated/* (rendered site output) live
+  // on the CONTAINER's own disk, which is not persistent — a redeploy or container restart wipes it.
+  // Generated sites are cheaply recoverable (their SiteDocument source of truth lives in D1; re-render
+  // from the editor's 保存 or /sites/[slug]'s 生成する button), but a hearing sheet that was submitted
+  // and never generated would need to be resubmitted. Moving that storage to D1/R2 is the real fix if
+  // this needs to be durable, rather than a quick first deploy.
+}

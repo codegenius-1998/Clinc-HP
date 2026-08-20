@@ -85,7 +85,7 @@ clinic_owner      → 自分が owner_email のサイトのみ編集可
 | バリデーション | zod 4.4.3 |
 | HTML/CSS 解析 | cheerio 1.2.0 ＋ 正規表現 |
 | DB | Cloudflare D1（**HTTP REST API 経由**、Workers バインディングではない） |
-| 画像ストレージ | Supabase Storage（バケット `site-images`） |
+| 画像ストレージ | Cloudflare R2（S3互換API経由、Workersバインディングではない） |
 | AI（文章・判断） | OpenAI `gpt-5.6-terra`（`responses.parse` ＋ `zodTextFormat`） |
 | AI（画像） | OpenAI `gpt-image-2` / `gpt-image-1` |
 | 公開先 | Cloudflare Pages（`npx wrangler pages deploy`） |
@@ -99,8 +99,10 @@ OPENAI_API_KEY
 CLOUDFLARE_API_TOKEN
 CLOUDFLARE_ACCOUNT_ID
 CLOUDFLARE_D1_DATABASE_ID
-SUPABASE_URL
-SUPABASE_ANON_KEY
+R2_ACCESS_KEY_ID
+R2_SECRET_ACCESS_KEY
+R2_BUCKET_NAME
+R2_PUBLIC_URL
 ```
 
 ### 4.3 データの所在
@@ -113,7 +115,7 @@ SUPABASE_ANON_KEY
 | ヒアリングシート | **ローカルファイル** `data/hearings/<slug>.json` |
 | 生成サイト | **ローカルファイル** `public/generated/<slug>/` |
 | テンプレートのプレビュー | `public/generated/_templates/<id>/` |
-| ユーザーアップロード写真 | Supabase Storage → 生成サイト内へ複製 |
+| ユーザーアップロード写真 | Cloudflare R2 → 生成サイト内へ複製 |
 
 ---
 
@@ -301,7 +303,7 @@ type Block = {
 | `faqs[]` | 実データがあれば AI 創作より優先 |
 | `news[]` | 空なら AI が一般的な内容を生成 |
 | `priceItems[]` | **AI 創作しない**。空ならセクションごと非表示 |
-| `uploadedImages` | カテゴリ → Supabase 公開 URL の配列 |
+| `uploadedImages` | カテゴリ → Cloudflare R2 公開 URL の配列 |
 | `templateId` `templateLabel` | **AI が選んだ結果の記録**（ユーザーの選択ではない） |
 | `templateReason` | AI が選んだ理由（1 文） |
 | `previewUrl` `generationError` `cloudflareUrl` `cloudflareError` | 生成・公開の結果 |
@@ -529,7 +531,7 @@ LOGO_RULE
 
 | 項目 | 値 |
 |---|---|
-| 保存先 | Supabase Storage `site-images`、`clinc-hp/<category>/<uuid>.<ext>` |
+| 保存先 | Cloudflare R2（`R2_BUCKET_NAME`）、`clinc-hp/<category>/<uuid>.<ext>` |
 | 枚数 | 最大 10 枚／回 |
 | サイズ | 最大 8MB／ファイル |
 | MIME | `image/*` のみ |
@@ -553,10 +555,10 @@ LOGO_RULE
 | アクション | 内容 |
 |---|---|
 | `saveDocumentAction(id, doc)` | 権限 → 識別子を保存済み行から復元 → zod 検証 → D1 保存 → `renderSiteFiles()` → `revalidatePath` |
-| `adoptImageAction(id, sourceUrl)` | Supabase の画像をサイト出力ディレクトリへ複製し、**サイト相対パス**を返す |
+| `adoptImageAction(id, sourceUrl)` | R2 の画像をサイト出力ディレクトリへ複製し、**サイト相対パス**を返す |
 | `publishDocumentAction(id)` | 再レンダリング → Cloudflare Pages へ公開。**テンプレートは公開不可** |
 
-`adoptImageAction` の複製は冗長ではありません。生成サイトは自己完結ディレクトリとして Cloudflare Pages に配布されるため、`<img>` が Supabase の URL を指していると、**公開後のすべてのページが Supabase の到達性とオブジェクトの公開状態に依存し続けます**。
+`adoptImageAction` の複製は冗長ではありません。生成サイトは自己完結ディレクトリとして Cloudflare Pages に配布されるため、`<img>` が R2 の URL を指していると、**公開後のすべてのページが R2 の到達性とオブジェクトの公開状態に依存し続けます**。
 
 `saveDocumentAction` は `updatedAt` を返します。編集画面が**自分で発明していない値**でプレビュー iframe のキャッシュを破棄できるようにするためです。
 
@@ -858,7 +860,7 @@ node scripts/seed-admin.mjs
 
 **提言**：該当する鍵をすべてローテーションする。
 
-あわせて、`SUPABASE_ANON_KEY` は公開前提の匿名キーですが、**バケット `site-images` の Storage RLS ポリシー**を確認してください。`POST /api/uploads` は枚数・サイズ・MIME をアプリ側で検証していますが、**匿名キーで直接 Storage を叩かれるとその検証を通りません**。
+画像ストレージは以降 Cloudflare R2（`R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`）に置き換わっています。この鍵はサーバー側の `POST /api/uploads` でのみ使われ、ブラウザに渡ることはありません（Supabase の匿名キー方式と異なり、書き込み用の鍵がクライアントに露出する経路自体が無い）。ただし R2 バケットの公開アクセス（`R2_PUBLIC_URL`）は読み取り専用の設定を確認すること。
 
 ### 13.10 【低】Cloudflare Pages のプロジェクト名が衝突しうる
 
