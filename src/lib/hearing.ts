@@ -47,7 +47,7 @@ export type HearingSheet = {
   generationError?: string;
   cloudflareUrl?: string;
   cloudflareError?: string;
-  /** category -> public Cloudflare R2 URLs of user-uploaded photos. */
+  /** category -> public Supabase Storage URLs of user-uploaded photos. */
   uploadedImages?: Partial<Record<ImageCategoryKey, string[]>>;
 };
 

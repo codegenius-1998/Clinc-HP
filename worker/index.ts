@@ -13,10 +13,12 @@ export type Env = {
   CLOUDFLARE_API_TOKEN: string;
   CLOUDFLARE_D1_DATABASE_ID: string;
   OPENAI_API_KEY: string;
-  R2_ACCESS_KEY_ID: string;
-  R2_SECRET_ACCESS_KEY: string;
-  R2_BUCKET_NAME: string;
-  R2_PUBLIC_URL: string;
+  SUPABASE_URL: string;
+  SUPABASE_ANON_KEY: string;
+  /** Optional: set only if the site-images bucket's policies do not let the anon role INSERT. */
+  SUPABASE_SERVICE_ROLE_KEY?: string;
+  /** Optional: defaults to "site-images" (see src/lib/supabaseStorage.ts). */
+  SUPABASE_STORAGE_BUCKET?: string;
 };
 
 export class ClincHpContainer extends Container<Env> {
@@ -25,24 +27,27 @@ export class ClincHpContainer extends Container<Env> {
   // public/generated live on this container's own disk (see Dockerfile), so a second instance would
   // have its own, different copy of that state rather than sharing it. Sleeping would also mean losing
   // that disk on every wake, which defeats the point of writing to it at all. Revisit only once that
-  // state has actually moved to D1/R2 (see the Dockerfile's top-of-file note).
+  // state has actually moved to D1/Supabase Storage (see the Dockerfile's top-of-file note).
   sleepAfter = "24h";
 
   constructor(ctx: DurableObject["ctx"], env: Env) {
     super(ctx, env);
-    // The app reads these via process.env (see src/lib/d1.ts, src/lib/r2.ts, cloudflareDeploy.ts, the
+    // The app reads these via process.env (see src/lib/d1.ts, src/lib/supabaseStorage.ts, cloudflareDeploy.ts, the
     // OpenAI client) exactly as it does in local dev — only the source changed, from .env.local to
     // secrets set with `wrangler secret put <NAME>` (see the deploy notes in wrangler.jsonc).
-    this.envVars = {
+    const vars: Record<string, string | undefined> = {
       CLOUDFLARE_ACCOUNT_ID: env.CLOUDFLARE_ACCOUNT_ID,
       CLOUDFLARE_API_TOKEN: env.CLOUDFLARE_API_TOKEN,
       CLOUDFLARE_D1_DATABASE_ID: env.CLOUDFLARE_D1_DATABASE_ID,
       OPENAI_API_KEY: env.OPENAI_API_KEY,
-      R2_ACCESS_KEY_ID: env.R2_ACCESS_KEY_ID,
-      R2_SECRET_ACCESS_KEY: env.R2_SECRET_ACCESS_KEY,
-      R2_BUCKET_NAME: env.R2_BUCKET_NAME,
-      R2_PUBLIC_URL: env.R2_PUBLIC_URL,
+      SUPABASE_URL: env.SUPABASE_URL,
+      SUPABASE_ANON_KEY: env.SUPABASE_ANON_KEY,
+      SUPABASE_SERVICE_ROLE_KEY: env.SUPABASE_SERVICE_ROLE_KEY,
+      SUPABASE_STORAGE_BUCKET: env.SUPABASE_STORAGE_BUCKET,
     };
+    // The two optional secrets above are simply absent when never `wrangler secret put`-ed; passing
+    // them through as undefined would make process.env hold the literal string "undefined".
+    this.envVars = Object.fromEntries(Object.entries(vars).filter(([, v]) => typeof v === "string")) as Record<string, string>;
   }
 }
 

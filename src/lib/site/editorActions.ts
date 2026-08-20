@@ -82,11 +82,11 @@ const EXTENSION_BY_TYPE: Record<string, string> = {
   "image/svg+xml": "svg",
 };
 
-/** Copies an uploaded image (already in Cloudflare R2, see /api/uploads) into the site's own
+/** Copies an uploaded image (already in Supabase Storage, see /api/uploads) into the site's own
  * output directory and returns the SITE-RELATIVE path to store in the block.
  *
  * The copy is not redundant: a generated site is deployed to Cloudflare Pages as a self-contained
- * directory, so an <img> pointing at an R2 URL would make every published page depend on that R2
+ * directory, so an <img> pointing at a Supabase URL would make every published page depend on that
  * bucket staying reachable and its objects staying public. */
 export async function adoptImageAction(id: string, sourceUrl: string): Promise<{ path: string | null; error: string | null }> {
   try {

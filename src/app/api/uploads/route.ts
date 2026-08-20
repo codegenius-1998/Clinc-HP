@@ -1,7 +1,5 @@
-import { PutObjectCommand } from "@aws-sdk/client-s3";
-import { getR2Client, r2PublicUrl } from "@/lib/r2";
+import { isStorageConfigured, StorageError, uploadObject } from "@/lib/supabaseStorage";
 
-const BUCKET = process.env.R2_BUCKET_NAME;
 const PREFIX = "clinc-hp";
 const MAX_FILES = 10;
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
@@ -9,10 +7,16 @@ const MAX_FILE_BYTES = 8 * 1024 * 1024;
 // upload flows (e.g. a staff member's own photo) use their own category names ("staff").
 const CATEGORY_PATTERN = /^[a-z0-9_-]{1,32}$/i;
 
+/** Extension for the stored object key. Taken from the browser-supplied filename, so it is clamped to
+ * plain alphanumerics — an unsanitised value would land straight in the Storage path. */
+function safeExtension(filename: string): string {
+  const raw = filename.includes(".") ? filename.split(".").pop() ?? "" : "";
+  return /^[a-z0-9]{1,5}$/i.test(raw) ? raw.toLowerCase() : "jpg";
+}
+
 export async function POST(request: Request) {
-  const client = getR2Client();
-  if (!client || !BUCKET) {
-    return Response.json({ error: "Cloudflare R2が設定されていないため、アップロードできませんでした。" }, { status: 500 });
+  if (!isStorageConfigured()) {
+    return Response.json({ error: "Supabase Storageが設定されていないため、アップロードできませんでした。" }, { status: 500 });
   }
 
   let formData: FormData;
@@ -44,22 +48,14 @@ export async function POST(request: Request) {
       return Response.json({ error: `${file.name} のサイズが大きすぎます（8MBまで）。` }, { status: 400 });
     }
 
-    const ext = file.name.includes(".") ? file.name.split(".").pop() : "jpg";
-    const key = `${PREFIX}/${category}/${crypto.randomUUID()}.${ext}`;
-    const buffer = Buffer.from(await file.arrayBuffer());
+    const key = `${PREFIX}/${category}/${crypto.randomUUID()}.${safeExtension(file.name)}`;
 
     try {
-      await client.send(new PutObjectCommand({ Bucket: BUCKET, Key: key, Body: buffer, ContentType: file.type }));
+      urls.push(await uploadObject(key, await file.arrayBuffer(), file.type));
     } catch (err) {
-      const message = err instanceof Error ? err.message : "不明なエラー";
+      const message = err instanceof StorageError ? err.message : err instanceof Error ? err.message : "不明なエラー";
       return Response.json({ error: `アップロードに失敗しました: ${message}` }, { status: 502 });
     }
-
-    const url = r2PublicUrl(key);
-    if (!url) {
-      return Response.json({ error: "R2の公開URL（R2_PUBLIC_URL）が設定されていません。" }, { status: 500 });
-    }
-    urls.push(url);
   }
 
   return Response.json({ urls });

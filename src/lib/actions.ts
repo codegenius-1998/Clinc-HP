@@ -30,7 +30,7 @@ export async function createHearingAction(
   }
   const slug = generateSlug(clinicName);
 
-  // Photos are uploaded to Cloudflare R2 client-side before this action runs (Server Actions
+  // Photos are uploaded to Supabase Storage client-side before this action runs (Server Actions
   // cap request bodies at 1MB, far too small for real photos) — only their URLs arrive here.
   const uploadedImages: NonNullable<HearingSheet["uploadedImages"]> = {};
   for (const category of IMAGE_CATEGORIES) {

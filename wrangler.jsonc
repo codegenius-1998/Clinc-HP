@@ -41,10 +41,10 @@
   //      wrangler secret put CLOUDFLARE_API_TOKEN
   //      wrangler secret put CLOUDFLARE_D1_DATABASE_ID
   //      wrangler secret put OPENAI_API_KEY
-  //      wrangler secret put R2_ACCESS_KEY_ID
-  //      wrangler secret put R2_SECRET_ACCESS_KEY
-  //      wrangler secret put R2_BUCKET_NAME
-  //      wrangler secret put R2_PUBLIC_URL
+  //      wrangler secret put SUPABASE_URL
+  //      wrangler secret put SUPABASE_ANON_KEY
+  //    (optional) wrangler secret put SUPABASE_SERVICE_ROLE_KEY   // only if anon can't INSERT
+  //    (optional) wrangler secret put SUPABASE_STORAGE_BUCKET     // defaults to "site-images"
   //
   // 3. `wrangler deploy` — builds the Dockerfile, pushes the image, and deploys the Worker + container.
   //
@@ -53,6 +53,6 @@
   // on the CONTAINER's own disk, which is not persistent — a redeploy or container restart wipes it.
   // Generated sites are cheaply recoverable (their SiteDocument source of truth lives in D1; re-render
   // from the editor's 保存 or /sites/[slug]'s 生成する button), but a hearing sheet that was submitted
-  // and never generated would need to be resubmitted. Moving that storage to D1/R2 is the real fix if
+  // and never generated would need to be resubmitted. Moving that storage to D1/Supabase Storage is the real fix if
   // this needs to be durable, rather than a quick first deploy.
 }

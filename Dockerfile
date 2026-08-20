@@ -14,7 +14,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # Real secrets are supplied at runtime (see wrangler.jsonc); the build itself needs no env vars since
-# nothing here is statically generated against D1/R2/OpenAI at build time.
+# nothing here is statically generated against D1/Supabase/OpenAI at build time.
 RUN npm run build
 
 FROM node:22-slim AS runner
