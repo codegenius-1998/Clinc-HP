@@ -99,6 +99,33 @@ function spacingCss(block: Block): CSSProperties | undefined {
   return Object.keys(style).length > 0 ? style : undefined;
 }
 
+/** Turns one `containerStyles` entry into inline CSS. Padding/margin are emitted as longhands so they
+ * beat site.css's shorthands by normal cascade order without any !important. The "section" container
+ * deliberately takes only its colours from here — its padding/margin come from `spacingCss` above, so
+ * the two never write the same property. */
+function containerCss(block: Block, path: string): CSSProperties | undefined {
+  const c = block.containerStyles?.[path];
+  if (!c) return undefined;
+  const style: CSSProperties = {};
+  if (c.background) style.background = c.background;
+  if (c.color) style.color = c.color;
+  if (path !== "section") {
+    if (c.paddingTop !== undefined) style.paddingTop = `${c.paddingTop}px`;
+    if (c.paddingBottom !== undefined) style.paddingBottom = `${c.paddingBottom}px`;
+    if (c.paddingLeft !== undefined) style.paddingLeft = `${c.paddingLeft}px`;
+    if (c.paddingRight !== undefined) style.paddingRight = `${c.paddingRight}px`;
+    if (c.marginTop !== undefined) style.marginTop = `${c.marginTop}px`;
+    if (c.marginBottom !== undefined) style.marginBottom = `${c.marginBottom}px`;
+  }
+  return Object.keys(style).length > 0 ? style : undefined;
+}
+
+/** Outer <section> style = spacing override (padding/margin) + container override (colours). */
+function sectionCss(block: Block): CSSProperties | undefined {
+  const merged = { ...spacingCss(block), ...containerCss(block, "section") };
+  return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
 // --- structural chrome ---------------------------------------------------------------------------
 
 function telHref(phone: string): string {
@@ -206,26 +233,31 @@ function Footer({ doc }: { doc: SiteDocument }) {
 /** Wraps a block's contents in the standard <section> shell. The `reveal` class pairs with
  * main.js's IntersectionObserver; `id` doubles as the nav anchor. */
 function Section({
-  id,
+  block,
   className,
-  style,
   children,
 }: {
-  id: string;
+  block: Block;
   className?: string;
-  style?: CSSProperties;
   children: React.ReactNode;
 }) {
   return (
-    <section id={id} className={`section${className ? ` ${className}` : ""}`} style={style}>
-      <div className="section-inner reveal">{children}</div>
+    <section
+      id={block.id}
+      className={`section${className ? ` ${className}` : ""}`}
+      style={sectionCss(block)}
+      data-container="section"
+    >
+      <div className="section-inner reveal" style={containerCss(block, "inner")} data-container="inner">
+        {children}
+      </div>
     </section>
   );
 }
 
 function HeroBlock({ block, doc }: { block: BlockOf<"hero">; doc: SiteDocument }) {
   return (
-    <section id={block.id} className={`hero hero-${doc.design.layout.heroLayout}`} style={spacingCss(block)}>
+    <section id={block.id} className={`hero hero-${doc.design.layout.heroLayout}`} style={sectionCss(block)} data-container="section">
       <img className="hero-image" src={block.data.image} alt="" data-block-id={block.id} data-field="image" />
       {/* Scroll cue. Outside .hero-copy on purpose: .hero-copy carries `reveal`, so anything inside it
           starts at opacity 0 and waits on the IntersectionObserver — a "keep scrolling" hint that is
@@ -255,7 +287,7 @@ function RichBlock({ block, doc }: { block: BlockOf<"rich">; doc: SiteDocument }
   const layout = doc.design.block.cardLayout;
   const showCardImages = layout !== "minimal";
   return (
-    <Section id={block.id} style={spacingCss(block)}>
+    <Section block={block}>
       <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
         {block.data.heading}
       </h2>
@@ -280,7 +312,7 @@ function RichBlock({ block, doc }: { block: BlockOf<"rich">; doc: SiteDocument }
       {block.data.cards.length > 0 && (
         <div className={`cards cards-${layout}`}>
           {block.data.cards.map((card, i) => (
-            <div className="card" key={i}>
+            <div className="card" key={i} data-container={`card.${i}`} style={containerCss(block, `card.${i}`)}>
               {layout === "minimal" ? (
                 <span className="card-index" aria-hidden>
                   {String(i + 1).padStart(2, "0")}
@@ -306,7 +338,7 @@ function RichBlock({ block, doc }: { block: BlockOf<"rich">; doc: SiteDocument }
 
 function HoursBlock({ block }: { block: BlockOf<"hours"> }) {
   return (
-    <Section id={block.id} className="section-alt" style={spacingCss(block)}>
+    <Section block={block} className="section-alt">
       <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
         {block.data.heading}
       </h2>
@@ -339,7 +371,7 @@ function HoursBlock({ block }: { block: BlockOf<"hours"> }) {
 function AccessBlock({ block }: { block: BlockOf<"access"> }) {
   const query = block.data.mapQuery || encodeURIComponent(block.data.address);
   return (
-    <Section id={block.id} style={spacingCss(block)}>
+    <Section block={block}>
       <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
         {block.data.heading}
       </h2>
@@ -369,7 +401,7 @@ function AccessBlock({ block }: { block: BlockOf<"access"> }) {
 
 function NewsBlock({ block }: { block: BlockOf<"news"> }) {
   return (
-    <Section id={block.id} className="section-alt" style={spacingCss(block)}>
+    <Section block={block} className="section-alt">
       <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
         {block.data.heading}
       </h2>
@@ -398,7 +430,7 @@ function NewsBlock({ block }: { block: BlockOf<"news"> }) {
 
 function StaffBlock({ block }: { block: BlockOf<"staff"> }) {
   return (
-    <Section id={block.id} style={spacingCss(block)}>
+    <Section block={block}>
       <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
         {block.data.heading}
       </h2>
@@ -426,7 +458,7 @@ function StaffBlock({ block }: { block: BlockOf<"staff"> }) {
 
 function FaqBlock({ block }: { block: BlockOf<"faq"> }) {
   return (
-    <Section id={block.id} className="section-alt" style={spacingCss(block)}>
+    <Section block={block} className="section-alt">
       <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
         {block.data.heading}
       </h2>
@@ -455,7 +487,7 @@ function FaqBlock({ block }: { block: BlockOf<"faq"> }) {
 
 function PricingBlock({ block }: { block: BlockOf<"pricing"> }) {
   return (
-    <Section id={block.id} style={spacingCss(block)}>
+    <Section block={block}>
       <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
         {block.data.heading}
       </h2>
@@ -504,7 +536,7 @@ function PricingBlock({ block }: { block: BlockOf<"pricing"> }) {
 
 function ContactBlock({ block, doc }: { block: BlockOf<"contact">; doc: SiteDocument }) {
   return (
-    <Section id={block.id} className="contact-section" style={spacingCss(block)}>
+    <Section block={block} className="contact-section">
       <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
         {block.data.heading}
       </h2>
@@ -520,7 +552,7 @@ function ContactBlock({ block, doc }: { block: BlockOf<"contact">; doc: SiteDocu
 
 function FreeTextBlock({ block }: { block: BlockOf<"freeText"> }) {
   return (
-    <Section id={block.id} className={`free-text align-${block.data.align}`} style={spacingCss(block)}>
+    <Section block={block} className={`free-text align-${block.data.align}`}>
       {block.data.heading && (
         <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
           {block.data.heading}
@@ -547,7 +579,7 @@ function ImageBannerBlock({ block }: { block: BlockOf<"imageBanner"> }) {
     </>
   );
   return (
-    <section id={block.id} className={`image-banner banner-${block.data.height} reveal`} style={spacingCss(block)}>
+    <section id={block.id} className={`image-banner banner-${block.data.height} reveal`} style={sectionCss(block)} data-container="section">
       {block.data.href ? (
         <a href={block.data.href} target="_blank" rel="noreferrer">
           {inner}
@@ -561,7 +593,7 @@ function ImageBannerBlock({ block }: { block: BlockOf<"imageBanner"> }) {
 
 function GalleryBlock({ block }: { block: BlockOf<"gallery"> }) {
   return (
-    <Section id={block.id} style={spacingCss(block)}>
+    <Section block={block}>
       <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
         {block.data.heading}
       </h2>

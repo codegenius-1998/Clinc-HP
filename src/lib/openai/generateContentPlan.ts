@@ -124,7 +124,6 @@ JSON。「ブロック一覧」に挙がっている blockId ごとに blocks �
 function buildUserPrompt(hearing: HearingSheet, doc: SiteDocument, needsNews: boolean, needsFaq: boolean): string {
   const infoLines = [
     `クリニック名: ${hearing.clinicName}`,
-    hearing.directorName && `院長名: ${hearing.directorName}`,
     hearing.address && `住所: ${hearing.address}`,
     hearing.department && `診療科: ${hearing.department}`,
     hearing.features && `医院の特徴: ${hearing.features}`,

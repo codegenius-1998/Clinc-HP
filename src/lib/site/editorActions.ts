@@ -7,10 +7,11 @@ import { revalidatePath } from "next/cache";
 import { renderSiteFiles, siteOutputPath } from "@/lib/render/renderSiteFiles";
 import { deployGeneratedSiteToCloudflare } from "@/lib/cloudflareDeploy";
 import { checkGuidelineCompliance, type GuidelineCheckResult } from "@/lib/openai/checkGuidelineCompliance";
+import { rewriteBlockText, type BlockRewrite } from "@/lib/openai/rewriteBlockText";
 import { AccessDeniedError, requireEditableDocument } from "./access";
 import { pruneOrphanedStyles } from "./fieldPath";
 import { saveDocument } from "./store";
-import { siteDocumentSchema, type SiteDocument } from "./document";
+import { blockSchema, siteDocumentSchema, type Block, type SiteDocument } from "./document";
 
 /** Server Actions behind the editor. Saving is deliberately AI-free: it validates, writes to D1 and
  * re-renders the static files. That is the whole reason editing text is instant and costs nothing,
@@ -71,6 +72,38 @@ export async function checkGuidelineComplianceAction(
     return { result, error: null };
   } catch (err) {
     return { result: null, error: errorMessage(err, "ガイドライン確認に失敗しました。") };
+  }
+}
+
+/** Rewrites ONE section's text to the user's instruction. The block comes from the client rather than
+ * from the stored row so that unsaved edits are what gets rewritten — the alternative would silently
+ * rewrite a stale version of the paragraph the user is looking at.
+ *
+ * That client-supplied block is still validated (`blockSchema`) before it reaches the model, and the
+ * result is only RETURNED: nothing is written to D1 and nothing is re-rendered, so the user reviews
+ * the change in the editor and presses 保存 themselves. Authorisation is on the document id, exactly
+ * as for every other editor action — a Server Action is directly POST-able, so this cannot rely on
+ * the page having gated the route.
+ *
+ * Scoped to one block on purpose: see the note at the top of rewriteBlockText.ts. */
+export async function rewriteBlockAction(
+  id: string,
+  block: Block,
+  instruction: string
+): Promise<{ result: BlockRewrite | null; error: string | null }> {
+  try {
+    await requireEditableDocument(id);
+
+    const trimmed = instruction.trim();
+    if (!trimmed) return { result: null, error: "指示を入力してください。" };
+    if (trimmed.length > 500) return { result: null, error: "指示が長すぎます（500文字まで）。" };
+
+    const parsed = blockSchema.safeParse(block);
+    if (!parsed.success) return { result: null, error: "セクションの内容を読み取れませんでした。" };
+
+    return { result: await rewriteBlockText(parsed.data, trimmed), error: null };
+  } catch (err) {
+    return { result: null, error: errorMessage(err, "AIの書き換えに失敗しました。") };
   }
 }
 

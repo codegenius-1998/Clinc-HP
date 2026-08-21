@@ -243,6 +243,33 @@ export const blockSpacingSchema = z.object({
 });
 export type BlockSpacing = z.infer<typeof blockSpacingSchema>;
 
+/** A "container path" addresses a *box* inside a block, as opposed to a text/image value:
+ *   "section" — the block's outer <section>
+ *   "inner"   — the padded content wrapper inside it (.section-inner)
+ *   "card.<n>" — one card in a list-bearing block
+ * The renderer stamps these onto the DOM as `data-container` (see components.tsx); the visual canvas
+ * turns the same attribute into a click target. Kept separate from field paths on purpose — a field
+ * holds a value the user types, a container holds only presentation. */
+const containerPathPattern = /^(section|inner|card\.\d+)$/;
+
+/** Per-container colour/padding/margin override. `background` and `color` are what a field-level
+ * TextStyle can't express: they belong to the box, not to one run of text.
+ *
+ * For the "section" container, padding and margin live in the block's own `spacing` instead of here —
+ * that field predates this one and is already wired through the renderer and `blockSupportsPadding`,
+ * so reusing it avoids both a migration and two sources of truth for the same two numbers. */
+export const containerStyleSchema = z.object({
+  background: hexColor.optional(),
+  color: hexColor.optional(),
+  paddingTop: z.number().min(0).max(200).optional(),
+  paddingBottom: z.number().min(0).max(200).optional(),
+  paddingLeft: z.number().min(0).max(200).optional(),
+  paddingRight: z.number().min(0).max(200).optional(),
+  marginTop: z.number().min(0).max(200).optional(),
+  marginBottom: z.number().min(0).max(200).optional(),
+});
+export type ContainerStyle = z.infer<typeof containerStyleSchema>;
+
 // --- block ---------------------------------------------------------------------------------------
 
 /** Every block carries a unique instance `id` rather than being keyed by its type. That is what lets
@@ -260,6 +287,9 @@ const blockCommon = {
    * see src/lib/site/blocks.ts's resolveFieldDefinition), so saveDocumentAction additionally prunes
    * keys that no longer resolve to a real field — see pruneOrphanedStyles in src/lib/site/fieldPath.ts. */
   textStyles: z.record(z.string().regex(fieldPathPattern), textStyleSchema).optional(),
+  /** Keyed by container path (see containerPathPattern). Same defence-in-depth as `textStyles`, and
+   * likewise pruned on save — a "card.7" entry is dead once the block only has three cards. */
+  containerStyles: z.record(z.string().regex(containerPathPattern), containerStyleSchema).optional(),
 };
 
 export const blockSchema = z.discriminatedUnion("type", [

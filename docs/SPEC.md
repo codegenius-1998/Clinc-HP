@@ -299,8 +299,8 @@ type Block = {
 | フィールド | 内容 |
 |---|---|
 | `slug` | ASCII のみ。日本語医院名は `clinic-<base36>` にフォールバック |
-| `ownerEmail` | 申請者。旧 `/create` 経由では未設定 |
-| `clinicName` `directorName` `address` `phone` `line` | 基本情報 |
+| `ownerEmail` | 申請者。削除済みの旧 `/create` 経由で作られた申請では未設定 |
+| `clinicName` `address` `phone` `line` | 基本情報（院長名は 2026-08-21 に廃止） |
 | `department` `serviceNames[]` `hours` `features` `featureNames[]` `targetNames[]` `request` | 診療内容・特徴・要望 |
 | `staffMembers[]` | `{name, comment, role?, photoUrl?}`。件数がカード数になる |
 | `faqs[]` | 実データがあれば AI 創作より優先 |
@@ -560,8 +560,14 @@ LOGO_RULE
 | `saveDocumentAction(id, doc)` | 権限 → 識別子を保存済み行から復元 → zod 検証 → D1 保存 → `renderSiteFiles()` → `revalidatePath` |
 | `adoptImageAction(id, sourceUrl)` | Supabase Storage の画像をサイト出力ディレクトリへ複製し、**サイト相対パス**を返す |
 | `publishDocumentAction(id)` | 再レンダリング → Cloudflare Pages へ公開。**テンプレートは公開不可** |
+| `checkGuidelineComplianceAction(id, doc)` | 医療広告ガイドライン確認。読み取りのみ、保存しない |
+| `rewriteBlockAction(id, block, instruction)` | **1ブロックの文章だけ**をAIが書き直し、編集内容を返す。D1 に書かず再レンダリングもしない |
 
 `adoptImageAction` の複製は冗長ではありません。生成サイトは自己完結ディレクトリとして Cloudflare Pages に配布されるため、`<img>` が Supabase Storage の URL を指していると、**公開後のすべてのページがそのバケットの到達性とオブジェクトの公開状態に依存し続けます**。
+
+`rewriteBlockAction` がブロックを**クライアントから受け取る**のは、編集中の未保存の内容を書き直し対象にするためです（保存済みの行を読むと、利用者が見ている段落とは違う古い版を書き直すことになる）。受け取ったブロックは `blockSchema` で検証してからモデルに渡し、返すのは編集案のみ — D1 には書かず、再レンダリングもしません。権限は他の編集アクションと同じくドキュメント ID で確認します（Server Action は直接 POST 可能なため、画面側のガードには依存できない）。
+
+対象を1ブロックに限定しているのは意図的です。ページ全体を対象にすると、1回の生成失敗で承認済みの原稿が丸ごと置き換わり、変更箇所のどれが問題かを利用者が判別できません。ブロック単位なら差分が読める分量に収まり、失敗しても「元に戻す」1回で復帰できます。
 
 `saveDocumentAction` は `updatedAt` を返します。編集画面が**自分で発明していない値**でプレビュー iframe のキャッシュを破棄できるようにするためです。
 
@@ -600,13 +606,11 @@ npx wrangler pages deploy public/generated/<slug> \
 | `/signup` | アカウント登録（`clinic_owner` 固定） |
 | `/home` | ホーム（サイドバー＋トップバー） |
 | `/mypage` | マイページ |
-| `/mypage/apply` | 新規申請ウィザード（9 ステップ：基本情報／写真／診療科／特徴／ターゲット／診療時間／スタッフ紹介／料金表／申請） |
+| `/mypage/apply` | 新規申請ウィザード（10 ステップ：基本情報／写真／診療科／特徴／ターゲット／診療時間／スタッフ紹介／料金表／**ご要望**／申請） |
 | `/mypage/requests` | 申請一覧（自分の分のみ） |
 | `/mypage/sites` | サイト一覧（生成完了分のみ）＋「編集する」 |
-| `/sites` | 全サイト一覧 |
 | `/sites/[slug]` | サイト詳細・プレビュー |
 | `/sites/[slug]/edit` | **サイト編集**（オーナー＋管理者） |
-| `/create` | 旧・作成フォーム（2 ステップ） |
 
 ### 7.2 管理者向け（`src/app/admin/(dashboard)/`）
 
@@ -635,11 +639,11 @@ npx wrangler pages deploy public/generated/<slug> \
 | モジュール | アクション |
 |---|---|
 | `authActions.ts` | `loginClinicOwnerAction` / `loginAdminAction` / `signupClinicOwnerAction` / `logoutAction` |
-| `actions.ts` | `createHearingAction` / `regenerateSiteAction` / `deployToCloudflareAction` |
+| `actions.ts` | `regenerateSiteAction` / `deployToCloudflareAction` |
 | `applicationActions.ts` | `createApplicationAction` / `deleteOwnApplicationAction` |
 | `contentActions.ts` | `approveRequestAction` / `deleteRequestAction` / ユーザー・サイト・セクション・診療科・サービス・特徴・ターゲットの CRUD |
 | `templateActions.ts` | `importTemplateAction` / `importFromGeneratedSiteAction` / `setTemplateCanSellAction` / `deleteTemplateAction` |
-| `site/editorActions.ts` | `saveDocumentAction` / `adoptImageAction` / `publishDocumentAction` |
+| `site/editorActions.ts` | `saveDocumentAction` / `adoptImageAction` / `publishDocumentAction` / `checkGuidelineComplianceAction` / `rewriteBlockAction` |
 
 ### 8.1 ハイドレーション前送信への対応
 
@@ -672,7 +676,7 @@ npx wrangler pages deploy public/generated/<slug> \
 | 比較 | `timingSafeEqual` による定数時間比較 |
 | 付加ヘッダ | `X-Robots-Tag: noindex, nofollow` |
 
-**存在理由**：`/create`（申請送信）、`/sites`（全クリニック一覧）、`/sites/[slug]`（AI 生成・Cloudflare 公開の実行）、`POST /api/uploads`（Supabase Storage への書き込み）はいずれも**認証が無い**まま残っています。localhost では許容できても公開 URL では許容できないため、暫定的に全体を覆っています。
+**存在理由**：`/sites/[slug]`（AI 生成・Cloudflare 公開の実行）と `POST /api/uploads`（Supabase Storage への書き込み）が**認証が無い**まま残っています（`/create` と `/sites` は 2026-08-21 に削除済み）。localhost では許容できても公開 URL では許容できないため、暫定的に全体を覆っています。
 
 ⚠️ これは**アプリ本来のログインの代替ではありません**。`requireAdmin()` / `requireEditableDocument()` はこのゲートの内側で従来どおり機能します。恒久対応は各エントリポイントへの認可追加（13 章）。
 
@@ -787,7 +791,7 @@ node scripts/seed-admin.mjs
 | 3 | SPA は URL 取り込みが効きにくい | `looksClientRendered` を検出して警告を返す |
 | 4 | ローカルサイトは URL 取り込み不可 | SSRF 防御が `localhost` を拒否するため。代わりに「作成済みサイトから作る」経路がファイルを直接読む |
 | 5 | ヒアリングシート・生成サイトがローカルファイル | 13.2 参照 |
-| 6 | 旧フロー `/create` が並存 | 13.3 参照 |
+| 6 | ~~旧フロー `/create` が並存~~ | **解消済み**（2026-08-21 削除）。13.3 参照 |
 | 7 | **自動テストが 1 件も存在しない** | テストフレームワーク自体が未導入 |
 | 8 | `hp-templates/` が残存 | `AI_GUIDE.md` `NEXTJS_TAILWIND_GSAP_GUIDE.md` `SITE_SPEC.json` `TEMPLATE_VARIABLES.md` `colors.json` `presets/`。**コードからの参照はゼロ** |
 | 9 | `docs/` が空 | 旧 `USER_ADMIN_GUIDE.md` は削除済み。本書が唯一のドキュメント |
@@ -831,9 +835,9 @@ node scripts/seed-admin.mjs
 
 ### 13.3 【高】生成フローが 2 系統並存している
 
-`/create`（承認なし・その場で生成）と `/mypage/apply` → `/admin/requests`（申請・承認型）が同じ `data/hearings/*.json` を共有しています。**申請・承認型で守っているはずの統制を旧フローから迂回できます。**
+**【2026-08-21 解消済み】** かつて `/create`（承認なし・その場で生成）と `/mypage/apply` → `/admin/requests`（申請・承認型）が同じ `data/hearings/*.json` を共有しており、**申請・承認型で守っているはずの統制を旧フローから迂回できました**。
 
-**提言**：`/create` を廃止するか、管理者専用として認証で塞ぐ。
+**対応**：`/create` と、全クリニックを一覧できた `/sites` を削除。あわせて `createHearingAction` と `HearingSheetForm` も削除し、申請の入口は `/mypage/apply`（ログイン必須）だけになりました。
 
 ### 13.4 【高】保存のアトミック性が経路によって不揃い
 

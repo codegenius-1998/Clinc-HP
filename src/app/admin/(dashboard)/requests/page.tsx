@@ -3,6 +3,7 @@ import { listHearings, hearingStatus } from "@/lib/hearing";
 import { deleteRequestAction, approveRequestAction } from "@/lib/contentActions";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { ConfirmDeleteButton } from "@/components/admin/ConfirmDeleteButton";
+import { PendingForm } from "@/components/sites/PendingForm";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString("ja-JP", {
@@ -56,14 +57,12 @@ export default async function AdminRequestsPage() {
                         詳細を確認
                       </Link>
                       {status.key === "pending_template" && (
-                        <form action={approveRequestAction.bind(null, hearing.slug)}>
-                          <button
-                            type="submit"
-                            className="rounded-lg bg-sky-600 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-sky-500"
-                          >
-                            承認して生成
-                          </button>
-                        </form>
+                        <PendingForm
+                          action={approveRequestAction.bind(null, hearing.slug)}
+                          label="承認して生成"
+                          pendingLabel="生成中…（数分）"
+                          className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-sky-600 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-sky-500 disabled:opacity-60"
+                        />
                       )}
                       {status.key === "generated" && (
                         <Link

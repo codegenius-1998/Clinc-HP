@@ -89,7 +89,7 @@ export function SiteEditor({
   /** Commits an in-place canvas edit (VisualCanvas's `onTextEdit`) into `doc.blocks` by field path —
    * the same state update BlockEditor's form fields go through, just addressed by path instead of a
    * form's own local key, so the two editing surfaces can never disagree about what's stored. */
-  function handleCanvasTextEdit(edit: Selection & { value: string }) {
+  function handleCanvasTextEdit(edit: { blockId: string; fieldPath: string; value: string }) {
     const block = doc.blocks.find((b) => b.id === edit.blockId);
     if (!block) return;
     replaceBlock({ ...block, data: setFieldValue(block.data, edit.fieldPath, edit.value) } as Block);
@@ -289,6 +289,7 @@ export function SiteEditor({
             <Inspector
               doc={doc}
               selection={canvasSelection}
+              onSelect={setCanvasSelection}
               documentId={doc.id}
               assetBase={assetBase}
               onChangeBlock={replaceBlock}

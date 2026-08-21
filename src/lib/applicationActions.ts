@@ -16,7 +16,8 @@ function requiredField(formData: FormData, name: string): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-/** Submits a new site-build application from /mypage/apply. Unlike the /create flow, this never
+/** Submits a new site-build application from /mypage/apply — now the only way a hearing sheet
+ * enters the system, since the older unauthenticated /create form was deleted. Unlike that flow, this never
  * triggers generation directly: an admin approves the request from /admin/requests (see
  * approveRequestAction in contentActions.ts), and that is what kicks off generateSite — including
  * the automatic template choice. */
@@ -34,6 +35,7 @@ export async function createApplicationAction(
   const phone = requiredField(formData, "phone");
   const line = requiredField(formData, "line");
   const hours = requiredField(formData, "hours");
+  const request = requiredField(formData, "request");
 
   if (!clinicName) {
     return { error: "クリニック名を入力してください。" };
@@ -98,7 +100,6 @@ export async function createApplicationAction(
     slug,
     ownerEmail: session.email,
     clinicName,
-    directorName: "",
     address,
     phone,
     line,
@@ -107,7 +108,7 @@ export async function createApplicationAction(
     department: selectedDepartmentNames.join("・"),
     hours,
     features: featureNames.join("、"),
-    request: "",
+    request,
     serviceNames,
     featureNames,
     targetNames,

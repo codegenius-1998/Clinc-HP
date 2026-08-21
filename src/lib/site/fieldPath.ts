@@ -53,12 +53,36 @@ export function pruneOrphanedStyles(doc: SiteDocument): SiteDocument {
   return {
     ...doc,
     blocks: doc.blocks.map((block): Block => {
-      if (!block.textStyles) return block;
-      const entries = Object.entries(block.textStyles).filter(
-        ([path]) => resolveFieldDefinition(block.type, path) !== null
-      );
-      if (entries.length === Object.keys(block.textStyles).length) return block;
-      return { ...block, textStyles: entries.length > 0 ? Object.fromEntries(entries) : undefined };
+      let next = block;
+
+      if (next.textStyles) {
+        const entries = Object.entries(next.textStyles).filter(
+          ([path]) => resolveFieldDefinition(next.type, path) !== null
+        );
+        if (entries.length !== Object.keys(next.textStyles).length) {
+          next = { ...next, textStyles: entries.length > 0 ? Object.fromEntries(entries) : undefined };
+        }
+      }
+
+      if (next.containerStyles) {
+        const entries = Object.entries(next.containerStyles).filter(([path]) => containerExists(next, path));
+        if (entries.length !== Object.keys(next.containerStyles).length) {
+          next = { ...next, containerStyles: entries.length > 0 ? Object.fromEntries(entries) : undefined };
+        }
+      }
+
+      return next;
     }),
   };
+}
+
+/** Whether a container path still names a box the renderer actually draws for this block. "section"
+ * and "inner" always exist; a "card.<n>" only exists while the block still has that many cards, so
+ * deleting the third card must not leave its styling behind to be re-applied to a future third card. */
+function containerExists(block: Block, path: string): boolean {
+  if (path === "section" || path === "inner") return true;
+  const card = /^card\.(\d+)$/.exec(path);
+  if (!card) return false;
+  const cards = getFieldValue(block.data, "cards");
+  return Array.isArray(cards) && Number(card[1]) < cards.length;
 }

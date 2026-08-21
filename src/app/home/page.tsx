@@ -7,8 +7,6 @@ const LINKS = [
   { href: "/mypage/apply", label: "新規申請", description: "ホームページ作成の申請を行います。" },
   { href: "/mypage/requests", label: "申請一覧", description: "送信した申請の状態を確認します。" },
   { href: "/mypage/sites", label: "サイト一覧", description: "生成が完了したホームページを確認します。" },
-  { href: "/create", label: "ホームページ作成（従来フォーム）", description: "デザイン選択まで一括で行う旧フォームです。" },
-  { href: "/sites", label: "閲覧", description: "作成済みのホームページを一覧で確認します。" },
 ];
 
 export default async function Home() {

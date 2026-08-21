@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getHearing } from "@/lib/hearing";
+import { friendlyGenerationError, getHearing } from "@/lib/hearing";
 import { regenerateSiteAction, deployToCloudflareAction } from "@/lib/actions";
 import { generatedSlugExists } from "@/lib/render/renderSiteFiles";
 import { getDocumentBySlug } from "@/lib/site/store";
+import { getSession } from "@/lib/auth";
+import { PendingForm } from "@/components/sites/PendingForm";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString("ja-JP", {
@@ -16,10 +18,9 @@ function formatDate(iso: string): string {
 }
 
 const rows: {
-  key: "directorName" | "address" | "phone" | "line" | "department" | "hours" | "features" | "request";
+  key: "address" | "phone" | "line" | "department" | "hours" | "features" | "request";
   label: string;
 }[] = [
-  { key: "directorName", label: "院長名" },
   { key: "address", label: "住所" },
   { key: "phone", label: "電話番号" },
   { key: "line", label: "LINE" },
@@ -36,6 +37,12 @@ const buttonClassName =
 export default async function SiteDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const hearing = await getHearing(slug);
+  // Where "戻る" goes depends on who is looking: this page is linked from the admin's リクエスト管理
+  // and from the clinic's own 申請一覧 / サイト一覧. It used to point at /sites, a list of every
+  // clinic in the system that has since been removed.
+  const session = await getSession();
+  const backHref = session?.role === "admin" ? "/admin/requests" : "/mypage/requests";
+  const backLabel = session?.role === "admin" ? "リクエスト管理へ戻る" : "申請一覧へ戻る";
 
   if (!hearing) {
     notFound();
@@ -51,8 +58,8 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ slu
   return (
     <div className="flex-1 bg-gradient-to-b from-sky-50 via-white to-white px-6 py-24">
       <div className="mx-auto max-w-3xl">
-        <Link href="/sites" className="text-[13px] text-slate-400 transition-colors hover:text-slate-900">
-          ← 一覧へ戻る
+        <Link href={backHref} className="text-[13px] text-slate-400 transition-colors hover:text-slate-900">
+          ← {backLabel}
         </Link>
 
         <p className="mt-8 text-[12px] tracking-[0.35em] text-sky-500">
@@ -71,14 +78,14 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ slu
         <div className={`mt-10 ${cardClassName}`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-[13px] font-medium text-slate-700">生成されたホームページ</p>
-            <form action={regenerateSiteAction.bind(null, slug)}>
-              <button
-                type="submit"
-                className="text-[12px] text-sky-600 underline decoration-dotted underline-offset-4 hover:text-sky-700"
-              >
-                {hearing.previewUrl ? "AIで再生成する" : "AIで生成する"}
-              </button>
-            </form>
+            <PendingForm
+              action={regenerateSiteAction.bind(null, slug)}
+              label={hearing.previewUrl ? "AIで再生成する" : "AIで生成する"}
+              pendingLabel="AIが作成中…"
+              note="AIが文章と写真を作っています。完了まで数分かかります。このページを開いたままお待ちください。（閉じても処理は続きますが、完了は画面に出ません）"
+              className="inline-flex items-center gap-1.5 text-[12px] text-sky-600 underline decoration-dotted underline-offset-4 hover:text-sky-700 disabled:no-underline disabled:opacity-70"
+              wrapperClassName="flex flex-wrap items-center justify-end gap-2"
+            />
           </div>
 
           {isGenerated && hearing.previewUrl ? (
@@ -103,14 +110,14 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ slu
                   新しいタブで開く
                 </a>
 
-                <form action={deployToCloudflareAction.bind(null, slug)}>
-                  <button
-                    type="submit"
-                    className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-6 py-2.5 text-[13px] font-medium tracking-[0.05em] text-slate-700 transition-colors hover:bg-slate-50"
-                  >
-                    Cloudflareでプレビュー
-                  </button>
-                </form>
+                <PendingForm
+                  action={deployToCloudflareAction.bind(null, slug)}
+                  label="Cloudflareでプレビュー"
+                  pendingLabel="公開中…"
+                  note="Cloudflare へ公開しています。1〜2分かかります。完了すると公開URLがこの下に表示されます。"
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-6 py-2.5 text-[13px] font-medium tracking-[0.05em] text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-60"
+                  wrapperClassName="flex flex-wrap items-center gap-2"
+                />
               </div>
 
               {hearing.cloudflareUrl && (
@@ -135,9 +142,13 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ slu
             </>
           ) : (
             <p className="mt-4 whitespace-pre-line rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
-              {hearing.previewUrl && !isGenerated
-                ? "以前は生成されていましたが、生成ファイルが見つかりません（削除された可能性があります）。「AIで再生成する」を押してください。"
-                : (hearing.generationError ?? "まだ生成されていません。")}
+              {/* generationError comes FIRST. It used to be the fallback, so a run that actually failed
+                  showed "ファイルが見つかりません" instead of the reason — the one piece of information
+                  that tells the user whether to retry or to fix something. */}
+              {(hearing.generationError && friendlyGenerationError(hearing.generationError)) ??
+                (hearing.previewUrl && !isGenerated
+                  ? "以前は生成されていましたが、生成ファイルが見つかりません（削除された可能性があります）。「AIで再生成する」を押してください。"
+                  : "まだ生成されていません。")}
             </p>
           )}
         </div>

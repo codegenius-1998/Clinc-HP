@@ -5,7 +5,7 @@ import type { ImageCategoryKey } from "./imageCategories";
 export type HearingSheet = {
   slug: string;
   /** Email of the clinic_owner who submitted this via /mypage/apply. Absent on hearings created
-   * through the older, unauthenticated /create flow. */
+   * through the older, unauthenticated /create flow, which has since been deleted. */
   ownerEmail?: string;
   /** The design template this site was built from — a record of what the AI auto-selector CHOSE
    * (see selectTemplate.ts), not something the clinic picks. Unset until generation has run, which
@@ -16,7 +16,6 @@ export type HearingSheet = {
    * the template's `mood` text rather than guessed at. */
   templateReason?: string;
   clinicName: string;
-  directorName: string;
   address: string;
   phone: string;
   line: string;
@@ -99,6 +98,18 @@ export type HearingStatus = { key: "pending_template" | "processing" | "generate
 /** Shared by /admin/requests and /mypage/requests so both screens agree on what a hearing's status
  * means. "pending_template" only exists because /mypage/apply intentionally never sets templateId —
  * that choice is deferred to an admin via assignTemplateAction. */
+/** Rewrites a stored `generationError` into something a clinic can act on.
+ *
+ * Applied at DISPLAY time, not only when the error is written: records saved before this existed hold
+ * the raw text (a bare "fetch failed" reads like a bug in the site rather than something a retry
+ * fixes), and re-running generation just to improve a message would cost real money in API calls. */
+export function friendlyGenerationError(message: string): string {
+  if (/fetch failed|ECONNRESET|ETIMEDOUT|socket hang up|network/i.test(message)) {
+    return "生成中に通信が切れました（AI画像の生成に時間がかかるため、途中で接続が切れることがあります）。もう一度「AIで再生成する」を押してください。";
+  }
+  return message;
+}
+
 export function hearingStatus(hearing: Pick<HearingSheet, "templateId" | "previewUrl" | "generationError">): HearingStatus {
   if (!hearing.templateId) return { key: "pending_template", label: "承認待ち", className: "bg-amber-50 text-amber-700" };
   // previewUrl wins over generationError: regenerateSiteAction can fail on a re-run (e.g. a transient

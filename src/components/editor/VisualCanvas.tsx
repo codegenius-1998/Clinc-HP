@@ -17,12 +17,19 @@ import type { Selection } from "./Inspector";
  * `contentDocument` — so all of this setup happens in `onLoad` and re-runs on every load, not just
  * the first, including re-applying whichever selection was active before the reload. */
 
-type FieldEdit = Selection & { value: string };
+type FieldEdit = { blockId: string; fieldPath: string; value: string };
 
+/* Two visually distinct selection languages, because they mean different things:
+ * blue  = a VALUE (text/image) — click to type into it
+ * amber = a BOX (section / inner wrapper / card) — click to restyle it
+ * Containers use `outline-offset: -2px` so the outline is drawn INSIDE the box; an outer offset on a
+ * full-width section would sit off-screen horizontally and read as a stray line. */
 const OUTLINE_STYLE = `
   [data-field] { cursor: text; }
   [data-field]:hover { outline: 2px dashed #2563eb; outline-offset: 2px; }
   [data-field].clinc-selected { outline: 2px solid #2563eb; outline-offset: 2px; }
+  [data-container]:hover { outline: 2px dashed #d97706; outline-offset: -2px; }
+  [data-container].clinc-selected-box { outline: 2px solid #d97706; outline-offset: -2px; }
 `;
 
 /** Deliberately typed on `Element`, not `HTMLElement`, and never does an `instanceof` check: the nodes
@@ -97,13 +104,15 @@ export function VisualCanvas({
     function commitCurrentField() {
       const el = currentFieldRef.current;
       const sel = selectionRef.current;
-      if (!el || !sel) return;
+      // A container selection has no fieldPath and is never contenteditable, so there is nothing to
+      // commit — but currentFieldRef could still hold a field from a moment ago.
+      if (!el || !sel?.fieldPath) return;
       // .innerText (not .textContent) collapses to what's actually rendered, then flattening the
       // element's own content back to that plain string is what guarantees stray formatting (a pasted
       // <b>, autocorrect inserting a <div>) can never survive into the stored, plain-string field.
       const value = (el.innerText || "").replace(/\r\n/g, "\n").trim();
       el.textContent = value;
-      onTextEditRef.current({ ...sel, value });
+      onTextEditRef.current({ blockId: sel.blockId, fieldPath: sel.fieldPath, value });
     }
 
     function applySelection(sel: Selection | null) {
@@ -112,16 +121,33 @@ export function VisualCanvas({
         currentFieldRef.current.removeAttribute("contenteditable");
       }
       currentFieldRef.current = null;
-      cdoc!.querySelectorAll(".clinc-selected").forEach((n) => n.classList.remove("clinc-selected"));
+      cdoc!.querySelectorAll(".clinc-selected, .clinc-selected-box").forEach((n) => {
+        n.classList.remove("clinc-selected");
+        n.classList.remove("clinc-selected-box");
+      });
       if (!sel) return;
 
       const blockRoot = cdoc!.getElementById(sel.blockId);
-      const el = blockRoot?.querySelector<HTMLElement>(`[data-field="${CSS.escape(sel.fieldPath)}"]`);
+      if (!blockRoot) return;
+
+      if (sel.containerPath) {
+        // The block's own outer element carries data-container="section"; every other container is a
+        // descendant of it. Matching on blockRoot itself first keeps `querySelector` from reaching
+        // into a NESTED block's section (blocks never nest today, but the rule costs nothing).
+        const box =
+          blockRoot.getAttribute("data-container") === sel.containerPath
+            ? blockRoot
+            : blockRoot.querySelector<HTMLElement>(`[data-container="${CSS.escape(sel.containerPath)}"]`);
+        box?.classList.add("clinc-selected-box");
+        return;
+      }
+
+      const el = blockRoot.querySelector<HTMLElement>(`[data-field="${CSS.escape(sel.fieldPath!)}"]`);
       if (!el) return;
       el.classList.add("clinc-selected");
 
       const block = docRef.current.blocks.find((b) => b.id === sel.blockId);
-      const field = block ? resolveFieldDefinition(block.type, sel.fieldPath) : null;
+      const field = block ? resolveFieldDefinition(block.type, sel.fieldPath!) : null;
       if (field && (field.type === "text" || field.type === "textarea")) {
         try {
           el.contentEditable = "plaintext-only";
@@ -166,6 +192,27 @@ export function VisualCanvas({
         // of just being previewed.
         event.preventDefault();
       }
+
+      // No field under the cursor — fall back to the innermost BOX. `findAncestor` walks outward from
+      // the click target, so clicking a card selects the card, clicking the padding around the content
+      // selects "inner", and clicking the section's own padding selects "section": the user gets the
+      // smallest box they actually pointed at, and can widen the selection by clicking further out.
+      const boxEl = findAncestor(target, cdoc!.body, (n) => n.hasAttribute("data-container"));
+      if (boxEl) {
+        event.preventDefault();
+        event.stopPropagation();
+        const blockIds = new Set(docRef.current.blocks.map((b) => b.id));
+        const blockId = findAncestor(boxEl, cdoc!.body, (n) => blockIds.has(n.id))?.id;
+        const containerPath = boxEl.getAttribute("data-container");
+        if (blockId && containerPath) {
+          const sel = selectionRef.current;
+          if (sel && sel.blockId === blockId && sel.containerPath === containerPath) return;
+          applySelection({ blockId, containerPath });
+          onSelectRef.current({ blockId, containerPath });
+          return;
+        }
+      }
+
       if (currentFieldRef.current || selectionRef.current) {
         applySelection(null);
         onSelectRef.current(null);
@@ -183,7 +230,7 @@ export function VisualCanvas({
       if (event.target !== currentFieldRef.current || event.key !== "Enter") return;
       const sel = selectionRef.current;
       const block = sel ? docRef.current.blocks.find((b) => b.id === sel.blockId) : null;
-      const field = block && sel ? resolveFieldDefinition(block.type, sel.fieldPath) : null;
+      const field = block && sel?.fieldPath ? resolveFieldDefinition(block.type, sel.fieldPath) : null;
       // Single-line fields (headings, labels, ...) commit on Enter rather than inserting a line break
       // the browser would otherwise render as a stray <div>/<br> once flattened on commit.
       if (field?.type !== "textarea") {
@@ -271,13 +318,40 @@ export function VisualCanvas({
         el.style.fontWeight = textStyle?.fontWeight !== undefined ? String(textStyle.fontWeight) : "";
       });
 
-      const spacing = block.spacing;
-      const supportsPadding = blockSupportsPadding(block.type);
-      root.style.paddingTop = supportsPadding && spacing?.paddingTop !== undefined ? `${spacing.paddingTop}px` : "";
-      root.style.paddingBottom =
-        supportsPadding && spacing?.paddingBottom !== undefined ? `${spacing.paddingBottom}px` : "";
-      root.style.marginTop = spacing?.marginTop !== undefined ? `${spacing.marginTop}px` : "";
-      root.style.marginBottom = spacing?.marginBottom !== undefined ? `${spacing.marginBottom}px` : "";
+      // Every box the renderer marked: the block's own <section> (which carries data-container itself,
+      // and so is NOT part of its own querySelectorAll result) plus the wrapper and cards inside it.
+      // Writing "" rather than deleting the property is what lets site.css's own rule take back over —
+      // an inline value only ever shadows the stylesheet, it never replaces it.
+      const boxes: HTMLElement[] = [root, ...Array.from(root.querySelectorAll<HTMLElement>("[data-container]"))];
+      for (const box of boxes) {
+        const path = box.getAttribute("data-container");
+        if (!path) continue;
+        const c = block.containerStyles?.[path];
+        box.style.background = c?.background ?? "";
+        box.style.color = c?.color ?? "";
+
+        if (path === "section") {
+          // The section's padding/margin come from `block.spacing`, not from containerStyles — see
+          // containerCss in components.tsx for why the two fields split that way.
+          const spacing = block.spacing;
+          const supportsPadding = blockSupportsPadding(block.type);
+          box.style.paddingTop =
+            supportsPadding && spacing?.paddingTop !== undefined ? `${spacing.paddingTop}px` : "";
+          box.style.paddingBottom =
+            supportsPadding && spacing?.paddingBottom !== undefined ? `${spacing.paddingBottom}px` : "";
+          box.style.paddingLeft = "";
+          box.style.paddingRight = "";
+          box.style.marginTop = spacing?.marginTop !== undefined ? `${spacing.marginTop}px` : "";
+          box.style.marginBottom = spacing?.marginBottom !== undefined ? `${spacing.marginBottom}px` : "";
+        } else {
+          box.style.paddingTop = c?.paddingTop !== undefined ? `${c.paddingTop}px` : "";
+          box.style.paddingBottom = c?.paddingBottom !== undefined ? `${c.paddingBottom}px` : "";
+          box.style.paddingLeft = c?.paddingLeft !== undefined ? `${c.paddingLeft}px` : "";
+          box.style.paddingRight = c?.paddingRight !== undefined ? `${c.paddingRight}px` : "";
+          box.style.marginTop = c?.marginTop !== undefined ? `${c.marginTop}px` : "";
+          box.style.marginBottom = c?.marginBottom !== undefined ? `${c.marginBottom}px` : "";
+        }
+      }
     }
   }, [doc]);
 
