@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin, createUser, deleteUser } from "./auth";
-import { deleteHearing, getHearing, updateHearing } from "./hearing";
+import { deleteHearing, friendlyGenerationError, getHearing, updateHearing } from "./hearing";
 import { generateSite } from "./siteGenerator";
 import {
   createSection,
@@ -84,8 +84,32 @@ export async function approveRequestAction(slug: string): Promise<void> {
   await requireAdmin();
   const hearing = await getHearing(slug);
   if (!hearing) return;
+  // Pressing 作成 twice while a run is in flight would start a second build writing to the same
+  // output directory; the flag is also what the screens read to show 作成中.
+  if (hearing.generationStartedAt) return;
 
+  await updateHearing(slug, { generationStartedAt: new Date().toISOString(), generationError: undefined });
+
+  // NOT awaited. A full build takes minutes (measured ~4 with 20 generated images) and Cloudflare
+  // cuts an origin response off at 100 seconds, so awaiting it here meant the tunnel killed the
+  // connection every time — the operator saw a failure while the server quietly finished the job.
+  // Returning immediately lets the screens render 作成中 and poll for the result instead.
+  //
+  // Safe to detach here specifically because this app runs as a long-lived Node server (see the
+  // Dockerfile note): the promise keeps running after the request ends. It would NOT be safe on a
+  // per-request serverless runtime, which can freeze the moment a response is sent.
+  void runGeneration(slug);
+
+  revalidatePath("/admin/requests");
+  revalidatePath(`/sites/${slug}`);
+}
+
+/** The build itself. Every exit path clears `generationStartedAt`, including the catch — a run that
+ * threw must not leave the row stuck on 作成中 forever. */
+async function runGeneration(slug: string): Promise<void> {
   try {
+    const hearing = await getHearing(slug);
+    if (!hearing) return;
     const result = await generateSite(hearing);
     await updateHearing(slug, {
       previewUrl: result.previewUrl,
@@ -93,13 +117,14 @@ export async function approveRequestAction(slug: string): Promise<void> {
       templateId: result.templateId,
       templateLabel: result.templateName,
       templateReason: result.templateReason ?? undefined,
+      generationStartedAt: undefined,
     });
   } catch (err) {
     await updateHearing(slug, {
-      generationError: err instanceof Error ? err.message : "サイトの生成に失敗しました。",
+      generationError: friendlyGenerationError(err instanceof Error ? err.message : "サイトの生成に失敗しました。"),
+      generationStartedAt: undefined,
     });
   }
-  revalidatePath("/admin/requests");
 }
 
 // --- Templates (sites + their sections) ---

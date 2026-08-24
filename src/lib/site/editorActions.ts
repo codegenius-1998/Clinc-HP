@@ -8,6 +8,7 @@ import { renderSiteFiles, siteOutputPath } from "@/lib/render/renderSiteFiles";
 import { deployGeneratedSiteToCloudflare } from "@/lib/cloudflareDeploy";
 import { checkGuidelineCompliance, type GuidelineCheckResult } from "@/lib/openai/checkGuidelineCompliance";
 import { rewriteBlockText, type BlockRewrite } from "@/lib/openai/rewriteBlockText";
+import { imageExtensionFor } from "@/lib/imageFormats";
 import { AccessDeniedError, requireEditableDocument } from "./access";
 import { pruneOrphanedStyles } from "./fieldPath";
 import { saveDocument } from "./store";
@@ -107,14 +108,6 @@ export async function rewriteBlockAction(
   }
 }
 
-const EXTENSION_BY_TYPE: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp",
-  "image/gif": "gif",
-  "image/svg+xml": "svg",
-};
-
 /** Copies an uploaded image (already in Supabase Storage, see /api/uploads) into the site's own
  * output directory and returns the SITE-RELATIVE path to store in the block.
  *
@@ -136,7 +129,7 @@ export async function adoptImageAction(id: string, sourceUrl: string): Promise<{
     }
 
     const contentType = (response.headers.get("content-type") ?? "").split(";")[0].trim();
-    const extension = EXTENSION_BY_TYPE[contentType];
+    const extension = imageExtensionFor(contentType);
     if (!extension) {
       return { path: null, error: `対応していない画像形式です（${contentType || "不明"}）。` };
     }

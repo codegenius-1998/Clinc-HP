@@ -4,6 +4,7 @@ import { deleteRequestAction, approveRequestAction } from "@/lib/contentActions"
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { ConfirmDeleteButton } from "@/components/admin/ConfirmDeleteButton";
 import { PendingForm } from "@/components/sites/PendingForm";
+import { AutoRefresh } from "@/components/sites/AutoRefresh";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString("ja-JP", {
@@ -17,10 +18,12 @@ function formatDate(iso: string): string {
 
 export default async function AdminRequestsPage() {
   const hearings = await listHearings();
+  const building = hearings.some((h) => hearingStatus(h).key === "generating");
 
   return (
     <div>
-      <AdminPageHeader title="リクエスト管理" description="クリニックオーナーから送信されたホームページ作成申請の一覧です。「承認待ち」の申請を承認すると、内容に合うテンプレートをAIが自動で選んでサイトを生成します。" />
+      {building && <AutoRefresh />}
+      <AdminPageHeader title="リクエスト管理" description="クリニックオーナーから送信されたホームページ作成申請の一覧です。「承認待ち」の申請で「作成」を押すと、内容に合うテンプレートをAIが自動で選んでサイトを作ります。" />
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
         <table className="w-full text-left text-[15px]">
@@ -56,11 +59,11 @@ export default async function AdminRequestsPage() {
                       >
                         詳細を確認
                       </Link>
-                      {status.key === "pending_template" && (
+                      {(status.key === "pending_template" || status.key === "failed") && (
                         <PendingForm
                           action={approveRequestAction.bind(null, hearing.slug)}
-                          label="承認して生成"
-                          pendingLabel="生成中…（数分）"
+                          label="作成"
+                          pendingLabel="作成中…（数分）"
                           className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-sky-600 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-sky-500 disabled:opacity-60"
                         />
                       )}

@@ -4,6 +4,7 @@ import { listHearingsByOwner, hearingStatus } from "@/lib/hearing";
 import { deleteOwnApplicationAction } from "@/lib/applicationActions";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { ConfirmDeleteButton } from "@/components/admin/ConfirmDeleteButton";
+import { AutoRefresh } from "@/components/sites/AutoRefresh";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString("ja-JP", {
@@ -18,9 +19,11 @@ function formatDate(iso: string): string {
 export default async function MypageRequestsPage() {
   const session = await getSession();
   const hearings = await listHearingsByOwner(session!.email);
+  const building = hearings.some((h) => hearingStatus(h).key === "generating");
 
   return (
     <div>
+      {building && <AutoRefresh />}
       <div className="flex items-start justify-between gap-4">
         <AdminPageHeader title="申請一覧" description="送信したホームページ作成の申請です。" />
         <Link

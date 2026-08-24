@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { friendlyGenerationError, getHearing } from "@/lib/hearing";
-import { regenerateSiteAction, deployToCloudflareAction } from "@/lib/actions";
+import { approveRequestAction } from "@/lib/contentActions";
+import { PendingForm } from "@/components/sites/PendingForm";
+import { AutoRefresh } from "@/components/sites/AutoRefresh";
 import { generatedSlugExists } from "@/lib/render/renderSiteFiles";
 import { getDocumentBySlug } from "@/lib/site/store";
 import { getSession } from "@/lib/auth";
-import { PendingForm } from "@/components/sites/PendingForm";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString("ja-JP", {
@@ -43,10 +44,15 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ slu
   const session = await getSession();
   const backHref = session?.role === "admin" ? "/admin/requests" : "/mypage/requests";
   const backLabel = session?.role === "admin" ? "リクエスト管理へ戻る" : "申請一覧へ戻る";
+  const isAdmin = session?.role === "admin";
 
   if (!hearing) {
     notFound();
   }
+
+  // Set while a background build is in flight (see approveRequestAction). Read after the notFound()
+  // guard so `hearing` is known to exist.
+  const isBuilding = Boolean(hearing.generationStartedAt);
 
   // `previewUrl` alone only means generation once succeeded — the output directory can be gone
   // (dev server killed mid-write, folder cleaned up by hand) without the record ever being updated.
@@ -78,14 +84,6 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ slu
         <div className={`mt-10 ${cardClassName}`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-[13px] font-medium text-slate-700">生成されたホームページ</p>
-            <PendingForm
-              action={regenerateSiteAction.bind(null, slug)}
-              label={hearing.previewUrl ? "AIで再生成する" : "AIで生成する"}
-              pendingLabel="AIが作成中…"
-              note="AIが文章と写真を作っています。完了まで数分かかります。このページを開いたままお待ちください。（閉じても処理は続きますが、完了は画面に出ません）"
-              className="inline-flex items-center gap-1.5 text-[12px] text-sky-600 underline decoration-dotted underline-offset-4 hover:text-sky-700 disabled:no-underline disabled:opacity-70"
-              wrapperClassName="flex flex-wrap items-center justify-end gap-2"
-            />
           </div>
 
           {isGenerated && hearing.previewUrl ? (
@@ -110,14 +108,18 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ slu
                   新しいタブで開く
                 </a>
 
-                <PendingForm
-                  action={deployToCloudflareAction.bind(null, slug)}
-                  label="Cloudflareでプレビュー"
-                  pendingLabel="公開中…"
-                  note="Cloudflare へ公開しています。1〜2分かかります。完了すると公開URLがこの下に表示されます。"
-                  className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-6 py-2.5 text-[13px] font-medium tracking-[0.05em] text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-60"
-                  wrapperClassName="flex flex-wrap items-center gap-2"
-                />
+                {/* Disabled rather than removed: the button stays visible so the feature is still
+                    discoverable, but it cannot be triggered. `disabled` alone is enough — a disabled
+                    <button> is not submittable and fires no click, so there is no form and no action
+                    bound here at all. */}
+                <button
+                  type="button"
+                  disabled
+                  title="現在ご利用いただけません"
+                  className="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-6 py-2.5 text-[13px] font-medium tracking-[0.05em] text-slate-400 opacity-60"
+                >
+                  Cloudflareでプレビュー
+                </button>
               </div>
 
               {hearing.cloudflareUrl && (
@@ -130,7 +132,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ slu
               )}
               {!isEditable && (
                 <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-relaxed text-amber-800">
-                  このサイトは編集機能の導入前に作られたため、編集できません。「AIで再生成する」を押すと、
+                  このサイトは編集機能の導入前に作られたため、編集できません。管理者に生成をやり直してもらうと、
                   以降は文章・写真・配色・セクションの並び順まで編集できるようになります。
                 </p>
               )}
@@ -140,16 +142,51 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ slu
                 </p>
               )}
             </>
+          ) : isBuilding ? (
+            <>
+              <AutoRefresh />
+              <p
+                role="status"
+                className="mt-4 flex items-start gap-2 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-[13px] leading-relaxed text-sky-800"
+              >
+                <span className="mt-0.5 inline-block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-sky-300 border-t-sky-700" />
+                <span>
+                  AIがホームページを作っています。完了まで<strong>5分ほど</strong>かかります。
+                  <br />
+                  この画面は自動で更新されます。<strong>閉じても作成は続きます</strong>ので、あとで開き直しても大丈夫です。
+                </span>
+              </p>
+            </>
           ) : (
-            <p className="mt-4 whitespace-pre-line rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
-              {/* generationError comes FIRST. It used to be the fallback, so a run that actually failed
-                  showed "ファイルが見つかりません" instead of the reason — the one piece of information
-                  that tells the user whether to retry or to fix something. */}
-              {(hearing.generationError && friendlyGenerationError(hearing.generationError)) ??
-                (hearing.previewUrl && !isGenerated
-                  ? "以前は生成されていましたが、生成ファイルが見つかりません（削除された可能性があります）。「AIで再生成する」を押してください。"
-                  : "まだ生成されていません。")}
-            </p>
+            <>
+              <p className="mt-4 whitespace-pre-line rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+                {/* generationError comes FIRST. It used to be the fallback, so a run that actually failed
+                    showed "ファイルが見つかりません" instead of the reason — the one piece of information
+                    that tells the user whether to retry or to fix something. */}
+                {(hearing.generationError && friendlyGenerationError(hearing.generationError)) ??
+                  (hearing.previewUrl && !isGenerated
+                    ? "以前は生成されていましたが、生成ファイルが見つかりません（削除された可能性があります）。「作成」を押してください。"
+                    : "まだ生成されていません。")}
+              </p>
+
+              {/* Admins only. Building a site is a go/no-go decision the clinic deliberately doesn't
+                  make (the same reason ApplyForm has no template picker), and approveRequestAction
+                  enforces that with requireAdmin() — so showing the button to anyone else would only
+                  produce a permission error. Nothing is offered once the site exists: there is no
+                  "rebuild" here, because a rebuild would discard whatever was edited afterwards. */}
+              {isAdmin && (
+                <div className="mt-4">
+                  <PendingForm
+                    action={approveRequestAction.bind(null, slug)}
+                    label="作成"
+                    pendingLabel="作成中…"
+                    note="AIが文章と写真を作っています。完了まで数分かかります。このページを開いたままお待ちください。（閉じても処理は続きますが、完了は画面に出ません）"
+                    className={buttonClassName + " disabled:opacity-60"}
+                    wrapperClassName="flex flex-wrap items-center gap-2"
+                  />
+                </div>
+              )}
+            </>
           )}
         </div>
 

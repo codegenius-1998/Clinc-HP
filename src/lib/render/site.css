@@ -311,6 +311,10 @@ nav.site-nav a:hover { background: var(--accent); }
 table.info-table { width: 100%; border-collapse: collapse; margin-top: 1rem; background: var(--bg); border-radius: var(--radius); overflow: hidden; }
 table.info-table th, table.info-table td { padding: 0.9rem 1rem; border-bottom: 1px solid #e5e5e5; text-align: left; font-size: 0.92rem; }
 table.info-table th { background: var(--light); width: 32%; white-space: pre-line; }
+/* A note line ("受付は診療終了の30分前まで") has no day label, so its <th> is empty. Left as-is that
+ * renders a 32%-wide blank tinted cell with the text pushed into the right third; collapsing it and
+ * letting the value span the full width reads as the note it is. */
+table.info-table th:empty { width: 0; padding: 0; background: none; }
 table.info-table td { white-space: pre-line; }
 
 /* 料金表
@@ -705,13 +709,21 @@ html.js[data-variety="1"] main > .section:nth-of-type(n) .reveal.is-visible {
   filter: none;
 }
 
-/* カードの並びもセクションごとに変える。 */
+/* カードの並びもセクションごとに変える。
+ *
+ * 対象は .cards-grid だけ。以前は .cards（全レイアウト共通）に掛けていたため、リスト型
+ * （.cards-list）や番号型（.cards-minimal）にも 4n+4 の
+ *   .card { display: grid; grid-template-columns: 34% 1fr }
+ *   .card img { height: 100%; aspect-ratio: auto }
+ * が当たり、そのセクションのカードだけ写真の縦横比も高さも変わってしまっていた
+ * （実測: ご挨拶だけ 140x102.7px・高さ129px、他は 140x140px・高さ166px）。
+ * 「列数を変える」という変化は、そもそも写真つきグリッドにしか意味がない。 */
 /* 2 番目の周期: 大きめのカードを 2 列で。 */
-html[data-variety="1"] main > .section:nth-of-type(4n + 2) .cards {
+html[data-variety="1"] main > .section:nth-of-type(4n + 2) .cards-grid {
   grid-template-columns: 1fr;
 }
 @media (min-width: 760px) {
-  html[data-variety="1"] main > .section:nth-of-type(4n + 2) .cards {
+  html[data-variety="1"] main > .section:nth-of-type(4n + 2) .cards-grid {
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   }
   /* 3 番目の周期: 偶数枚目を下げて段違いにする。
@@ -720,24 +732,24 @@ html[data-variety="1"] main > .section:nth-of-type(4n + 2) .cards {
      align-self: stretch、つまり「行の高さ から 自分のマージン を引いた高さ」に伸びるので、
      下げたカードだけがその分（2.4rem）低くなる。奇数枚目に同じ量の margin-bottom を入れて
      両者のマージン合計を揃えると、高さが一致したまま段差だけが残る。 */
-  html[data-variety="1"] main > .section:nth-of-type(4n + 3) .cards .card:nth-child(even) { margin-top: 2.4rem; }
-  html[data-variety="1"] main > .section:nth-of-type(4n + 3) .cards .card:nth-child(odd) { margin-bottom: 2.4rem; }
+  html[data-variety="1"] main > .section:nth-of-type(4n + 3) .cards-grid .card:nth-child(even) { margin-top: 2.4rem; }
+  html[data-variety="1"] main > .section:nth-of-type(4n + 3) .cards-grid .card:nth-child(odd) { margin-bottom: 2.4rem; }
   /* 4 番目の周期: 写真を左、文章を右に置いた横長の並び。 */
-  html[data-variety="1"] main > .section:nth-of-type(4n + 4) .cards { grid-template-columns: 1fr; }
-  html[data-variety="1"] main > .section:nth-of-type(4n + 4) .cards .card {
+  html[data-variety="1"] main > .section:nth-of-type(4n + 4) .cards-grid { grid-template-columns: 1fr; }
+  html[data-variety="1"] main > .section:nth-of-type(4n + 4) .cards-grid .card {
     display: grid;
     grid-template-columns: 34% 1fr;
     align-items: center;
   }
-  html[data-variety="1"] main > .section:nth-of-type(4n + 4) .cards .card img { height: 100%; aspect-ratio: auto; }
+  html[data-variety="1"] main > .section:nth-of-type(4n + 4) .cards-grid .card img { height: 100%; aspect-ratio: auto; }
 }
-/* list レイアウト（.cards-list）は grid ではなく flex なので、上の grid-template-columns 系の
- * 指定はそもそも効かない。列数の代わりに「写真の左右」と「写真の大きさ」を周期で入れ替える。 */
-@media (min-width: 760px) {
-  html[data-variety="1"] main > .section:nth-of-type(4n + 3) .cards-list .card { flex-direction: row-reverse; }
-  html[data-variety="1"] main > .section:nth-of-type(4n + 4) .cards-list .card img { width: 200px; height: 200px; }
-  html[data-variety="1"] main > .section:nth-of-type(4n + 2) .cards-list .card { gap: 2.4rem; }
-}
+/* list レイアウトには、セクションごとの変化を掛けない。
+ *
+ * 以前はここで写真の左右を反転させ、あるセクションだけ写真を 200px に拡大し、別のセクションだけ
+ * 余白を 2.4rem に広げていた。grid の「列数が変わる」変化と違い、list は 1 行の中の寸法そのものが
+ * 変わるため、行の高さも写真の大きさも文字の位置もセクションごとにずれる。実測で 166px / 183px /
+ * 166px / 166px と揃わず、変化ではなく「崩れ」として読めてしまった（実際にそう指摘された）。
+ * ブロックの中の余白と寸法は、どのセクションでも同じであるべき。 */
 
 /* 白いセクションが続くときに、ごく薄い落ち込みを付けて境目を作る。 */
 html[data-variety="1"] main > .section:nth-of-type(4n + 3):not(.section-alt) {

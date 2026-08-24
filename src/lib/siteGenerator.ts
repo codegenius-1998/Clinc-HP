@@ -1,9 +1,10 @@
 import { mkdir, rm, writeFile } from "fs/promises";
 import path from "path";
 import { renderSiteFiles, siteOutputPath } from "./render/renderSiteFiles";
-import { instantiateTemplate, saveDocument } from "./site/store";
+import { getDocumentBySlug, instantiateTemplate, saveDocument } from "./site/store";
 import { selectTemplate } from "./template/selectTemplate";
 import { generateContentPlan, type ContentPlan, type ImageAspect } from "./openai/generateContentPlan";
+import { polishStaffComments } from "./openai/polishStaffComments";
 import { generateSiteImage, type ImageStyle } from "./openai/generateSiteImage";
 import { matchImagesToCategories, type ImageTarget as CategoryImageTarget } from "./openai/matchImageCategories";
 import type { HearingSheet } from "./hearing";
@@ -32,18 +33,45 @@ export type GeneratedSite = {
 
 // --- hearing sheet -> factual block content ------------------------------------------------------
 
-/** Splits `hearing.hours` (free-form, newline-separated) into table rows, pulling a "label：value"
- * shape apart where present. Deterministic — never routed through the AI, so it can never drift from
- * what the clinic actually typed (see HONESTY_RULES). */
-function hoursRowsFromHearing(hearing: HearingSheet): { label: string; value: string }[] {
+/** Splits `hearing.hours` (free-form, newline-separated) into table rows: a day column and a time
+ * column. Deterministic — never routed through the AI, so it can never drift from what the clinic
+ * actually typed (see HONESTY_RULES).
+ *
+ * Two shapes have to work, because clinics write both and neither is wrong:
+ *   "月〜金：9:00-13:00"   — an explicit colon
+ *   "月〜金　10時〜18時"    — a space (usually full-width) doing the same job
+ * Only the first was handled, so every space-separated line produced an EMPTY day column — which
+ * renders as a 32%-wide blank grey cell with the whole line crammed beside it.
+ *
+ * A line starting with a digit is never split. "10:00 - 18:00" has a colon, but splitting on it
+ * yields label "10" / value "00 - 18:00"; a line that opens with a number is a time, not a label. */
+function splitHoursLine(line: string): { label: string; value: string } {
+  if (/^\d/.test(line)) return { label: "", value: line };
+
+  // Whitespace is tried BEFORE the colon, not after. "月〜金 9:00-13:00" contains both, and the colon
+  // there belongs to the time — splitting on it first yields the label "月〜金 9". Where a colon is
+  // genuinely the separator ("月〜金：9:00-13:00") there is no whitespace for this rule to catch, so
+  // it falls through correctly.
+  //
+  // Full-width space, tab, or two-plus ordinary spaces always separate. A SINGLE ordinary space only
+  // separates when what follows opens like a time or a closure ("日・祝 休診"), so that a label that
+  // legitimately contains a space is not torn in half.
+  const spaced =
+    line.match(/^(.*?)(?:[\u3000\t]|\s{2,})\s*(.+)$/) ?? line.match(/^(\S+)\s+([\d０-９午休定祝].*)$/);
+  if (spaced && spaced[1].trim()) return { label: spaced[1].trim(), value: spaced[2].trim() };
+
+  const colon = line.match(/^([^：:]*?)[：:]\s*(.+)$/);
+  if (colon && colon[1].trim()) return { label: colon[1].trim(), value: colon[2].trim() };
+
+  return { label: "", value: line };
+}
+
+export function hoursRowsFromHearing(hearing: HearingSheet): { label: string; value: string }[] {
   return (hearing.hours ?? "")
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
-    .map((line) => {
-      const match = line.match(/^(.*?)[：:](.*)$/);
-      return match ? { label: match[1].trim(), value: match[2].trim() } : { label: "", value: line };
-    });
+    .map(splitHoursLine);
 }
 
 /** Hides the blocks the clinic gave us nothing to fill. An empty 料金表 is worse than no 料金表: the
@@ -68,7 +96,14 @@ function applyFactualVisibility(doc: SiteDocument, hearing: HearingSheet): void 
 /** Copies the hearing sheet's hard facts into the blocks that report them. This copy is what makes
  * the site editable later: from here on the document is the source of truth, and re-reading the
  * hearing sheet at render time (which the old generator did) would silently undo the user's edits. */
-function applyFactualContent(doc: SiteDocument, hearing: HearingSheet, plan: ContentPlan): void {
+function applyFactualContent(
+  doc: SiteDocument,
+  hearing: HearingSheet,
+  plan: ContentPlan,
+  /** Index-aligned with hearing.staffMembers. Falls back to the raw comments (see
+   * polishStaffComments), so this is never missing — it is only ever the same text, tidied. */
+  staffComments: string[]
+): void {
   const hoursRows = hoursRowsFromHearing(hearing);
 
   for (const block of doc.blocks) {
@@ -88,10 +123,11 @@ function applyFactualContent(doc: SiteDocument, hearing: HearingSheet, plan: Con
         }));
         break;
       case "staff":
-        block.data.members = (hearing.staffMembers ?? []).map((m) => ({
+        block.data.members = (hearing.staffMembers ?? []).map((m, i) => ({
           name: m.name,
           role: m.role,
-          comment: m.comment,
+          // Name and role stay exactly as submitted; only the comment is the tidied version.
+          comment: staffComments[i] ?? m.comment,
           image: undefined,
         }));
         break;
@@ -401,6 +437,14 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
     name: hearing.clinicName,
     ownerEmail: hearing.ownerEmail,
   });
+
+  // Rebuilding a slug that already has a document must reuse that document's id. instantiateTemplate
+  // always mints a fresh one, and saveDocument upserts on id — so a second run inserted a NEW row
+  // carrying an existing slug and hit `UNIQUE constraint failed: sites.slug` (idx_sites_slug). That
+  // failure landed at the very END of the run, after several minutes and ~20 billed image
+  // generations, which is the worst possible place to discover it.
+  const existing = await getDocumentBySlug(hearing.slug);
+  if (existing) doc.id = existing.id;
   doc.meta = {
     ...doc.meta,
     clinicName: hearing.clinicName,
@@ -416,9 +460,14 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
   const needsNewsFallback = Boolean(newsBlock) && (hearing.news?.length ?? 0) === 0;
   const needsFaqFallback = Boolean(faqBlock) && (hearing.faqs?.length ?? 0) === 0;
 
-  const plan = await generateContentPlan(hearing, doc, needsNewsFallback, needsFaqFallback);
+  // Run alongside the content plan rather than after it: neither depends on the other, and staff
+  // comments are a second model call that would otherwise add its own latency to an already long run.
+  const [plan, staffComments] = await Promise.all([
+    generateContentPlan(hearing, doc, needsNewsFallback, needsFaqFallback),
+    polishStaffComments(hearing.staffMembers ?? []),
+  ]);
   applyContentPlan(doc, plan);
-  applyFactualContent(doc, hearing, plan);
+  applyFactualContent(doc, hearing, plan, staffComments);
 
   // Full regeneration replaces every image, so the old directory is cleared here — unlike
   // renderSiteFiles, which must preserve it. This is the only place that removal is correct.

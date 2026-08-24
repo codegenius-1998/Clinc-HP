@@ -44,6 +44,14 @@ export type HearingSheet = {
   createdAt: string;
   previewUrl?: string;
   generationError?: string;
+  /** ISO timestamp of when a build was kicked off. Set the moment 作成 is pressed and cleared when the
+   * run ends (either outcome), so the screens can show 作成中 for a job that is still running.
+   *
+   * This exists because a build takes minutes — measured at ~4 for a full site with 20 images — while
+   * the browser's request to start it must return in seconds. Cloudflare cuts an origin response off
+   * at 100s, so waiting for the result inside the request meant the tunnel killed the connection every
+   * single time and the operator saw a failure even though the server went on to finish successfully. */
+  generationStartedAt?: string;
   cloudflareUrl?: string;
   cloudflareError?: string;
   /** category -> public Supabase Storage URLs of user-uploaded photos. */
@@ -93,7 +101,7 @@ export async function listHearingsByOwner(ownerEmail: string): Promise<HearingSh
   return all.filter((h) => h.ownerEmail === ownerEmail);
 }
 
-export type HearingStatus = { key: "pending_template" | "processing" | "generated" | "failed"; label: string; className: string };
+export type HearingStatus = { key: "pending_template" | "generating" | "processing" | "generated" | "failed"; label: string; className: string };
 
 /** Shared by /admin/requests and /mypage/requests so both screens agree on what a hearing's status
  * means. "pending_template" only exists because /mypage/apply intentionally never sets templateId —
@@ -105,12 +113,17 @@ export type HearingStatus = { key: "pending_template" | "processing" | "generate
  * fixes), and re-running generation just to improve a message would cost real money in API calls. */
 export function friendlyGenerationError(message: string): string {
   if (/fetch failed|ECONNRESET|ETIMEDOUT|socket hang up|network/i.test(message)) {
-    return "生成中に通信が切れました（AI画像の生成に時間がかかるため、途中で接続が切れることがあります）。もう一度「AIで再生成する」を押してください。";
+    return "生成中に通信が切れました（AI画像の生成に時間がかかるため、途中で接続が切れることがあります）。もう一度「作成」を押してください。";
   }
   return message;
 }
 
-export function hearingStatus(hearing: Pick<HearingSheet, "templateId" | "previewUrl" | "generationError">): HearingStatus {
+export function hearingStatus(
+  hearing: Pick<HearingSheet, "templateId" | "previewUrl" | "generationError" | "generationStartedAt">
+): HearingStatus {
+  // Checked before everything else: a re-run of an already-built site is still "作成中" while it runs,
+  // and a first build has no templateId yet but must not read as 承認待ち once it has been started.
+  if (hearing.generationStartedAt) return { key: "generating", label: "作成中", className: "bg-sky-50 text-sky-700" };
   if (!hearing.templateId) return { key: "pending_template", label: "承認待ち", className: "bg-amber-50 text-amber-700" };
   // previewUrl wins over generationError: regenerateSiteAction can fail on a re-run (e.g. a transient
   // API error) while leaving an EARLIER successful previewUrl untouched — the clinic's already-live,
@@ -137,6 +150,7 @@ export async function updateHearing(
       HearingSheet,
       | "previewUrl"
       | "generationError"
+      | "generationStartedAt"
       | "cloudflareUrl"
       | "cloudflareError"
       | "templateId"

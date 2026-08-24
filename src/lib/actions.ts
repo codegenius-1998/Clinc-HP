@@ -1,36 +1,18 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { friendlyGenerationError, getHearing, updateHearing } from "./hearing";
-import { generateSite } from "./siteGenerator";
+import { getHearing, updateHearing } from "./hearing";
 import { deployGeneratedSiteToCloudflare } from "./cloudflareDeploy";
 
-function generationErrorMessage(err: unknown): string {
-  return err instanceof Error ? friendlyGenerationError(err.message) : "サイトの生成に失敗しました。";
-}
-
-export async function regenerateSiteAction(slug: string): Promise<void> {
-  const hearing = await getHearing(slug);
-  if (!hearing) {
-    return;
-  }
-
-  try {
-    const result = await generateSite(hearing);
-    await updateHearing(slug, {
-      previewUrl: result.previewUrl,
-      generationError: undefined,
-      templateId: result.templateId,
-      templateLabel: result.templateName,
-      templateReason: result.templateReason ?? undefined,
-    });
-  } catch (err) {
-    await updateHearing(slug, { generationError: generationErrorMessage(err) });
-  }
-
-  revalidatePath(`/sites/${slug}`);
-}
-
+/** `regenerateSiteAction` used to live here, behind the "AIで再生成する" button on /sites/[slug]. The
+ * button was removed at the client's request, and the action went with it rather than being left as
+ * an unreferenced export: a Server Action stays directly POST-able whether or not any page renders a
+ * form for it, and this one had no authentication while costing real money (a full AI run: text plus
+ * 10-20 generated images) and overwriting the clinic's edited copy. Generation now happens only
+ * through the admin-gated 「作成」 button (approveRequestAction), on /admin/requests and on the site's own detail page.
+ *
+ * Re-rendering after an edit does NOT need this: saveDocumentAction re-renders from the stored
+ * SiteDocument without calling any model. */
 export async function deployToCloudflareAction(slug: string): Promise<void> {
   const hearing = await getHearing(slug);
   if (!hearing?.previewUrl) {
