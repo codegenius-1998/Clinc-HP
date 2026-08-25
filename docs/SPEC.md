@@ -114,7 +114,7 @@ SUPABASE_STORAGE_BUCKET     （任意：既定 "site-images"）
 | ユーザー・セッション | D1 `users` / `sessions` |
 | マスタデータ（診療科・サービス・特徴・ターゲット・セクション） | D1 |
 | SiteDocument（テンプレート／サイト） | D1 `sites` / `site_sections` |
-| ヒアリングシート | **ローカルファイル** `data/hearings/<slug>.json` |
+| ヒアリングシート | **D1** `hearings` テーブル（2026-08-25 移行。旧: `data/hearings/<slug>.json`） |
 | 生成サイト | **ローカルファイル** `public/generated/<slug>/` |
 | テンプレートのプレビュー | `public/generated/_templates/<id>/` |
 | ユーザーアップロード写真 | Supabase Storage → 生成サイト内へ複製 |
@@ -296,7 +296,7 @@ type Block = {
 
 ### 5.5 HearingSheet（`src/lib/hearing.ts`）
 
-`data/hearings/<slug>.json` にファイル保存されます。
+D1 の `hearings` テーブルに保存されます（1申請 = 1行）。
 
 | フィールド | 内容 |
 |---|---|
@@ -645,7 +645,7 @@ npx wrangler pages deploy public/generated/<slug> \
 | `applicationActions.ts` | `createApplicationAction` / `deleteOwnApplicationAction` |
 | `contentActions.ts` | `approveRequestAction` / `deleteRequestAction` / ユーザー・サイト・セクション・診療科・サービス・特徴・ターゲットの CRUD |
 | `templateActions.ts` | `importTemplateAction` / `importFromGeneratedSiteAction` / `setTemplateCanSellAction` / `deleteTemplateAction` |
-| `site/editorActions.ts` | `saveDocumentAction` / `adoptImageAction` / `publishDocumentAction` / `checkGuidelineComplianceAction` / `rewriteBlockAction` |
+| `site/editorActions.ts` | `saveDocumentAction` / `adoptImageAction` / `publishDocumentAction` / `checkGuidelineComplianceAction` / `checkDesignAction` / `rewriteBlockAction` |
 
 ### 8.1 ハイドレーション前送信への対応
 
@@ -794,10 +794,285 @@ node scripts/seed-admin.mjs
 | 4 | ローカルサイトは URL 取り込み不可 | SSRF 防御が `localhost` を拒否するため。代わりに「作成済みサイトから作る」経路がファイルを直接読む |
 | 5 | ヒアリングシート・生成サイトがローカルファイル | 13.2 参照 |
 | 6 | ~~旧フロー `/create` が並存~~ | **解消済み**（2026-08-21 削除）。13.3 参照 |
-| 7 | **自動テストが 1 件も存在しない** | テストフレームワーク自体が未導入 |
+| 7 | 自動テストはデザイン検査のみ | `npm run check:design` が**表示の崩れ**を機械的に確認する（2026-08-25 追加、14.章参照）。ロジックの単体テストは依然ゼロ。テストランナーは未導入で、`tsx` と `playwright` のみ入っている |
 | 8 | `hp-templates/` が残存 | `AI_GUIDE.md` `NEXTJS_TAILWIND_GSAP_GUIDE.md` `SITE_SPEC.json` `TEMPLATE_VARIABLES.md` `colors.json` `presets/`。**コードからの参照はゼロ** |
 | 9 | `docs/` が空 | 旧 `USER_ADMIN_GUIDE.md` は削除済み。本書が唯一のドキュメント |
 | 10 | 変更が未コミット | 7 ファイル変更＋2 ファイル未追跡 |
+
+---
+
+## 12.1 デザイン検査（2026-08-25 追加）
+
+生成物が**見た目として壊れていないか**を機械で確認する仕組みです。きっかけは、生成済み5サイトのうち3サイトが `images/greeting.jpg` を参照したままファイルを持たず、**クライアントに見せる直前まで誰も気づかなかった**ことです。
+
+### 構成
+
+| 層 | 実装 | 内容 | 費用 |
+|---|---|---|---|
+| 画像スロットの列挙 | `src/lib/site/imagePaths.ts` | ドキュメント上の全画像位置を返す**唯一の定義**。生成（`buildImageJobs`）・書き戻し（`applyImagePaths`）・検査がこれを共有する | — |
+| 静的検査 | `src/lib/site/designCheck.ts` | 画像の実在／コントラスト／見出しの空欄／ブロックの不変条件／文字数／カード枚数と並べ方の整合 | 無料・即時 |
+| 実描画検査 | `src/lib/site/renderCheck.ts` | Playwright で 390px と 1280px に描画して実測。横スクロール／画像切れ／はみ出し／ボタン幅／ヒーローの食い込み | 無料・約10秒/件 |
+| CLI | `scripts/check-design.mts` | `npm run check:design -- --all`。要修正があれば終了コード1 | — |
+| 再描画 | `scripts/render-sites.mts` | `npm run render:sites -- --all`。`site.css`/`main.js` は各サイトへ**コピー**されるため、変更したら必要 | — |
+| 画面 | `components/editor/DesignCheckButton.tsx` | 編集画面のツールバー。**未保存の状態**に対して静的検査だけを実行 | 無料 |
+| 記録 | `HearingSheet.designCheck` | 生成の最後に自動実行し、件数を申請レコードへ記録。一覧にバッジで出る | — |
+
+### 設計上の判断
+
+- **`imagePaths.ts` を分けた理由**：同じ列挙が生成側と書き戻し側に二重にあり、**その差分がBUG-01そのもの**でした。1か所に集約したことで、画像を持つブロック種別を増やすときに片方だけ直す余地が消えています。
+- **判定の重み**：`high` は「そのままでは表示が崩れる」もの（画像切れ・横スクロール・heroの重複）に限ります。配色のコントラストは読みやすさの問題なので `medium` 止まりです。**常に赤い検査は読まれなくなる**ためです。
+- **Playwright はアプリから絶対に import しない**：devDependency であり、`output: "standalone"` の依存追跡に入ってはいけません。`renderCheck.ts` の `import("playwright")` は動的で、呼ぶのは CLI だけです。
+- **演出を切ってから測る**：スクロール演出は要素を `translateX(±40px)` の位置で待たせるため、そのまま測ると「はみ出し」が毎回別の場所に出ました。横スクロールの判定だけは演出込みで測り（それが不具合の実体のため）、残りは演出を無効化してから測ります。
+
+### この仕組みが見つけた不具合
+
+| 内容 | 状態 |
+|---|---|
+| 生成サイト3件のセクション画像が参照切れ（BUG-01） | 検出。生成側は修正済み、既存サイトのファイルは未復旧 |
+| **テンプレート2件がスマートフォンで横スクロールする** | **修正済み**。横方向のスクロール演出で未表示のセクションが右にずれ、幅390pxの画面が417pxになっていた。`.section, .hero { overflow-x: clip }` を追加（`html` に書くとビューポートへ伝播して効かない。`hidden` では区切り装飾の縦のはみ出しまで消える） |
+
+---
+
+## 12.2 文字主体テンプレート（2026-08-25 追加）
+
+写真に頼らずに成立するデザインの語彙を足し、それを使ったテンプレートを1件用意しました。
+
+### 追加したデザイントークン
+
+いずれも `.default()` 付き。既存サイトの設定は変わりません（`safeParse` の全体フォールバックに落ちないことを実測で確認済み）。
+
+| トークン | 範囲 | 既定 | 役割 |
+|---|---|---|---|
+| `font.displayScale` | 1.0〜2.2 | 1.0 | **見出しだけ**を拡大。`baseSize` を上げると本文まで大きくなるので別立てにした |
+| `font.headingLetterSpacing` | -0.02〜0.3em | 0 | 和文見出しの字間。**書体からは導けない**ため独立した値 |
+| `layout.rule` | `none`/`hairline`/`accent-bar` | `none` | 見出しの区切り方。既定の太い下線を、細い罫線または左の色帯に置き換える |
+
+CSS 側は `--display-scale` `--heading-tracking` と `<html data-rule>` で受けます。編集画面の「デザイン」パネルからも操作できます。
+
+### 既にあった仕組みを使った部分
+
+**エンジンの改修はほとんど不要でした。**
+
+- `block.cardLayout: "minimal"` — カード画像を一切描かない。`buildImageJobs` も生成対象から外す（`ImageSlot.rendered = false`）
+- `freeText` ブロック — 写真の無い区切り
+- `layout.background` / `decoration` / `sectionDivider` — 既存
+
+追加したのは `.cards-minimal` の作り替え（枠 → 罫線と大きな番号）と `data-rule` の指定群です。
+
+### テンプレート `typographic-template`
+
+`src/lib/site/typographicTemplate.ts`。登録は `npm run seed:template -- typographic [--force]`（AI不使用・無料・再実行可）。
+
+| 項目 | 値 |
+|---|---|
+| 配色 | 墨緑 `#2f3a3f` × 真鍮 `#6f6046` × 生成り `#f5f2ec`。**全ペアが 4.5:1 以上**（最小は白×真鍮の 6.1:1） |
+| 書体 | 見出し Shippori Mincho / 本文 Noto Sans JP |
+| 字送り | `displayScale 1.35` / `headingLetterSpacing 0.12em` / `spacingScale 1.6` |
+| 形 | `radius 0` / `shadow none` / `cardLayout minimal` / `rule hairline` |
+| 動き | `fade` のみ。方向のある演出は文字と競合し、横スクロールの原因にもなるため使わない |
+| **画像枚数** | **7枚**（他の3テンプレートは 23枚） |
+
+### この作業中に見つけて直したこと
+
+| 内容 | 直し方 |
+|---|---|
+| スマートフォンで見出しが「お問い合わせ・ご予 / 約」と語の途中で割れる | 見出しに `word-break: auto-phrase` と `text-wrap: balance`。日本語は原則どこでも改行できるため、文節を見る指定が要る。未対応ブラウザは無視するだけなので代替指定は不要 |
+| `.cards-minimal` の閉じ罫線が、横に4枚並んだうちの**4枚目の下にだけ**出る | `.card:last-child` ではなく一覧そのもの（`.cards-minimal`）に `border-bottom` を引く |
+| テンプレートに `freeText` / `gallery` を置くとサンプル文が空のまま | `sampleCopy.ts` に両方を追加。gallery は**テンプレートが枚数を指定していれば上書きしない** |
+| デザイン検査が `freeText` の空見出しを誤検出 | `BLOCK_DEFINITIONS` の `optional` を見るように変更。型ごとの列挙を増やさない |
+
+### ボタン・メニューの配色を自動補正（同日）
+
+⚠️ **検査自体に誤りが1つありました。** `accentInverse` × `accent` を指摘していましたが、**`--accent-inverse` はスキーマにあるだけで、CSSのどこからも使われていませんでした**。描画されない組み合わせを指摘していたことになります。
+
+対応：
+
+1. `nav.site-nav a:hover` に `color: var(--accent-inverse)` を追加し、トークンを実際に使う値にした
+2. `color.ts` に `readableFill()` を追加。**文字ではなく面のほうを濃くする**（白い文字を灰色にするのは「間違い」に見えるが、青を濃くするのはデザイナーが実際にやる直し方）
+3. `--primary-fill` / `--accent-fill` を導入し、**文字が乗る箇所（メニューバー・電話ボタン）だけ**に適用。`--primary` そのものは触らないので、見出しの罫線やグラデーションは指定どおりの色のまま
+4. 検査は「自動で濃くしました」という**低優先の通知**に変更。読み手に実害が無い以上、要確認にすべきではない
+
+実測: `#4ba3fc`（2.6:1）→ `#3572b0`（5.0:1）。色相は保持。新テンプレートは基準を満たしているため**変更されません**。
+
+### 運用上の注意
+
+⚠️ **Playwright のブラウザは `~/Library/Caches/ms-playwright` にあり、macOS のキャッシュ削除で消えます**（実際に消えました）。描画検査が「ブラウザを起動できませんでした」で失敗したら、次を実行してください。
+
+```bash
+npx playwright install chromium chromium-headless-shell
+```
+
+---
+
+## 12.3 1テンプレートから多様なサイトを出す（2026-08-25 追加）
+
+### 何が固定だったか
+
+文章は**もともと柔軟**でした（`generateContentPlan` はテンプレートの実ブロック一覧を読んで書く）。固定だったのは骨格と配色です。同じテンプレートから出たサイトは「言葉だけ違う同じサイト」でした。
+
+### 方式：CSSではなく「選択肢」を渡す
+
+`src/lib/site/composition.ts` が語彙を持ちます。
+
+```
+BLOCK_VARIANTS = {
+  hero: full-bleed | split | centered
+  rich: grid | list | minimal | overlap
+}
+```
+
+⚠️ **AIにCSSやクラス名を書かせません。** variant は**このファイルが持つ一覧の中の1語**で、しかもその値はすべて、既存テンプレートが `heroLayout` / `cardLayout` として**すでに出荷しているレイアウト**です。今回やったのは「ドキュメント全体の設定だったものを、ブロック単位で上書きできるようにした」だけで、**新しいCSSは1行も足していません**。だから「崩れない」と言えます。
+
+### 正規化（`normalizeComposition`）
+
+`normalizeDesignTokens` と同じ思想です。「モデルの出力は提案であって真実ではない」。**例外を投げません** — 数分と実費を使った生成を、提案の不備で失敗させないためです。
+
+| 入力 | 結果 |
+|---|---|
+| 一覧に無い variant（`wobble`） | 無視 → テンプレート既定 |
+| 存在しない blockId | 捨てる |
+| `cardCount: 99` / `0` | 6 / 2 にクランプ |
+| **全セクションに `grid`**（怠けた回答） | 隣が同じにならないよう次の変種へずらす → `grid → list → grid → minimal` |
+
+### 実効レイアウトの一元化
+
+⚠️ `cardLayout` を読む場所は**必ず `effectiveCardLayout()` を通すこと**。描画・画像生成・デザイン検査の3つが別々に読むと、「カードに写真があるか」で食い違い、BUG-01と同じ種類の事故になります。
+
+### 配色のクリニックごとの揺らぎ
+
+`derivePalette(colors, slug)` が `primary` / `accent` / `light` の**色相のみ**を最大±24°回します。
+
+- **slug から決まる**ので、作り直しても同じ色になります（公開中のページが勝手に模様替えされない）
+- `text` / `background` / 2つの inverse は回しません。ほぼ無彩色であり、回すとページ全体が色被りします
+- 可読性は描画時の `readableOn` / `readableFill` が担保するので、回した結果が読めなくなることはありません
+
+### 人が使う導線
+
+編集画面のブロック設定に「**このセクションのレイアウト**」を追加しました（既定は「テンプレートに合わせる」）。AIの選択を人が上書きできます。
+
+### 意図的に入れなかったもの
+
+**セクションの並べ替えと、AIによる非表示。** 順序はテンプレートが意図して決めた語り口であり、入れ替えは「柔軟」が「崩れ」に変わる境目です。表示・非表示は「クリニックがその事実を入力したか」（`applyFactualVisibility`）で決まっており、モデルの推測より確かです。
+
+### 検証（課金なし）
+
+AIの出力を人手で模し、同一テンプレートから2サイトを実描画しました。
+
+| | hero | 診療科案内 | ご挨拶 | 特徴 | 施設案内 | 主要色 |
+|---|---|---|---|---|---|---|
+| A | split | minimal | list | minimal | grid | `#4bb0fc` |
+| B | centered | grid | minimal | overlap | list | `#4bd0fc` |
+
+両方ともデザイン検査を通過（要修正0）。正規化の4つのルールも上表のとおり実測で確認しました。
+
+---
+
+## 12.4 公開トップページとユーザー側の画面（2026-08-25 追加）
+
+### 経路の変更
+
+| 変更前 | 変更後 |
+|---|---|
+| `/` = オーナーのログインフォーム | **`/` = 公開トップページ**（未ログインで閲覧可） |
+| — | **`/login` = オーナーのログイン** |
+
+⚠️ **`redirect("/")` でオーナー画面を守っていた箇所は、すべて `/login` に変更が必要です。** 対象は `src/app/home/layout.tsx` / `home/page.tsx` / `mypage/layout.tsx` の3か所。`logoutAction` は `/`（公開トップ）のままにしてあります — ログアウト直後の人が必ずログインし直したいわけではなく、空のパスワード欄に着地するのは失敗に見えるためです。
+
+権限の境界は curl で全経路を実測し、変化が「未ログイン時の遷移先が `/` → `/login` になったこと」と「`/` が公開になったこと」だけであることを確認済みです。
+
+### なぜ管理画面と分けたか
+
+オーナー画面は `AdminTopBar` / `AdminPageHeader` を**管理画面と共有していました**。同じに見えていたのではなく、**同じものでした**。これが「業務ツールに見える」直接の原因です。
+
+`src/components/mypage/MypageShell.tsx` に専用のものを新設し、`src/app/admin` 配下は一切変更していません。両者は今後別々に育てられます。
+
+### 配色と書体
+
+`src/app/globals.css` の `@theme inline` にトークンを追加しました（Tailwind のユーティリティとして `bg-paper` `text-ink` `font-display` などが使えます）。
+
+| トークン | 値 | 対背景コントラスト |
+|---|---|---|
+| `ink` | `#16201d` | 16.7:1 |
+| `ink-soft` | `#5a6560` | 6.1:1 |
+| `brand` | `#2f5d4e` | 7.5:1 |
+| `canvas` | `#f6f4ef` | — |
+| `line` | `#e2ded5` | — |
+
+見出しは Shippori Mincho（`font-display`）、本文は Noto Sans JP。⚠️ 既存の `--background` / `--foreground` は**変更していません**。管理画面はそのままです。
+
+### スクロール演出
+
+`src/components/ui/Reveal.tsx`。⚠️ **生成サイト用の `site.css` / `main.js` とは完全に別物です。** 混ぜないこと。
+
+内容が永久に隠れないよう2重の保険があります。CSSは `html.js` が付いている時だけ隠し、その class は当のコンポーネントが mount 時に付けます（＝スクリプトが動かない環境では最初から全部見える）。さらに全体が `prefers-reduced-motion: no-preference` の中にあります。
+
+### ⚠️ 実績としてクリニックのサイトを載せないこと
+
+公開トップの「デザインの型」に並ぶのは**テンプレートだけ**です。生成済みサイトは実在の医院のもので、営業ページへの掲載は掲載許諾の問題であり、デザインの判断ではありません。
+
+### 検証用のサーバー
+
+`PREVIEW_BASIC_AUTH` が設定されていると、画面の確認にも認証が要ります。`.claude/launch.json` に **`clinc-hp-nogate`**（ポート3100・認証なし）を追加しました。localhost のみで、トンネルには乗せません。
+
+⚠️ Next.js 16 は**同じディレクトリで2つ目の `next dev` を拒否します**。3100を使うときは3000を止めてください。
+
+---
+
+## 12.5 ヒアリングシートを D1 へ移行（2026-08-25）
+
+### なぜ
+
+顧客が入力したデータが、サーバーのローカルディスクにしか無い状態でした。申請を受け取ったインスタンスだけがそれを読み返せる、という構造上の単一マシン依存です。
+
+実害も出ていました。移行前の時点で、**D1 のサイト7件のうち4件はヒアリングシートが存在しませんでした**。片方が DB、片方がファイルである限り、この種のズレは起き続けます。
+
+### テーブル設計
+
+`sites` と同じ考え方です。**申請後に書き換わる項目はカラム、申請フォームの中身は JSON 1列**。
+
+この切り方は見た目の問題ではありません。`updateHearing` の patch 型が列挙している項目 = 可変項目 = カラム、と一致させたことで、**更新が UPDATE 1文**で済みます（旧: 読んで→マージして→書く）。
+
+⚠️ **同じ項目を2か所に持たせないこと。** `toRow` は JSON 側から column 側の項目を削除しています。`previewUrl` の写しが2つあると、片方だけ更新された瞬間に「正しい値」が2つになります。
+
+### ⚠️ この移行の本当の成果：作成の二重起動が原理的に不可能になった
+
+移行前のコード：
+
+```ts
+if (hearing.generationStartedAt) return;                    // 読む
+await updateHearing(slug, { generationStartedAt: ... });     // 書く
+```
+
+**この2行の間に、別のリクエストが同じ判定を通過できました。** 管理者の二度押し、あるいは2人が同時に押すと、同じ slug に対して4分の生成が2本走ります。両方が同じ出力フォルダを削除してから書くため、**課金が二重になり、結果も壊れます**。
+
+`claimGeneration()` が条件付き UPDATE 1文に置き換えました。
+
+```sql
+UPDATE hearings SET generation_started_at = ?, generation_error = NULL
+ WHERE slug = ? AND generation_started_at IS NULL
+```
+
+更新件数が 0 なら他が先に取得済み。**5並列で呼んで成功が1件だけになることを実測で確認済みです。**
+
+### マイグレーション上の注意
+
+⚠️ **`hearings` テーブルは、どのマイグレーションにも無いのに既に存在していました**（手作業で作られたもの・0行・`slug` `owner_email` `created_at` `data` のみ）。そのため `CREATE TABLE IF NOT EXISTS` だけでは新しい列が入りません。
+
+0004 は **CREATE + ALTER の併記**にしてあります。新規DBでは ALTER が「duplicate column name」で失敗しますが、`scripts/migrate.mjs` はこれを無視する作りです。両経路が同じスキーマに着地するよう、**CREATE 側にも ALTER で追加できない NOT NULL を置いていません**。
+
+### 移行の実施記録
+
+```bash
+node scripts/migrate.mjs --file 0004_hearings.sql
+npx tsx scripts/import-hearings.mts --dry-run   # 確認
+npx tsx scripts/import-hearings.mts             # 実行（slug で upsert・再実行可）
+```
+
+3件を取り込み、**全項目（22 / 21 / 19 項目）が元の JSON と完全一致**することを突き合わせて確認したうえで、`data/hearings/` を削除しました。Dockerfile の `mkdir` からも外してあります。
+
+### 残っている課題
+
+**`public/generated/`（26MB・172ファイル）は依然としてローカルディスクです。** ヒアリングシートは 20KB。量でいえば全体の 0.1% しか動かせていません。**デプロイ可能にするための本丸はこちらです**（13.2 参照）。
 
 ---
 
@@ -823,7 +1098,7 @@ node scripts/seed-admin.mjs
 
 ### 13.2 【最優先】永続化がローカルファイルシステムに依存している
 
-**事実**：ヒアリングシート＝`data/hearings/*.json`、生成サイト＝`public/generated/<slug>/`、公開＝そのディレクトリを `wrangler` の子プロセスに渡す。
+**事実**：~~ヒアリングシート＝`data/hearings/*.json`~~（2026-08-25 に D1 へ移行・12.5 参照）、生成サイト＝`public/generated/<slug>/`、公開＝そのディレクトリを `wrangler` の子プロセスに渡す。**残る依存は生成サイトのみ**。移行の設計は [DESIGN_STORAGE_R2.md](./DESIGN_STORAGE_R2.md) にまとめてあります（設計のみ・未実装）。
 
 **問題**：**単一マシンでの運用が暗黙の前提**になっています。Vercel / Workers / コンテナ等に載せると、
 

@@ -5,6 +5,7 @@ import type { HearingSheet } from "@/lib/hearing";
 import type { Block, SiteDocument } from "@/lib/site/document";
 import { BLOCK_DEFINITIONS } from "@/lib/site/blocks";
 import { HONESTY_RULES, IMAGE_STYLE_RULES, LOGO_RULE, SEO_DESCRIPTION_LENGTH } from "@/lib/site/authoringRules";
+import { CARD_COUNT_RANGE, variantsFor, type PlannedSection } from "@/lib/site/composition";
 
 /** Writes the copy for one clinic against a chosen template's actual block list.
  *
@@ -41,6 +42,9 @@ export type BlockContent = {
 
 export type ContentPlan = {
   seo: { title: string; metaDescription: string; ogTitle: string; ogDescription: string; ogSiteName: string };
+  /** Layout choices, one entry per section that has any. Validated and clamped by
+   * normalizeComposition before anything is applied — see src/lib/site/composition.ts. */
+  composition: PlannedSection[];
   blocks: BlockContent[];
   newsFallback: { date: string; title: string }[];
   faqFallback: { question: string; answer: string }[];
@@ -65,7 +69,17 @@ const blockContentSchema = z.object({
   cards: z.array(z.object({ heading: z.string(), body: z.string() })),
 });
 
+const sectionPlanSchema = z.object({
+  blockId: z.string(),
+  /** Free string rather than an enum because the allowed values differ per block TYPE, which a single
+   * structured-output schema cannot express. The prompt lists them per block and composition.ts
+   * rejects anything else, so an invalid answer costs the template's own layout, not a broken page. */
+  variant: z.string().nullable(),
+  cardCount: z.number().nullable(),
+});
+
 const planSchema = z.object({
+  composition: z.array(sectionPlanSchema),
   seo: z.object({
     title: z.string(),
     metaDescription: z.string(),
@@ -112,6 +126,21 @@ ${IMAGE_STYLE_RULES.map((r) => `- ${r}`).join("\n")}
 - ロゴ（role: "logo"）: ${LOGO_RULE}
 - promptは画像生成AIにそのまま渡す英語のプロンプトにすること。
 
+# レイアウトの選択（composition）
+「ブロック一覧」の各ブロックには、選べるレイアウトが示してある。医院の性格に合わせて1つ選び、composition 配列に書くこと。
+- full-bleed: 画像を全面に敷き、その上に文字を重ねる。写真の力で見せたい医院向け。
+- split: 画像と文字を左右に分ける。落ち着いた、読ませたい医院向け。
+- centered: 画像の下に文字を置く。情報量が多い医院向け。
+- grid: 写真つきのカードを格子状に並べる。項目が4つ前後で、視覚的に見せたいとき。
+- list: 写真を左、文章を右に置いた行を縦に積む。1項目ずつ説明が長いとき。
+- minimal: **写真を使わず**、番号と見出しと本文だけで並べる。項目名だけで伝わるとき、落ち着いた印象にしたいとき。
+- overlap: カードを少しずつずらして重ねる。雑誌的で、動きのある印象にしたいとき。
+
+**隣り合うセクションで同じレイアウトを選ばないこと。** 同じものが続くと1つの長いセクションに見えてしまう。
+写真より文章で伝わる医院（心療内科、内科など）では minimal を積極的に使ってよい。
+迷う場合は variant を null にすれば、テンプレート既定のレイアウトになる。
+cardCount には、そのセクションに並べるカードの枚数を ${CARD_COUNT_RANGE.min}〜${CARD_COUNT_RANGE.max} で指定する（null なら目安どおり）。**cards 配列の要素数は必ず cardCount と一致させること。**
+
 # 出力形式
 JSON。「ブロック一覧」に挙がっている blockId ごとに blocks 配列の要素を1つずつ作ること（blockIdは必ず一覧のものをそのまま使う。勝手に増やさない）。
 - 種類が「メインビジュアル」のブロックは、heading にキャッチコピー、body にサブコピーを書く（cards は空配列）。
@@ -134,11 +163,13 @@ function buildUserPrompt(hearing: HearingSheet, doc: SiteDocument, needsNews: bo
   const blockLines = authorableBlocks(doc).map((block) => {
     const def = BLOCK_DEFINITIONS[block.type];
     const cards = sampleCardCount(block);
+    const variants = variantsFor(block.type);
     const parts = [
       `blockId: ${block.id}`,
       `種類: ${def.label}`,
       block.navLabel && `このセクションの役割: ${block.navLabel}`,
-      cards && `カード（写真）枚数の目安: ${cards}枚`,
+      cards && `カード枚数の目安: ${cards}枚`,
+      variants.length > 0 && `選べるレイアウト: ${variants.join(" / ")}`,
     ].filter(Boolean);
     return `- ${parts.join(" / ")}`;
   });
@@ -163,6 +194,7 @@ function buildUserPrompt(hearing: HearingSheet, doc: SiteDocument, needsNews: bo
     `# 忘れずに`,
     `- ヘッダー用ロゴ画像（blockId: "logo", role: "logo", cardIndex: null, aspect: "1:1"）を必ず1件 images に含めること。`,
     `- SEO（title / metaDescription / ogTitle / ogDescription / ogSiteName）を必ず作成すること。metaDescriptionは${SEO_DESCRIPTION_LENGTH}。`,
+    `- composition に、「選べるレイアウト」がある blockId すべてについて1件ずつ書くこと。`,
   ].join("\n");
 }
 

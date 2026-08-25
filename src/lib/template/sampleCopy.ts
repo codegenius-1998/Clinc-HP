@@ -87,6 +87,26 @@ export function applySampleCopy(blocks: Block[]): Block[] {
             ],
           },
         };
+      case "freeText":
+        return {
+          ...block,
+          data: {
+            ...block.data,
+            body: "医院の考え方や姿勢を、短い文章で伝える区切りです。写真を使わずに、ページの調子を変える役割を持ちます。",
+          },
+        };
+      // Only filled when the template left it empty: a template that specifies its own photo count
+      // (a 2-up gallery, say) is making a layout decision that sample copy must not overwrite.
+      case "gallery":
+        return block.data.images.length > 0
+          ? block
+          : {
+              ...block,
+              data: {
+                ...block.data,
+                images: Array.from({ length: 4 }, () => ({ src: "images/placeholder.svg" })),
+              },
+            };
       case "faq":
         return {
           ...block,

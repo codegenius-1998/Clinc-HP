@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { renderSiteFiles, siteOutputPath } from "@/lib/render/renderSiteFiles";
 import { deployGeneratedSiteToCloudflare } from "@/lib/cloudflareDeploy";
 import { checkGuidelineCompliance, type GuidelineCheckResult } from "@/lib/openai/checkGuidelineCompliance";
+import { checkDesign, type DesignCheckResult } from "./designCheck";
 import { rewriteBlockText, type BlockRewrite } from "@/lib/openai/rewriteBlockText";
 import { imageExtensionFor } from "@/lib/imageFormats";
 import { AccessDeniedError, requireEditableDocument } from "./access";
@@ -73,6 +74,30 @@ export async function checkGuidelineComplianceAction(
     return { result, error: null };
   } catch (err) {
     return { result: null, error: errorMessage(err, "ガイドライン確認に失敗しました。") };
+  }
+}
+
+/** Runs the design check against what is currently in the editor, unsaved changes included.
+ *
+ * Free and instant — no model call, unlike the guideline check next door. The output directory is
+ * passed so the check can tell a path that resolves from one that points at nothing; note that those
+ * files are one 保存 behind, so an image the user just swapped shows as missing until they save. That
+ * is the right trade: the alternative is not catching the missing-file case at all, which is the one
+ * defect this whole check exists for.
+ *
+ * The heavier half of the check — opening the page in a browser and measuring it — deliberately is
+ * NOT here. It needs Playwright, which is a devDependency the running app must never import; run
+ * `npm run check:design` for that. */
+export async function checkDesignAction(
+  id: string,
+  current: SiteDocument
+): Promise<{ result: DesignCheckResult | null; error: string | null }> {
+  try {
+    await requireEditableDocument(id);
+    const parsed = siteDocumentSchema.parse(current);
+    return { result: checkDesign(parsed, { outDir: siteOutputPath(parsed).outDir }), error: null };
+  } catch (err) {
+    return { result: null, error: errorMessage(err, "デザイン確認に失敗しました。") };
   }
 }
 

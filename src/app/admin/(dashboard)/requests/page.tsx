@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { listHearings, hearingStatus } from "@/lib/hearing";
+import { DesignCheckBadge } from "@/components/sites/DesignCheckBadge";
 import { deleteRequestAction, approveRequestAction } from "@/lib/contentActions";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { ConfirmDeleteButton } from "@/components/admin/ConfirmDeleteButton";
@@ -46,9 +47,12 @@ export default async function AdminRequestsPage() {
                     {hearing.templateLabel ?? "—"}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`rounded-full px-2.5 py-1 text-[13px] font-medium ${status.className}`}>
-                      {status.label}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className={`rounded-full px-2.5 py-1 text-[13px] font-medium ${status.className}`}>
+                        {status.label}
+                      </span>
+                      {status.key === "generated" && <DesignCheckBadge check={hearing.designCheck} />}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-slate-400">{formatDate(hearing.createdAt)}</td>
                   <td className="px-4 py-3 text-right">

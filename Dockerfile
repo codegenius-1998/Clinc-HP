@@ -32,8 +32,9 @@ RUN addgroup --system --gid 1001 nodejs \
   && adduser --system --uid 1001 nextjs \
   # Runtime-written state (see the top-of-file note) — must exist and be writable by the non-root
   # user before USER switches below, since `mkdir -p` won't fix ownership after the fact.
-  && mkdir -p /app/data/hearings /app/public/generated \
-  && chown -R nextjs:nodejs /app/data /app/public
+  # Hearing sheets moved to D1 (migration 0004), so only the generated sites are still written here.
+  && mkdir -p /app/public/generated \
+  && chown -R nextjs:nodejs /app/public
 
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./

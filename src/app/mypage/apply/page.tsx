@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { listDepartments, listServices, listFeatures, listTargets } from "@/lib/content";
 import { ApplyForm } from "@/components/apply/ApplyForm";
-import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { MypagePageHeader } from "@/components/mypage/MypageShell";
 
 export default async function MypageApplyPage() {
   const [departments, services, features, targets] = await Promise.all([
@@ -17,7 +17,7 @@ export default async function MypageApplyPage() {
         ← 申請一覧へ戻る
       </Link>
       <div className="mt-6">
-        <AdminPageHeader title="新規申請" description="ホームページ作成の申請内容を入力してください。デザインは内容に合わせて自動で選ばれます。" />
+        <MypagePageHeader title="新規申請" description="ホームページ作成の申請内容を入力してください。デザインは内容に合わせて自動で選ばれます。" />
       </div>
       <div className="mx-auto max-w-2xl">
         <ApplyForm departments={departments} services={services} features={features} targets={targets} />

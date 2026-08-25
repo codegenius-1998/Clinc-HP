@@ -15,6 +15,9 @@
   /* 文字として使う用の、背景に対して読める明度に補正した色（components.tsx が上書きする） */
   --primary-text: #2d7dd2;
   --accent-text: #2d7dd2;
+  /* 上に文字が乗る「面」用。文字ではなく面のほうを濃くして読めるようにした色。 */
+  --primary-fill: #1d6fbe;
+  --accent-fill: #2d7dd2;
 
   /* 文字 */
   --font-heading: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", "Segoe UI", sans-serif;
@@ -41,6 +44,20 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 html { scroll-behavior: smooth; }
+
+/* 横方向のスクロール演出は、まだ現れていないセクションを右（または左）にずらして待たせる。
+ * その「待っている」あいだ、ずれた分だけページが横に広くなり、スマートフォンでは実際に
+ * 左右へスクロールできてしまっていた（幅390pxの画面で417px。ずれ量46px − セクション左右の
+ * 余白19.5px×2 と一致する）。演出のためのはみ出しは、閲覧者に見せる必要が無い。
+ *
+ * 指定先が <html> ではなく、はみ出している要素自身であることが要点。ルート要素の overflow は
+ * ビューポートへ「伝播」する特殊な扱いを受けるため、html に書いても実測で横スクロールは
+ * 止まらなかった（scrollX が 0 → 60 に動いた）。
+ *
+ * `clip` であって `hidden` でもないのが要点。`hidden` は要素をスクロールコンテナに変えてしまい、
+ * 区切り装飾（.section-alt::after の波形など）の縦のはみ出しまで切り落とす。`clip` は片方の軸
+ * だけを切り落とし、もう片方を visible のまま残せる。 */
+.section, .hero { overflow-x: clip; }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
@@ -94,7 +111,19 @@ body {
 img { max-width: 100%; height: auto; display: block; }
 a { color: inherit; text-decoration: none; }
 ul { list-style: none; margin: 0; padding: 0; }
-h1, h2, h3, h4 { margin: 0; font-family: var(--font-heading); font-weight: var(--heading-weight); }
+h1, h2, h3, h4 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: var(--heading-weight);
+  /* 和文見出しの字間。既定は 0em なので、指定しないテンプレートの見た目は変わらない。 */
+  letter-spacing: var(--heading-tracking);
+  /* 日本語は原則どこでも改行できるため、放っておくと「お問い合わせ・ご予 / 約」のように
+   * 単語の途中で折り返す。auto-phrase は文節を見て切れ目を選ぶ（実際にスマートフォン幅で
+   * 発生していた）。balance は短い見出しの行長を揃える。どちらも未対応のブラウザでは
+   * 単に無視されるので、フォールバックの記述は要らない。 */
+  word-break: auto-phrase;
+  text-wrap: balance;
+}
 
 .container { max-width: var(--max-width); margin: 0 auto; padding: 0 var(--space); }
 
@@ -132,12 +161,12 @@ header.site-header.is-scrolled { box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
 .nav-toggle-label span::before { top: -9px; }
 .nav-toggle-label span::after { top: 9px; }
 
-nav.site-nav { background: var(--primary); }
+nav.site-nav { background: var(--primary-fill); }
 nav.site-nav ul { display: flex; flex-wrap: wrap; justify-content: center; }
 nav.site-nav a {
   display: block; padding: 0.85rem 1.1rem; color: var(--primary-inverse); font-size: 0.9rem; white-space: nowrap;
 }
-nav.site-nav a:hover { background: var(--accent); }
+nav.site-nav a:hover { background: var(--accent-fill); color: var(--accent-inverse); }
 
 @media (max-width: 760px) {
   .nav-toggle-label { display: block; }
@@ -190,9 +219,9 @@ nav.site-nav a:hover { background: var(--accent); }
   position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
   text-align: center; gap: 0.6rem; padding: 1rem; background: rgba(0,0,0,0.28); color: #fff;
 }
-.hero-copy h1 { font-size: 1.6rem; line-height: 1.5; text-shadow: 0 1px 4px rgba(0,0,0,0.4); }
+.hero-copy h1 { font-size: calc(1.6rem * var(--display-scale)); line-height: 1.5; text-shadow: 0 1px 4px rgba(0,0,0,0.4); }
 .hero-copy p { font-size: 1rem; opacity: 0.95; }
-@media (min-width: 760px) { .hero-copy h1 { font-size: 2.2rem; } }
+@media (min-width: 760px) { .hero-copy h1 { font-size: calc(2.2rem * var(--display-scale)); } }
 
 /* "split": 画像とテキストを左右（モバイルは上下）に分けた、エディトリアル風レイアウト */
 .hero.hero-split {
@@ -250,7 +279,7 @@ nav.site-nav a:hover { background: var(--accent); }
   .cta-buttons .btn { width: 100%; justify-content: center; }
 }
 .btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.8rem 1.6rem; border-radius: var(--radius); font-weight: 700; font-size: 0.95rem; }
-.btn-tel { background: var(--primary); color: var(--primary-inverse); }
+.btn-tel { background: var(--primary-fill); color: var(--primary-inverse); }
 .btn-line { background: #06c755; color: #fff; }
 
 /* セクション共通
@@ -260,7 +289,7 @@ nav.site-nav a:hover { background: var(--accent); }
 .section { padding: calc(2rem * var(--space-scale)) var(--space); }
 .section-alt { background: var(--light); }
 .section-inner { max-width: var(--max-width); margin: 0 auto; }
-.section h2 { font-size: 1.5rem; margin-bottom: 0.5rem; border-bottom: 3px solid #ddd; padding-bottom: 0.7rem; position: relative; }
+.section h2 { font-size: calc(1.5rem * var(--display-scale)); margin-bottom: 0.5rem; border-bottom: 3px solid #ddd; padding-bottom: 0.7rem; position: relative; }
 .section h2::after { content: ""; position: absolute; left: 0; bottom: -3px; width: 4.5rem; height: 3px; background: var(--primary); }
 .section .lead { color: #666; margin: 1.2rem 0 1.6rem; white-space: pre-line; }
 
@@ -289,17 +318,45 @@ nav.site-nav a:hover { background: var(--accent); }
 .cards-list .card img { width: 140px; height: 140px; flex-shrink: 0; aspect-ratio: 1 / 1; border-radius: var(--radius); }
 .cards-list .card-body { padding: 0; }
 
-/* "minimal": 写真を使わず、番号つきの見出し＋本文だけのシンプルなカード */
+/* "minimal": 写真を使わず、番号と罫線だけで区切る。
+ *
+ * 枠で囲うのをやめて上下の罫線に変えてある。写真が無いレイアウトで一つずつを箱に入れると、
+ * 中身の少なさがそのまま「スカスカの箱」として見えてしまう。罫線で区切って番号を大きく取ると、
+ * 同じ情報量が「目次」として読め、余白が不足ではなく設計に見える。 */
+/* 閉じの罫線は「最後のカード」ではなく一覧そのものに引く。カードは横に並ぶことがあるので、
+ * .card:last-child に引くと、4枚並んだうちの4枚目の下だけに線が出て不揃いになる。 */
+.cards-minimal {
+  gap: 0;
+  margin-top: calc(1.8rem * var(--space-scale));
+  border-bottom: 1px solid var(--border-color);
+}
 .cards-minimal .card {
   display: flex;
-  gap: 1rem;
-  align-items: flex-start;
-  background: var(--bg);
-  border: var(--border-width) solid var(--border-color);
+  gap: 1.6rem;
+  align-items: baseline;
+  background: none;
+  border: none;
+  border-top: 1px solid var(--border-color);
+  border-radius: 0;
   box-shadow: none;
-  padding: 1.2rem;
+  padding: calc(1.3rem * var(--space-scale)) 0;
+  transition: border-top-color 0.4s ease;
 }
-.card-index { flex-shrink: 0; font-size: 1.5rem; font-weight: 700; line-height: 1; color: var(--accent-text); font-family: var(--font-heading); }
+.cards-minimal .card:hover { border-top-color: var(--primary); }
+.cards-minimal .card-body { padding: 0; }
+.cards-minimal .card-body h3, .cards-minimal .card-body h4 { font-size: calc(1.02rem * var(--display-scale)); margin-bottom: 0.5rem; }
+/* 番号は「読ませる」ものではないので、大きくしたぶん薄くして本文より後ろに置く。 */
+.card-index {
+  flex-shrink: 0;
+  font-size: calc(1.9rem * var(--display-scale));
+  font-weight: var(--heading-weight);
+  line-height: 1;
+  letter-spacing: var(--heading-tracking);
+  color: var(--accent-text);
+  opacity: 0.42;
+  font-family: var(--font-heading);
+  font-variant-numeric: tabular-nums;
+}
 
 .split { display: grid; gap: 1.5rem; align-items: center; }
 @media (min-width: 760px) { .split { grid-template-columns: 40% 1fr; } }
@@ -686,6 +743,58 @@ html[data-decoration="rich"][data-divider="none"] .section-alt::after {
   0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
   50% { transform: translate3d(0, -16px, 0) scale(1.05); }
 }
+
+/* 区切りの引き方（<html data-rule>）— 写真の代わりに罫と余白で構造を作る
+---------------------------------------------------------------------------*/
+/* 既定（"none"）では、どのセクションの見出しにも 3px の太い下線が付く。写真が並ぶページでは
+ * それでいいが、写真を減らしたページでは「太い線」が画面上でいちばん強い要素になってしまい、
+ * 事務書類のように見える。ここは、その下線を引き取って別の形で区切りを作る指定。 */
+
+/* "hairline": 見出しの下線を外し、セクションとセクションの間に髪の毛ほどの罫を1本引く。
+ * 区切りを「セクションの境目」に移すことで、見出し自体は文字の大きさと字間だけで立つ。 */
+html[data-rule="hairline"] .section h2 { border-bottom: none; padding-bottom: 0; }
+html[data-rule="hairline"] .section h2::after { display: none; }
+html[data-rule="hairline"] .section + .section { border-top: 1px solid var(--border-color); }
+/* 淡色セクションが続くときは罫が沈むので、そこだけ少し濃くする。 */
+html[data-rule="hairline"] .section-alt + .section-alt { border-top-color: rgba(0, 0, 0, 0.1); }
+
+/* "accent-bar": 下線をやめて、見出しの左に色の帯を立てる。
+ * 縦組みの柱のように読めるので、和文の見出しと相性が良い。 */
+html[data-rule="accent-bar"] .section h2 {
+  border-bottom: none;
+  padding-bottom: 0;
+  border-left: 3px solid var(--primary);
+  padding-left: 0.9rem;
+}
+html[data-rule="accent-bar"] .section h2::after { display: none; }
+
+/* リード文を引用のように扱う。見出しの罫と揃うので、左端に一本の軸が通る。 */
+html[data-rule="hairline"] .section .lead,
+html[data-rule="accent-bar"] .section .lead {
+  border-left: 1px solid var(--border-color);
+  padding-left: 1.1rem;
+  margin-top: calc(1.4rem * var(--space-scale));
+  font-size: 1.02rem;
+}
+
+/* 淡色セクションのベタ塗りを、ごく浅いグラデーションに変える。
+ * 写真が無いページでは、この「面のわずかな傾き」が唯一の奥行きになる。 */
+html[data-rule="hairline"] .section-alt,
+html[data-rule="accent-bar"] .section-alt {
+  background: linear-gradient(163deg, var(--light) 0%, var(--bg) 118%);
+}
+
+/* 画像1枚を大きく、文章を広く。既定の 40% / 1fr は「写真が主役」の比率で、
+ * 写真が1枚しかないページでは、その1枚に重さが集まりすぎる。 */
+@media (min-width: 760px) {
+  html[data-rule="hairline"] .split,
+  html[data-rule="accent-bar"] .split {
+    grid-template-columns: 34% 1fr;
+    gap: calc(2.6rem * var(--space-scale));
+  }
+}
+html[data-rule="hairline"] .split img,
+html[data-rule="accent-bar"] .split img { aspect-ratio: 3 / 4; }
 
 /* セクションごとの変化（<html data-variety>）
 ---------------------------------------------------------------------------*/

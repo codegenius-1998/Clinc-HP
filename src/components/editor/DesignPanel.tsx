@@ -129,6 +129,26 @@ export function DesignPanel({
           step={100}
           onChange={(headingWeight) => set("font", { headingWeight })}
         />
+        <NumberField
+          label="見出しの大きさ"
+          value={design.font.displayScale}
+          min={1}
+          max={2.2}
+          step={0.05}
+          unit="倍"
+          hint="本文はそのままで、見出しだけを大きくします。写真が少ないデザインでは、ここを上げると印象が決まります。"
+          onChange={(displayScale) => set("font", { displayScale })}
+        />
+        <NumberField
+          label="見出しの字間"
+          value={design.font.headingLetterSpacing}
+          min={-0.02}
+          max={0.3}
+          step={0.01}
+          unit="em"
+          hint="広げるほど落ち着いた印象になります。明朝体と組み合わせると効果的です。"
+          onChange={(headingLetterSpacing) => set("font", { headingLetterSpacing })}
+        />
       </Group>
 
       <Group title="ブロックの形">
@@ -234,6 +254,17 @@ export function DesignPanel({
           onChange={(background) =>
             set("layout", { background: background as DesignTokens["layout"]["background"] })
           }
+        />
+        <SelectField
+          label="見出しの区切り方"
+          value={design.layout.rule}
+          options={[
+            { value: "none", label: "太い下線（標準）" },
+            { value: "hairline", label: "細い罫線（セクションの境目に引く）" },
+            { value: "accent-bar", label: "左に色の帯" },
+          ]}
+          hint="写真を減らしたデザインでは、太い下線が画面でいちばん強い要素になり、事務的に見えます。"
+          onChange={(rule) => set("layout", { rule: rule as DesignTokens["layout"]["rule"] })}
         />
         <SelectField
           label="装飾の量"

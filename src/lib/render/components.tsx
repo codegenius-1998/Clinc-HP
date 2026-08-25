@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { navBlocks, type Block, type BlockOf, type DesignTokens, type SiteDocument } from "@/lib/site/document";
-import { readableOn } from "@/lib/site/color";
+import { readableFill, readableOn } from "@/lib/site/color";
+import { effectiveCardLayout, effectiveHeroLayout } from "@/lib/site/composition";
 import { blockSupportsPadding } from "@/lib/site/blocks";
 
 /** Renders a SiteDocument to a static page. The page is driven entirely by `doc.blocks` in array
@@ -43,6 +44,8 @@ function themeStyle(design: DesignTokens): CSSProperties {
     "--font-size": `${design.font.baseSize}px`,
     "--line-height": String(design.font.lineHeight),
     "--heading-weight": String(design.font.headingWeight),
+    "--display-scale": String(design.font.displayScale),
+    "--heading-tracking": `${design.font.headingLetterSpacing}em`,
 
     "--radius": `${design.block.radius}px`,
     "--border-width": `${design.block.borderWidth}px`,
@@ -58,6 +61,14 @@ function themeStyle(design: DesignTokens): CSSProperties {
      * readable without the admin having to notice. */
     "--primary-text": readableOn(design.colors.primary, design.colors.background, design.colors.text),
     "--accent-text": readableOn(design.colors.accent, design.colors.background, design.colors.text),
+
+    /* Surface variants, for the two places a label sits ON the brand colour: the navigation bar and
+     * the 電話 button. Derived the other way round from the two above — there the text moves, here
+     * the fill does, because darkening a white button label reads as a mistake rather than a choice.
+     * The stock palette needs it: white on #4ba3fc is 2.6:1. `--primary` itself is left alone, so
+     * underlines, rules and gradients keep the authored colour exactly. */
+    "--primary-fill": readableFill(design.colors.primary, design.colors.primaryInverse),
+    "--accent-fill": readableFill(design.colors.accent, design.colors.accentInverse),
 
     "--reveal-duration": `${design.animation.duration}ms`,
   } as CSSProperties;
@@ -257,7 +268,7 @@ function Section({
 
 function HeroBlock({ block, doc }: { block: BlockOf<"hero">; doc: SiteDocument }) {
   return (
-    <section id={block.id} className={`hero hero-${doc.design.layout.heroLayout}`} style={sectionCss(block)} data-container="section">
+    <section id={block.id} className={`hero hero-${effectiveHeroLayout(doc)}`} style={sectionCss(block)} data-container="section">
       {block.data.image && (
         <img className="hero-image" src={block.data.image} alt="" data-block-id={block.id} data-field="image" />
       )}
@@ -286,7 +297,7 @@ function HeroBlock({ block, doc }: { block: BlockOf<"hero">; doc: SiteDocument }
  * favour of a numbered accent, which is why the <img> must not render at all (an empty broken image
  * would still occupy layout) rather than merely being hidden in CSS. */
 function RichBlock({ block, doc }: { block: BlockOf<"rich">; doc: SiteDocument }) {
-  const layout = doc.design.block.cardLayout;
+  const layout = effectiveCardLayout(block, doc.design);
   const showCardImages = layout !== "minimal";
   return (
     <Section block={block}>
@@ -666,13 +677,14 @@ export function SitePage({ doc }: { doc: SiteDocument }) {
       lang="ja"
       style={themeStyle(design)}
       data-card-layout={design.block.cardLayout}
-      data-hero={design.layout.heroLayout}
+      data-hero={effectiveHeroLayout(doc)}
       data-divider={design.layout.sectionDivider}
       data-reveal={design.animation.reveal}
       data-stagger={design.animation.stagger ? "1" : "0"}
       data-parallax={design.animation.parallaxHero ? "1" : "0"}
       data-bg={design.layout.background}
       data-decoration={design.layout.decoration}
+      data-rule={design.layout.rule}
       data-variety={design.animation.variety ? "1" : "0"}
     >
       <head>

@@ -38,6 +38,16 @@ export const designTokensSchema = z.object({
     baseSize: z.number().min(12).max(22),
     lineHeight: z.number().min(1.2).max(2.4),
     headingWeight: z.number().int().min(300).max(900),
+    /** Multiplies heading sizes only, leaving body text alone. A design that carries its impact in
+     * type rather than in photographs needs the headings to be genuinely large; scaling `baseSize`
+     * instead would just make the whole page bigger, which is not the same thing.
+     *
+     * .default() is load-bearing here, as it is for every field added after the first sites were
+     * written — see the note on layout.background below. */
+    displayScale: z.number().min(1).max(2.2).default(1),
+    /** Heading letter-spacing in em. Japanese headings set with generous tracking are most of what
+     * separates "洗練" from "普通" in a text-led layout, and it cannot be derived from the family. */
+    headingLetterSpacing: z.number().min(-0.02).max(0.3).default(0),
   }),
   block: z.object({
     radius: z.number().min(0).max(48),
@@ -64,6 +74,11 @@ export const designTokensSchema = z.object({
     /** Ornament level: section numbers, heading marks, corner shapes. Purely decorative — nothing
      * here changes what the page says, only how furnished it looks. */
     decoration: z.enum(["none", "accent", "rich"]).default("none"),
+    /** How one section is separated from the next when there is no photograph to do it. "hairline"
+     * is a thin rule and a lightened heading; "accent-bar" moves the emphasis to a coloured bar
+     * beside the heading. Both replace the default heavy underline under every h2, which is what
+     * makes a photo-light page read as a form rather than as a design. */
+    rule: z.enum(["none", "hairline", "accent-bar"]).default("none"),
   }),
   animation: z.object({
     reveal: z.enum(["none", "fade", "slide-up", "slide-left", "slide-right", "zoom", "pop", "flip", "blur"]),
@@ -99,6 +114,8 @@ export const DEFAULT_DESIGN_TOKENS: DesignTokens = {
     baseSize: 16,
     lineHeight: 1.8,
     headingWeight: 700,
+    displayScale: 1,
+    headingLetterSpacing: 0,
   },
   block: {
     radius: 12,
@@ -114,6 +131,7 @@ export const DEFAULT_DESIGN_TOKENS: DesignTokens = {
     sectionDivider: "none",
     background: "plain",
     decoration: "none",
+    rule: "none",
   },
   animation: {
     reveal: "slide-up",
@@ -278,6 +296,14 @@ export type ContainerStyle = z.infer<typeof containerStyleSchema>;
 const blockCommon = {
   id: z.string().min(1),
   visible: z.boolean(),
+  /** Per-block layout override, chosen from a closed list this codebase owns (see
+   * src/lib/site/composition.ts). It is what lets one template produce differently-shaped pages for
+   * different clinics without anything outside that list ever reaching the renderer. A value that is
+   * not in the list is ignored rather than rejected — the block simply renders in the template's own
+   * layout, which is exactly what happened before this field existed. Hence a plain string here
+   * rather than an enum: the vocabulary is per block TYPE, which zod cannot express in `blockCommon`,
+   * and `effectiveCardLayout` / `effectiveHeroLayout` are the single place it is validated. */
+  variant: z.string().optional(),
   /** Label shown in the page's nav. Empty string means "render the block but keep it out of the nav"
    * — correct for hero and for decorative banners. */
   navLabel: z.string(),

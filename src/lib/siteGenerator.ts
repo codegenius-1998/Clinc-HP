@@ -9,6 +9,9 @@ import { generateSiteImage, type ImageStyle } from "./openai/generateSiteImage";
 import { matchImagesToCategories, type ImageTarget as CategoryImageTarget } from "./openai/matchImageCategories";
 import type { HearingSheet } from "./hearing";
 import type { Block, SiteDocument } from "./site/document";
+import { LOGO_SLOT, documentImageSlots, needsGeneratedFile, slotKey } from "./site/imagePaths";
+import { checkDesign } from "./site/designCheck";
+import { applyComposition, derivePalette, normalizeComposition } from "./site/composition";
 import type { ImageCategoryKey } from "./imageCategories";
 
 /** Builds one clinic site: pick a template, clone it, write the copy, generate the images, save the
@@ -29,6 +32,8 @@ export type GeneratedSite = {
   templateName: string;
   /** One-line explanation of why the auto-selector chose that template, when an AI call decided it. */
   templateReason: string | null;
+  /** How many problems the automatic design check found in what was just built. */
+  designCheck: { high: number; medium: number; low: number; checkedAt: string };
 };
 
 // --- hearing sheet -> factual block content ------------------------------------------------------
@@ -197,23 +202,6 @@ const ASPECT_SIZE: Record<ImageAspect, { width: number; height: number }> = {
   "2:1": { width: 1200, height: 600 },
 };
 
-const LOGO_SLOT = "logo";
-
-/** Slot keys address one image placement: a block's own image, or the nth item inside it. They double
- * as output filenames, so they're kept to characters that are safe in a path and in a URL. */
-function slotKey(blockId: string, index?: number): string {
-  const base = index === undefined ? blockId : `${blockId}-${index}`;
-  return base.replace(/[^A-Za-z0-9_-]/g, "-");
-}
-
-/** True when a path can only resolve if this run writes the file itself. Absolute URLs (an uploaded
- * photo on Supabase) and root-relative paths (anything already under public/) live outside the site
- * directory and survive on their own; a bare "images/foo.jpg" does not. */
-function needsGeneratedFile(value: string | undefined): boolean {
-  if (!value) return false;
-  return !/^(?:[a-z][a-z0-9+.-]*:|\/)/i.test(value);
-}
-
 type ImageJob = {
   slot: string;
   /** Site-relative path written into the block, e.g. "images/hero.jpg". */
@@ -305,34 +293,19 @@ function buildImageJobs(doc: SiteDocument, hearing: HearingSheet, plan: ContentP
   // generateSite wipes the output directory first, and instantiateTemplate copies a template's image
   // *paths* without copying the files behind them. So a slot the plan happened to skip pointed at
   // nothing at all — which is how ご挨拶 and 施設案内 shipped with a blank split where the photo
-  // belongs. Slots already covered above are no-ops (push dedupes by slot); slots the template left
-  // empty stay empty, so this adds cost only where an image is actually rendered.
-  function fillGap(slot: string, current: string | undefined, aspect: ImageAspect, alt: string) {
-    if (!needsGeneratedFile(current)) return;
-    push({ slot, path: `images/${slot}.jpg`, alt, role: "photo", targetSize: ASPECT_SIZE[aspect] });
-  }
-  for (const block of doc.blocks) {
-    if (!block.visible) continue;
-    switch (block.type) {
-      case "rich":
-        fillGap(slotKey(block.id), block.data.image, "4:3", block.data.heading || hearing.clinicName);
-        if (doc.design.block.cardLayout !== "minimal") {
-          block.data.cards.forEach((card, i) =>
-            fillGap(slotKey(block.id, i), card.image, "4:3", card.heading || block.data.heading)
-          );
-        }
-        break;
-      case "imageBanner":
-        fillGap(slotKey(block.id), block.data.image, "2:1", block.data.caption || hearing.clinicName);
-        break;
-      case "gallery":
-        block.data.images.forEach((image, i) =>
-          fillGap(slotKey(block.id, i), image.src, "4:3", image.caption || block.data.heading)
-        );
-        break;
-      default:
-        break;
-    }
+  // belongs. Walking documentImageSlots rather than re-listing the block types here is what keeps
+  // this in step with applyImagePaths and with the design check. Slots already covered above are
+  // no-ops (push dedupes by slot); slots the template left empty stay empty, so this adds cost only
+  // where an image is actually rendered.
+  for (const slot of documentImageSlots(doc)) {
+    if (!slot.rendered || !needsGeneratedFile(slot.value)) continue;
+    push({
+      slot: slot.slot,
+      path: `images/${slot.slot}.jpg`,
+      alt: slot.label,
+      role: "photo",
+      targetSize: ASPECT_SIZE[slot.aspect],
+    });
   }
 
   return jobs;
@@ -504,6 +477,11 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
     address: hearing.address ?? "",
   };
 
+  // Each clinic gets its own shade of the template's palette. Seeded from the slug, so a rebuild
+  // reproduces the same colours rather than quietly redecorating a page that is already live. Done
+  // here, before anything reads the design, so the renderer and the design check see one palette.
+  doc.design = { ...doc.design, colors: derivePalette(doc.design.colors, hearing.slug) };
+
   applyFactualVisibility(doc, hearing);
 
   const newsBlock = doc.blocks.find((b): b is Extract<Block, { type: "news" }> => b.type === "news" && b.visible);
@@ -518,6 +496,9 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
     polishStaffComments(hearing.staffMembers ?? []),
   ]);
   applyContentPlan(doc, plan);
+  // Layout choices are applied AFTER the copy, because the normalizer's "no two neighbouring sections
+  // in the same layout" rule reads the blocks in their final visible order.
+  applyComposition(doc, normalizeComposition(plan.composition, doc));
   applyFactualContent(doc, hearing, plan, staffComments);
 
   // Full regeneration replaces every image, so the old directory is cleared here — unlike
@@ -532,6 +513,12 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
   await saveDocument(doc);
   await renderSiteFiles(doc);
 
+  // Checked here, at the end, because this is the moment the files and the document are guaranteed to
+  // agree — and because a build is exactly when a defect like a missing section image is introduced.
+  // Only the counts are kept: the full list is regenerated on demand from the editor, and storing it
+  // on the request record would go stale the first time someone edits the site.
+  const issues = checkDesign(doc, { outDir }).issues;
+
   return {
     documentId: doc.id,
     slug: doc.slug,
@@ -539,5 +526,11 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
     templateId: template.id,
     templateName: template.name,
     templateReason: reason,
+    designCheck: {
+      high: issues.filter((i) => i.severity === "high").length,
+      medium: issues.filter((i) => i.severity === "medium").length,
+      low: issues.filter((i) => i.severity === "low").length,
+      checkedAt: new Date().toISOString(),
+    },
   };
 }

@@ -1,19 +1,60 @@
 @import "tailwindcss";
 
+/* Styles for the APP's own screens — the marketing page, the clinic owner's pages and the admin
+ * panel. The sites this app generates have their own, entirely separate stylesheet
+ * (src/lib/render/site.css); nothing here reaches them and nothing there reaches here. */
+
 :root {
   --background: #f6f9fc;
   --foreground: #1b2433;
   --font-noto-sans-jp: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-shippori-mincho: "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
 }
 
+/* The owner-facing palette. Deliberately warm and near-neutral rather than the slate/sky the admin
+ * panel uses: the two audiences are different, and a clinic owner arriving at a page that looks like
+ * an internal dashboard has already been told the wrong thing about what this product is.
+ *
+ * `ink` on `paper` is 16.7:1 and `brand` on `paper` is 7.5:1 — both clear WCAG AA comfortably, which
+ * matters here for the same reason it matters in the generated sites. */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-noto-sans-jp);
+  --font-display: var(--font-shippori-mincho);
+
+  --color-ink: #16201d;
+  --color-ink-soft: #5a6560;
+  --color-paper: #ffffff;
+  --color-canvas: #f6f4ef;
+  --color-line: #e2ded5;
+  --color-brand: #2f5d4e;
+  --color-brand-deep: #1f473b;
+  --color-brand-soft: #eaf0ec;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), sans-serif;
+}
+
+/* Scroll-triggered reveal for the owner-facing pages (see src/components/ui/Reveal.tsx).
+ *
+ * The class is applied by the server so the element starts hidden without a flash, and removed by an
+ * IntersectionObserver. Two guards keep it from ever hiding content permanently: `html.js` is set by
+ * the component itself on mount, so a browser that never runs the script shows everything at once,
+ * and `prefers-reduced-motion` turns the whole thing off. */
+@media (prefers-reduced-motion: no-preference) {
+  html.js .app-reveal {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  html.js .app-reveal-in {
+    opacity: 1;
+    transform: none;
+    transition:
+      opacity 700ms cubic-bezier(0.22, 0.68, 0.3, 1),
+      transform 700ms cubic-bezier(0.22, 0.68, 0.3, 1);
+  }
 }

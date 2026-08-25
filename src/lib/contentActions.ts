@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin, createUser, deleteUser } from "./auth";
-import { deleteHearing, friendlyGenerationError, getHearing, updateHearing } from "./hearing";
+import { claimGeneration, deleteHearing, friendlyGenerationError, getHearing, updateHearing } from "./hearing";
 import { generateSite } from "./siteGenerator";
 import {
   createSection,
@@ -82,13 +82,12 @@ export async function deleteRequestAction(slug: string): Promise<void> {
  * the admin to review afterwards. */
 export async function approveRequestAction(slug: string): Promise<void> {
   await requireAdmin();
-  const hearing = await getHearing(slug);
-  if (!hearing) return;
-  // Pressing 作成 twice while a run is in flight would start a second build writing to the same
-  // output directory; the flag is also what the screens read to show 作成中.
-  if (hearing.generationStartedAt) return;
 
-  await updateHearing(slug, { generationStartedAt: new Date().toISOString(), generationError: undefined });
+  // One conditional UPDATE, not a read-then-write. A second 作成 — a double click, or two admins on
+  // the same row — would otherwise start a second four-minute, separately-billed build that deletes
+  // and rewrites the same output directory underneath the first. Whoever loses the race here simply
+  // returns; the screens already show 作成中 from the same column.
+  if (!(await claimGeneration(slug))) return;
 
   // NOT awaited. A full build takes minutes (measured ~4 with 20 generated images) and Cloudflare
   // cuts an origin response off at 100 seconds, so awaiting it here meant the tunnel killed the
@@ -117,6 +116,7 @@ async function runGeneration(slug: string): Promise<void> {
       templateId: result.templateId,
       templateLabel: result.templateName,
       templateReason: result.templateReason ?? undefined,
+      designCheck: result.designCheck,
       generationStartedAt: undefined,
     });
   } catch (err) {

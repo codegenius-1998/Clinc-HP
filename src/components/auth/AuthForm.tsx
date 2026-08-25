@@ -4,16 +4,19 @@ import Link from "next/link";
 import { useActionState } from "react";
 import type { AuthFormState } from "@/lib/authActions";
 
+/** Two visual identities, because the two sign-ins are for two different people. The clinic owner's
+ * pages carry the warm typographic look introduced on the landing page; the administrator's stay in
+ * the panel's neutral ink. Same form, same validation — only the surface differs. */
 const ACCENTS = {
   sky: {
-    button: "bg-sky-600 hover:bg-sky-500 shadow-sky-200",
-    label: "text-sky-500",
-    ring: "focus:border-sky-400 focus:ring-sky-100",
+    button: "bg-brand hover:bg-brand-deep",
+    label: "text-brand",
+    ring: "focus:border-brand focus:ring-brand-soft",
   },
   slate: {
-    button: "bg-slate-800 hover:bg-slate-700 shadow-slate-200",
-    label: "text-slate-400",
-    ring: "focus:border-slate-400 focus:ring-slate-100",
+    button: "bg-ink hover:bg-brand-deep",
+    label: "text-ink-soft",
+    ring: "focus:border-ink focus:ring-line",
   },
 } as const;
 
@@ -36,17 +39,17 @@ export function AuthForm({
 }) {
   const [state, formAction, pending] = useActionState(action, { error: null });
   const colors = ACCENTS[accent];
-  const inputClass = `w-full rounded-xl border border-slate-200 px-4 py-3 text-[14px] text-slate-900 outline-none transition-colors ${colors.ring}`;
+  const inputClass = `w-full rounded-lg border border-line bg-paper px-4 py-3 text-[14px] text-ink outline-none transition-colors focus:ring-2 ${colors.ring}`;
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center px-6 py-24">
+    <div className="flex flex-1 flex-col items-center justify-center bg-canvas px-6 py-24">
       <div className="w-full max-w-sm">
-        <p className={`text-center text-[12px] tracking-[0.35em] ${colors.label}`}>{eyebrow}</p>
-        <h1 className="mt-4 text-center text-2xl font-semibold tracking-tight text-slate-900">{title}</h1>
+        <p className={`text-center text-[11px] tracking-[0.4em] ${colors.label}`}>{eyebrow}</p>
+        <h1 className="mt-5 text-center font-display text-[27px] tracking-[0.14em] text-ink">{title}</h1>
 
         <form action={formAction} className="mt-10 flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="email" className="text-[13px] font-medium text-slate-600">
+            <label htmlFor="email" className="text-[13px] font-medium text-ink-soft">
               メールアドレス
             </label>
             <input
@@ -61,7 +64,7 @@ export function AuthForm({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="password" className="text-[13px] font-medium text-slate-600">
+            <label htmlFor="password" className="text-[13px] font-medium text-ink-soft">
               パスワード
             </label>
             <input
@@ -78,7 +81,7 @@ export function AuthForm({
 
           {showConfirmPassword && (
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="passwordConfirm" className="text-[13px] font-medium text-slate-600">
+              <label htmlFor="passwordConfirm" className="text-[13px] font-medium text-ink-soft">
                 パスワード（確認）
               </label>
               <input
@@ -95,21 +98,21 @@ export function AuthForm({
           )}
 
           {state.error && (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-[13px] text-red-600">{state.error}</p>
+            <p className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-[13px] text-red-700">{state.error}</p>
           )}
 
           <button
             type="submit"
             disabled={pending}
-            className={`mt-2 inline-flex items-center justify-center gap-2 rounded-full px-7 py-3.5 text-[13px] font-medium tracking-[0.08em] text-white shadow-sm transition-transform hover:-translate-y-0.5 disabled:pointer-events-none disabled:opacity-60 ${colors.button}`}
+            className={`mt-3 inline-flex items-center justify-center gap-2 rounded-full px-7 py-3.5 text-[13px] font-medium tracking-[0.1em] text-paper transition-transform hover:-translate-y-0.5 disabled:pointer-events-none disabled:opacity-60 ${colors.button}`}
           >
             {pending ? "処理中…" : submitLabel}
           </button>
         </form>
 
         {footer && (
-          <p className="mt-6 text-center text-[13px] text-slate-500">
-            <Link href={footer.href} className="text-slate-700 underline underline-offset-4 hover:text-slate-900">
+          <p className="mt-8 text-center text-[13px] text-ink-soft">
+            <Link href={footer.href} className="text-ink underline underline-offset-8 transition-colors hover:text-brand">
               {footer.label}
             </Link>
           </p>

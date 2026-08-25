@@ -7,6 +7,7 @@ import type { Block, SiteDocument } from "@/lib/site/document";
 import { AddBlockPalette } from "./AddBlockPalette";
 import { BlockEditor } from "./BlockEditor";
 import { BlockList } from "./BlockList";
+import { DesignCheckButton } from "./DesignCheckButton";
 import { DesignPanel } from "./DesignPanel";
 import { GuidelineCheckButton } from "./GuidelineCheckButton";
 import { Inspector, type Selection } from "./Inspector";
@@ -130,6 +131,7 @@ export function SiteEditor({
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
+          <DesignCheckButton doc={doc} documentId={doc.id} />
           <GuidelineCheckButton doc={doc} documentId={doc.id} />
           <a
             href={`${previewUrl}?v=${encodeURIComponent(previewVersion)}`}

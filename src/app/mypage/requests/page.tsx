@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { getSession } from "@/lib/auth";
 import { listHearingsByOwner, hearingStatus } from "@/lib/hearing";
+import { DesignCheckBadge } from "@/components/sites/DesignCheckBadge";
 import { deleteOwnApplicationAction } from "@/lib/applicationActions";
-import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { MypagePageHeader } from "@/components/mypage/MypageShell";
 import { ConfirmDeleteButton } from "@/components/admin/ConfirmDeleteButton";
 import { AutoRefresh } from "@/components/sites/AutoRefresh";
 
@@ -25,19 +26,19 @@ export default async function MypageRequestsPage() {
     <div>
       {building && <AutoRefresh />}
       <div className="flex items-start justify-between gap-4">
-        <AdminPageHeader title="申請一覧" description="送信したホームページ作成の申請です。" />
+        <MypagePageHeader title="申請一覧" description="送信したホームページ作成の申請です。" />
         <Link
           href="/mypage/apply"
-          className="shrink-0 inline-flex items-center justify-center gap-2 rounded-full bg-sky-600 px-5 py-2.5 text-[13px] font-medium text-white shadow-sm shadow-sky-200 transition-transform hover:-translate-y-0.5 hover:bg-sky-500"
+          className="shrink-0 inline-flex items-center justify-center gap-2 rounded-full bg-brand px-6 py-3 text-[13px] font-medium text-paper transition-transform hover:-translate-y-0.5 hover:bg-brand-deep"
         >
           新規申請
           <span aria-hidden>→</span>
         </Link>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <div className="overflow-hidden border border-line bg-paper">
         <table className="w-full text-left text-[15px]">
-          <thead className="border-b border-slate-100 bg-slate-50 text-slate-500">
+          <thead className="border-b border-line bg-canvas text-ink-soft">
             <tr>
               <th className="px-4 py-3 font-medium">クリニック名</th>
               <th className="px-4 py-3 font-medium">状態</th>
@@ -49,19 +50,22 @@ export default async function MypageRequestsPage() {
             {hearings.map((hearing) => {
               const status = hearingStatus(hearing);
               return (
-                <tr key={hearing.slug} className="border-b border-slate-50 last:border-0">
-                  <td className="px-4 py-3 text-slate-900">{hearing.clinicName}</td>
+                <tr key={hearing.slug} className="border-b border-line/60 last:border-0">
+                  <td className="px-4 py-3 text-ink">{hearing.clinicName}</td>
                   <td className="px-4 py-3">
-                    <span className={`rounded-full px-2.5 py-1 text-[13px] font-medium ${status.className}`}>
-                      {status.label}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className={`rounded-full px-2.5 py-1 text-[13px] font-medium ${status.className}`}>
+                        {status.label}
+                      </span>
+                      {status.key === "generated" && <DesignCheckBadge check={hearing.designCheck} />}
+                    </div>
                   </td>
-                  <td className="px-4 py-3 text-slate-400">{formatDate(hearing.createdAt)}</td>
+                  <td className="px-4 py-3 text-ink-soft/75">{formatDate(hearing.createdAt)}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-3">
                       <Link
                         href={`/sites/${hearing.slug}`}
-                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-[13px] text-slate-700 hover:bg-slate-50"
+                        className="rounded-lg border border-line px-3 py-1.5 text-[13px] text-ink-soft transition-colors hover:bg-canvas hover:text-ink"
                       >
                         詳細を確認
                       </Link>
@@ -76,7 +80,7 @@ export default async function MypageRequestsPage() {
             })}
             {hearings.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-slate-400">
+                <td colSpan={4} className="px-4 py-6 text-center text-ink-soft/75">
                   申請はまだありません。
                 </td>
               </tr>
