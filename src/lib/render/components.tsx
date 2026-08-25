@@ -141,7 +141,7 @@ function Header({ doc }: { doc: SiteDocument }) {
   return (
     <header className="site-header">
       <a className="brand" href="#top" aria-label={meta.clinicName}>
-        <img src={meta.logoImage} alt={meta.clinicName} />
+        {meta.logoImage && <img src={meta.logoImage} alt={meta.clinicName} />}
         <span className="clinic-name">{meta.clinicName}</span>
       </a>
       {meta.phone && (
@@ -258,7 +258,9 @@ function Section({
 function HeroBlock({ block, doc }: { block: BlockOf<"hero">; doc: SiteDocument }) {
   return (
     <section id={block.id} className={`hero hero-${doc.design.layout.heroLayout}`} style={sectionCss(block)} data-container="section">
-      <img className="hero-image" src={block.data.image} alt="" data-block-id={block.id} data-field="image" />
+      {block.data.image && (
+        <img className="hero-image" src={block.data.image} alt="" data-block-id={block.id} data-field="image" />
+      )}
       {/* Scroll cue. Outside .hero-copy on purpose: .hero-copy carries `reveal`, so anything inside it
           starts at opacity 0 and waits on the IntersectionObserver — a "keep scrolling" hint that is
           invisible until it scrolls into view is useless, since it sits on the first screen. */}
@@ -570,7 +572,9 @@ function FreeTextBlock({ block }: { block: BlockOf<"freeText"> }) {
 function ImageBannerBlock({ block }: { block: BlockOf<"imageBanner"> }) {
   const inner = (
     <>
-      <img src={block.data.image} alt={block.data.caption ?? ""} data-block-id={block.id} data-field="image" />
+      {block.data.image && (
+        <img src={block.data.image} alt={block.data.caption ?? ""} data-block-id={block.id} data-field="image" />
+      )}
       {block.data.caption && (
         <span className="banner-caption" data-block-id={block.id} data-field="caption" style={textStyleCss(block, "caption")}>
           {block.data.caption}
@@ -600,7 +604,9 @@ function GalleryBlock({ block }: { block: BlockOf<"gallery"> }) {
       <div className={`gallery gallery-${block.data.columns}`}>
         {block.data.images.map((image, i) => (
           <figure key={i}>
-            <img src={image.src} alt={image.caption ?? ""} loading="lazy" data-block-id={block.id} data-field={`images.${i}.src`} />
+            {image.src && (
+              <img src={image.src} alt={image.caption ?? ""} loading="lazy" data-block-id={block.id} data-field={`images.${i}.src`} />
+            )}
             {image.caption && (
               <figcaption data-block-id={block.id} data-field={`images.${i}.caption`} style={textStyleCss(block, `images.${i}.caption`)}>
                 {image.caption}

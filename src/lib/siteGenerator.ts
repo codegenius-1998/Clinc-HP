@@ -206,6 +206,14 @@ function slotKey(blockId: string, index?: number): string {
   return base.replace(/[^A-Za-z0-9_-]/g, "-");
 }
 
+/** True when a path can only resolve if this run writes the file itself. Absolute URLs (an uploaded
+ * photo on Supabase) and root-relative paths (anything already under public/) live outside the site
+ * directory and survive on their own; a bare "images/foo.jpg" does not. */
+function needsGeneratedFile(value: string | undefined): boolean {
+  if (!value) return false;
+  return !/^(?:[a-z][a-z0-9+.-]*:|\/)/i.test(value);
+}
+
 type ImageJob = {
   slot: string;
   /** Site-relative path written into the block, e.g. "images/hero.jpg". */
@@ -293,42 +301,85 @@ function buildImageJobs(doc: SiteDocument, hearing: HearingSheet, plan: ContentP
     });
   }
 
+  // Every image path the document still carries has to resolve to a file this run produces:
+  // generateSite wipes the output directory first, and instantiateTemplate copies a template's image
+  // *paths* without copying the files behind them. So a slot the plan happened to skip pointed at
+  // nothing at all — which is how ご挨拶 and 施設案内 shipped with a blank split where the photo
+  // belongs. Slots already covered above are no-ops (push dedupes by slot); slots the template left
+  // empty stay empty, so this adds cost only where an image is actually rendered.
+  function fillGap(slot: string, current: string | undefined, aspect: ImageAspect, alt: string) {
+    if (!needsGeneratedFile(current)) return;
+    push({ slot, path: `images/${slot}.jpg`, alt, role: "photo", targetSize: ASPECT_SIZE[aspect] });
+  }
+  for (const block of doc.blocks) {
+    if (!block.visible) continue;
+    switch (block.type) {
+      case "rich":
+        fillGap(slotKey(block.id), block.data.image, "4:3", block.data.heading || hearing.clinicName);
+        if (doc.design.block.cardLayout !== "minimal") {
+          block.data.cards.forEach((card, i) =>
+            fillGap(slotKey(block.id, i), card.image, "4:3", card.heading || block.data.heading)
+          );
+        }
+        break;
+      case "imageBanner":
+        fillGap(slotKey(block.id), block.data.image, "2:1", block.data.caption || hearing.clinicName);
+        break;
+      case "gallery":
+        block.data.images.forEach((image, i) =>
+          fillGap(slotKey(block.id, i), image.src, "4:3", image.caption || block.data.heading)
+        );
+        break;
+      default:
+        break;
+    }
+  }
+
   return jobs;
 }
 
-/** Writes the finished image paths back into the blocks. Slots with no file (the model didn't plan
- * one, or generation was skipped) are left alone so a template's own sample image survives. */
+/** Writes the finished image paths back into the blocks. A slot with no file left behind a path that
+ * resolves to nothing (see the gap-filling loop in buildImageJobs), so anything still pointing inside
+ * the wiped output directory is cleared rather than kept: a section with no photo beats a broken one,
+ * and it keeps the stored document honest about what exists on disk. Paths that live outside the site
+ * directory — uploads, anything under public/ — are untouched. */
 function applyImagePaths(doc: SiteDocument, paths: Map<string, string>): void {
   const logo = paths.get(LOGO_SLOT);
   if (logo) doc.meta.logoImage = logo;
+  else if (needsGeneratedFile(doc.meta.logoImage)) doc.meta.logoImage = "";
+
+  /** The produced path, the current one if it needs no file of ours, or "" when neither holds. */
+  function resolve(slot: string, current: string | undefined): string {
+    return paths.get(slot) ?? (needsGeneratedFile(current) ? "" : current ?? "");
+  }
 
   for (const block of doc.blocks) {
-    const own = paths.get(slotKey(block.id));
+    const ownSlot = slotKey(block.id);
     switch (block.type) {
       case "hero":
-        if (own) block.data.image = own;
+        block.data.image = resolve(ownSlot, block.data.image);
         break;
       case "rich":
-        if (own) block.data.image = own;
-        block.data.cards = block.data.cards.map((card, i) => {
-          const image = paths.get(slotKey(block.id, i));
-          return image ? { ...card, image } : card;
-        });
+        block.data.image = resolve(ownSlot, block.data.image);
+        block.data.cards = block.data.cards.map((card, i) => ({
+          ...card,
+          image: resolve(slotKey(block.id, i), card.image),
+        }));
         break;
       case "imageBanner":
-        if (own) block.data.image = own;
+        block.data.image = resolve(ownSlot, block.data.image);
         break;
       case "gallery":
-        block.data.images = block.data.images.map((image, i) => {
-          const src = paths.get(slotKey(block.id, i));
-          return src ? { ...image, src } : image;
-        });
+        block.data.images = block.data.images.map((image, i) => ({
+          ...image,
+          src: resolve(slotKey(block.id, i), image.src),
+        }));
         break;
       case "staff":
-        block.data.members = block.data.members.map((member, i) => {
-          const image = paths.get(slotKey(block.id, i));
-          return image ? { ...member, image } : member;
-        });
+        block.data.members = block.data.members.map((member, i) => ({
+          ...member,
+          image: resolve(slotKey(block.id, i), member.image),
+        }));
         break;
       default:
         break;
