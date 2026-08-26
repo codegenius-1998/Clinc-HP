@@ -1,5 +1,5 @@
-import { DEFAULT_DESIGN_TOKENS, type Block, type SiteDocument } from "./document";
-import { BLOCK_DEFINITIONS } from "./blocks";
+import { archetypeBlocks } from "./archetypes";
+import { DEFAULT_DESIGN_TOKENS, defaultPages, type Block, type SiteDocument } from "./document";
 import { newDocumentId } from "./store";
 
 /** The stock clinic layout, used as the fallback template when D1 holds none that fit (a brand-new
@@ -12,38 +12,13 @@ import { newDocumentId } from "./store";
  * planner writes against. That is why an admin can add a fifth content section to a template and the
  * generator will write copy for it without any code change. */
 
-function block<T extends Block["type"]>(
-  id: string,
-  type: T,
-  navLabel: string,
-  data: Partial<Record<string, unknown>> = {}
-): Block {
-  return {
-    id,
-    type,
-    visible: true,
-    navLabel,
-    data: { ...BLOCK_DEFINITIONS[type].defaultData(), ...data },
-  } as Block;
-}
-
-/** Stable, readable block ids — these become the page's HTML anchors (`#department`), and a template
- * is a fixed document rather than something the editor generates ids for on the fly. */
+/** The stock twelve-section layout, now expressed as the `one-page-classic` archetype.
+ *
+ * ⚠️ Kept as a function rather than inlined at its call sites: `blockLabel`-stable ids and this exact
+ * section order are what every existing template on disk was built from, and scripts/verify-archetypes.mts
+ * checks that the archetype still reproduces it. */
 export function defaultTemplateBlocks(): Block[] {
-  return [
-    block("hero", "hero", ""),
-    block("news", "news", "お知らせ", { heading: "お知らせ" }),
-    block("department", "rich", "診療科案内", { heading: "診療科案内" }),
-    block("greeting", "rich", "ご挨拶", { heading: "ご挨拶" }),
-    block("features", "rich", "当院の特徴", { heading: "当院の特徴" }),
-    block("facility", "rich", "施設案内", { heading: "施設案内" }),
-    block("hours", "hours", "診療時間", { heading: "診療時間" }),
-    block("staff", "staff", "スタッフ紹介", { heading: "スタッフ紹介" }),
-    block("pricing", "pricing", "料金表", { heading: "料金表" }),
-    block("faq", "faq", "よくある質問", { heading: "よくある質問" }),
-    block("access", "access", "アクセス", { heading: "アクセス" }),
-    block("contact", "contact", "お問い合わせ"),
-  ];
+  return archetypeBlocks("one-page-classic").blocks;
 }
 
 export function buildDefaultTemplate(): SiteDocument {
@@ -54,7 +29,11 @@ export function buildDefaultTemplate(): SiteDocument {
     name: "標準クリニックテンプレート",
     isTemplate: true,
     canSell: true,
-    design: DEFAULT_DESIGN_TOKENS,
+    // ⚠️ A copy, not the constant. DEFAULT_DESIGN_TOKENS is a shared mutable object, and a document
+    // holding it by reference lets any writer corrupt the defaults for the whole process — which is
+    // no longer hypothetical: applyImagePaths writes design.layout.backdropImage. Same reasoning as
+    // defaultPages() being a function rather than a constant (document.ts).
+    design: structuredClone(DEFAULT_DESIGN_TOKENS),
     meta: {
       clinicName: "",
       phone: "",
@@ -64,6 +43,8 @@ export function buildDefaultTemplate(): SiteDocument {
       seo: { title: "", metaDescription: "", ogTitle: "", ogDescription: "", ogSiteName: "" },
       snsLinks: [],
     },
+    // One page, as every document was before multi-page rendering existed.
+    pages: defaultPages(),
     blocks: defaultTemplateBlocks(),
     mood: "清潔感があり親しみやすい、オーソドックスなクリニックサイト。専門的すぎず、初めての患者にも安心感を与える柔らかいトーン。幅広い診療科に合う無難な選択肢。",
     tags: ["汎用", "クリニック", "清潔感"],

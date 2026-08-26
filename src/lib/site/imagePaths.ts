@@ -13,6 +13,14 @@ import type { Block, DesignTokens, SiteDocument } from "./document";
 
 export const LOGO_SLOT = "logo";
 
+/** The generated photograph behind the page (`design.layout.backdrop`).
+ *
+ * ⚠️ It is listed here rather than being a field on some block, and that is the whole point: this
+ * module is the single ledger of "every place a document points at an image". Adding the slot here
+ * gives buildImageJobs' gap-filling, checkImages' file-existence rule and
+ * scripts/illustrate-template.mts the backdrop for free — which is the arrangement BUG-01 taught. */
+export const BACKDROP_SLOT = "backdrop";
+
 export type ImageAspect = "1:1" | "4:3" | "16:9" | "2:1";
 
 /** Slot keys address one image placement: a block's own image, or the nth item inside it. They double
@@ -146,6 +154,18 @@ export function documentImageSlots(
       rendered: true,
     },
   ];
+  // Only when the design asks for one. A template that does not use a backdrop must not be billed
+  // for a photograph nothing draws — the same rule `rendered` expresses for card images.
+  if (doc.design.layout.backdrop !== "none") {
+    slots.push({
+      slot: BACKDROP_SLOT,
+      field: "design.layout.backdropImage",
+      value: doc.design.layout.backdropImage,
+      label: "ページ背景の写真",
+      aspect: "16:9",
+      rendered: true,
+    });
+  }
   for (const block of doc.blocks) {
     if (!block.visible && !options.includeHidden) continue;
     // Per block, not per document: a section may override the template's card layout (see

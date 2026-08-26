@@ -1,5 +1,6 @@
-import { BLOCK_DEFINITIONS } from "./blocks";
 import { newDocumentId } from "./store";
+import { archetypeBlocks } from "./archetypes";
+import { defaultPages } from "./document";
 import type { Block, DesignTokens, SiteDocument } from "./document";
 
 /** A template that carries its impact in type and space rather than in photographs.
@@ -60,6 +61,17 @@ export const TYPOGRAPHIC_DESIGN: DesignTokens = {
     background: "plain",
     decoration: "none",
     rule: "hairline",
+    // 麻の葉。和紙の地紋そのもので、明朝と細い罫でできたこの型と喧嘩しない唯一の柄。
+    // ⚠️ 0.14 は「見えるか見えないか」の濃さ。この型の身上は余白なので、地紋が主張したら負ける。
+    ornament: "asanoha",
+    ornamentStrength: 0.14,
+    backdrop: "none",
+    backdropImage: "",
+  },
+  // 明朝の見出しと細い罫線で組む型なので、ヘッダーも影も飾りも落とす。
+  chrome: {
+    header: "minimal",
+    footer: "light",
   },
   animation: {
     // A quiet fade, slow. Anything with direction would compete with the type for attention, and the
@@ -69,53 +81,15 @@ export const TYPOGRAPHIC_DESIGN: DesignTokens = {
     stagger: true,
     parallaxHero: false,
     variety: false,
+    // 静けさを選んだ型なので、地紋は動かさない。読み進み具合のバーだけは、
+    // 長い文章のページで「あとどれくらいか」を示すだけの、音のない動き。
+    ambient: "none",
+    progressBar: true,
   },
 };
 
-function block<T extends Block["type"]>(
-  id: string,
-  type: T,
-  navLabel: string,
-  data: Partial<Record<string, unknown>> = {}
-): Block {
-  return {
-    id,
-    type,
-    visible: true,
-    navLabel,
-    data: { ...BLOCK_DEFINITIONS[type].defaultData(), ...data },
-  } as Block;
-}
-
-/** `images/placeholder.svg` is written into every rendered site by renderSiteFiles, so a template
- * ships with something that resolves and costs nothing. A real preview replaces these — see
- * scripts/seed-template.mts. Slots meant to stay empty are left as "" so the generator never spends
- * an image on them. */
-const PLACEHOLDER = "images/placeholder.svg";
-
 export function typographicTemplateBlocks(): Block[] {
-  return [
-    block("hero", "hero", "", { image: PLACEHOLDER }),
-    // Sets the tone before any information arrives — the page opens with a sentence, not a grid.
-    block("philosophy", "freeText", "", { align: "center" }),
-    block("news", "news", "お知らせ", { heading: "お知らせ" }),
-    // No section image and no card images: `cardLayout: "minimal"` numbers them instead.
-    block("department", "rich", "診療案内", { heading: "診療案内", image: "" }),
-    // The one section that keeps a photograph. A greeting without a face reads as a notice board.
-    block("greeting", "rich", "ご挨拶", { heading: "ご挨拶", image: PLACEHOLDER }),
-    block("hours", "hours", "診療時間", { heading: "診療時間" }),
-    block("features", "rich", "当院の特徴", { heading: "当院の特徴", image: "" }),
-    block("gallery", "gallery", "院内", {
-      heading: "院内のご案内",
-      columns: 2,
-      images: [{ src: PLACEHOLDER }, { src: PLACEHOLDER }],
-    }),
-    block("staff", "staff", "スタッフ紹介", { heading: "スタッフ紹介" }),
-    block("pricing", "pricing", "料金表", { heading: "料金表" }),
-    block("faq", "faq", "よくある質問", { heading: "よくある質問" }),
-    block("access", "access", "アクセス", { heading: "アクセス" }),
-    block("contact", "contact", "お問い合わせ"),
-  ];
+  return archetypeBlocks("one-page-editorial").blocks;
 }
 
 export function buildTypographicTemplate(): SiteDocument {
@@ -147,6 +121,8 @@ export function buildTypographicTemplate(): SiteDocument {
       },
       snsLinks: [],
     },
+    // One page, as every document was before multi-page rendering existed.
+    pages: defaultPages(),
     blocks: typographicTemplateBlocks(),
     // Read by BOTH selectTemplate (to decide which clinic gets this) and generateContentPlan (to set
     // the tone of the copy), so it describes the atmosphere and the fit, not the CSS.

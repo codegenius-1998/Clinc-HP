@@ -5,7 +5,7 @@ import { zodTextFormat } from "openai/helpers/zod";
 import * as cheerio from "cheerio";
 import { getOpenAIClient } from "@/lib/openai/client";
 import { DEFAULT_DESIGN_TOKENS, designTokensSchema, type Block, type DesignTokens, type SiteDocument } from "@/lib/site/document";
-import { defaultTemplateBlocks } from "@/lib/site/defaultTemplate";
+import { archetypeBlocks, isArchetypeKey, type ArchetypeKey } from "@/lib/site/archetypes";
 import { deleteDocument, newDocumentId, saveDocument } from "@/lib/site/store";
 import { renderSiteFiles, siteOutputPath } from "@/lib/render/renderSiteFiles";
 import { applySampleCopy } from "./sampleCopy";
@@ -221,7 +221,11 @@ async function adoptImages(sourceSlug: string, target: SiteDocument, blocks: Blo
 
 export type GeneratedImportResult = { document: SiteDocument; previewUrl: string };
 
-export async function importTemplateFromGeneratedSite(slug: string, nameOverride?: string): Promise<GeneratedImportResult> {
+export async function importTemplateFromGeneratedSite(
+  slug: string,
+  nameOverride?: string,
+  archetype?: ArchetypeKey
+): Promise<GeneratedImportResult> {
   const safeSlug = path.basename(slug);
   const html = await readFile(path.join(GENERATED_ROOT, safeSlug, "index.html"), "utf-8").catch(() => {
     throw new Error(`生成済みサイトが見つかりません（${slug}）。`);
@@ -237,6 +241,7 @@ export async function importTemplateFromGeneratedSite(slug: string, nameOverride
 
   const now = new Date().toISOString();
   const id = newDocumentId();
+  const layout = archetypeBlocks(archetype && isArchetypeKey(archetype) ? archetype : "one-page-classic");
   const base: SiteDocument = {
     id,
     slug: `template-${id.slice(0, 8)}`,
@@ -259,7 +264,8 @@ export async function importTemplateFromGeneratedSite(slug: string, nameOverride
       },
       snsLinks: [],
     },
-    blocks: applySampleCopy(defaultTemplateBlocks()),
+    pages: layout.pages,
+    blocks: applySampleCopy(layout.blocks),
     mood: described?.mood,
     tags: (described?.tags ?? []).map((t) => t.trim()).filter(Boolean).slice(0, 8),
     sourceUrl: `/generated/${safeSlug}/index.html`,

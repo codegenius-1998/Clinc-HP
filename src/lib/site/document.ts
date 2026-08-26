@@ -79,7 +79,47 @@ export const designTokensSchema = z.object({
      * beside the heading. Both replace the default heavy underline under every h2, which is what
      * makes a photo-light page read as a form rather than as a design. */
     rule: z.enum(["none", "hairline", "accent-bar"]).default("none"),
+    /** A pattern drawn with CSS and an inline SVG mask — no file, no request, and it follows the
+     * theme colour because the SVG is a MASK over `var(--primary)` rather than a picture.
+     *
+     * ⚠️ Deliberately orthogonal to `background` above. That one paints the whole page (`body`);
+     * this one is per section, sits inside the section's own `overflow-x: clip` box, and is what an
+     * "動きのある・飾りのある" template is built from. */
+    ornament: z.enum(["none", "seigaiha", "asanoha", "dots-fine", "hairlines", "arc"]).default("none"),
+    /** How visible the pattern is. 0 is invisible, 1 is the brand colour at full strength.
+     *
+     * ⚠️ The default is low on purpose, and it is low because it was measured rather than guessed:
+     * at 0.3 the pattern is the strongest thing on the page and the cards float on top of wallpaper.
+     * A 地紋 is meant to be noticed second, not first. */
+    ornamentStrength: z.number().min(0).max(1).default(0.16),
+    /** A generated photograph behind the page. "page" puts it behind everything, "sections" only
+     * behind the tinted sections.
+     *
+     * ⚠️ Always under a scrim of `--bg` (see site.css). `checkContrast` compares TOKENS, so it
+     * cannot see text sitting on a photograph; keeping the effective background at the token colour
+     * is what lets the existing check stay correct instead of silently becoming a lie. */
+    backdrop: z.enum(["none", "page", "sections"]).default("none"),
+    /** Filled by the image pipeline, like every other image path in the document — see
+     * BACKDROP_SLOT in site/imagePaths.ts. Empty means the backdrop renders as nothing at all. */
+    backdropImage: z.string().default(""),
   }),
+  /** The header and footer — the two regions that are not blocks and so have no per-block variant.
+   *
+   * Both had exactly one hardcoded form until now, and the footer's colours were literal hex values
+   * in site.css with no token behind them at all. The first value of each enum reproduces that form
+   * exactly, so an existing template is unchanged by their arrival. */
+  chrome: z
+    .object({
+      /** ⚠️ No "overlay" (transparent header on top of the hero). `nav.site-nav` is a SIBLING of the
+       * header, not a child — the CSS-only hamburger needs `.nav-toggle:checked ~ nav.site-nav`,
+       * which only matches between elements sharing a parent. Lifting just the header out of flow
+       * therefore strands the coloured nav bar at the top of the hero, and lifting both requires a
+       * wrapper that breaks the mobile menu on every page of every site. It is doable, but it needs
+       * markup and JS changes rather than a CSS variant, so it is not one of these. */
+      header: z.enum(["bar", "stacked", "minimal"]).default("bar"),
+      footer: z.enum(["dark", "light", "compact", "band"]).default("dark"),
+    })
+    .default(() => ({ header: "bar" as const, footer: "dark" as const })),
   animation: z.object({
     reveal: z.enum(["none", "fade", "slide-up", "slide-left", "slide-right", "zoom", "pop", "flip", "blur"]),
     /** Milliseconds. 0 with reveal "none" means the page ships with no motion at all. */
@@ -90,6 +130,19 @@ export const designTokensSchema = z.object({
      * page doesn't repeat one identical entrance a dozen times. `reveal` above stays the base.
      * Defaulted for the same back-compat reason as layout.background. */
     variety: z.boolean().default(false),
+    /** Motion that never stops, on the decorative layer only.
+     *
+     * ⚠️ It only ever moves `.ornament` — an element that is `position: absolute; inset: 0;
+     * pointer-events: none` inside a box with `overflow-x: clip`. That is not a style choice: it is
+     * what makes it impossible for a decoration to reintroduce the 390px horizontal-scroll bug, or
+     * to sit on top of a link. Nothing here may move a box that holds text.
+     *
+     * ⚠️ Every rule that reads this is prefixed `html:not([data-reveal="none"])`. A template that
+     * opted out of motion opted out of ALL of it, and ambient motion is the easiest place to
+     * forget that. */
+    ambient: z.enum(["none", "drift", "float", "sheen"]).default("none"),
+    /** A thin bar across the top showing how far down the page the reader is. */
+    progressBar: z.boolean().default(false),
   }),
 });
 
@@ -132,6 +185,14 @@ export const DEFAULT_DESIGN_TOKENS: DesignTokens = {
     background: "plain",
     decoration: "none",
     rule: "none",
+    ornament: "none",
+    ornamentStrength: 0.16,
+    backdrop: "none",
+    backdropImage: "",
+  },
+  chrome: {
+    header: "bar",
+    footer: "dark",
   },
   animation: {
     reveal: "slide-up",
@@ -139,6 +200,8 @@ export const DEFAULT_DESIGN_TOKENS: DesignTokens = {
     stagger: true,
     parallaxHero: false,
     variety: false,
+    ambient: "none",
+    progressBar: false,
   },
 };
 
@@ -288,6 +351,41 @@ export const containerStyleSchema = z.object({
 });
 export type ContainerStyle = z.infer<typeof containerStyleSchema>;
 
+// --- page ----------------------------------------------------------------------------------------
+
+/** The home page's id. Blocks written before multi-page rendering have no stored page and default
+ * to it, which is how every existing one-page site keeps rendering unchanged. */
+export const HOME_PAGE_ID = "home";
+
+/** Reserved output names. A page claiming one of these would collide with a directory or a file that
+ * renderSiteFiles writes itself, or with a Cloudflare Pages control file. */
+export const RESERVED_PAGE_PATHS = new Set(["index", "css", "js", "images", "_headers", "_redirects", "404"]);
+
+export const pageSchema = z.object({
+  /** Stable identity, referenced by `Block.pageId`. Never appears in a URL, so renaming a page's
+   * `path` cannot orphan its blocks. */
+  id: z.string().min(1),
+  /** The URL segment, without an extension. `""` is the home page and renders as `index.html`.
+   *
+   * ⚠️ That is a constraint rather than a convention: `generatedSiteExists`/`generatedSlugExists`
+   * (renderSiteFiles.ts), `importFromGeneratedSite` and the design-check script all key on
+   * `<outDir>/index.html`, and no already-published site's URL may change. */
+  path: z.string().regex(/^$|^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  navLabel: z.string(),
+  /** Empty falls back to `meta.seo.title` / `meta.seo.metaDescription`. */
+  title: z.string().default(""),
+  metaDescription: z.string().default(""),
+  inNav: z.boolean().default(true),
+});
+export type PageDef = z.infer<typeof pageSchema>;
+
+/** A brand-new `pages` array. Returned from a function, not shared as a constant — `z.default()`
+ * hands the SAME value to every parse, and a shared mutable array would let one document's page
+ * edits appear in another's. */
+export function defaultPages(): PageDef[] {
+  return [{ id: HOME_PAGE_ID, path: "", navLabel: "ホーム", title: "", metaDescription: "", inNav: true }];
+}
+
 // --- block ---------------------------------------------------------------------------------------
 
 /** Every block carries a unique instance `id` rather than being keyed by its type. That is what lets
@@ -295,6 +393,14 @@ export type ContainerStyle = z.infer<typeof containerStyleSchema>;
  * SITE_SPEC model keyed sections by type id and so capped each at one. Anchors/nav links use this id. */
 const blockCommon = {
   id: z.string().min(1),
+  /** Which page this block renders on (see `pageSchema`). Defaults rather than being optional, so
+   * every reader gets a real value and no `?? HOME_PAGE_ID` is scattered through the renderer, the
+   * editor and the checks.
+   *
+   * ⚠️ The default is what keeps every document written before multi-page rendering working: their
+   * blocks have no stored page and so all land on the home page, which is exactly where they were.
+   * A block naming a page that does not exist would render on NO page — see normalizePages. */
+  pageId: z.string().default(HOME_PAGE_ID),
   visible: z.boolean(),
   /** Per-block layout override, chosen from a closed list this codebase owns (see
    * src/lib/site/composition.ts). It is what lets one template produce differently-shaped pages for
@@ -304,6 +410,14 @@ const blockCommon = {
    * rather than an enum: the vocabulary is per block TYPE, which zod cannot express in `blockCommon`,
    * and `effectiveCardLayout` / `effectiveHeroLayout` are the single place it is validated. */
   variant: z.string().optional(),
+  /** How many repeating items this section is DESIGNED around — advisory, never what renders.
+   *
+   * ⚠️ `data.cards.length` is always what is drawn. This exists because a template has to know how
+   * many cards to lay out before any content plan exists, which `data.cards.length` cannot answer
+   * for a template whose cards are still sample copy. Exactly three places read it: applySampleCopy
+   * (how many samples to fill a template with), sampleCardCount (the target shown to the planner),
+   * and applyComposition (written back so a rebuild reproduces the shape). The renderer never does. */
+  cardCount: z.number().int().min(2).max(6).optional(),
   /** Label shown in the page's nav. Empty string means "render the block but keep it out of the nav"
    * — correct for hero and for decorative banners. */
   navLabel: z.string(),
@@ -387,6 +501,27 @@ export const siteMetaSchema = z.object({
 
 export type SiteMeta = z.infer<typeof siteMetaSchema>;
 
+/** Header/footer text styling and spacing — the two document-level fields below, named here so the
+ * store can validate the `sites.chrome` blob they are persisted in without restating their shapes.
+ *
+ * They live outside `blocks` because the chrome is not a block: it has no block id for the visual
+ * editor to address, so its overrides share one document-level record instead. */
+const metaTextStylesSchema = z.record(z.string().regex(fieldPathPattern), textStyleSchema);
+const chromeSpacingSchema = z.object({
+  header: blockSpacingSchema.optional(),
+  footer: blockSpacingSchema.optional(),
+});
+
+/** Shape of the `sites.chrome` column (migration 0005). Both members are optional and the whole blob
+ * is optional, so a row written before that migration reads back as "no overrides" rather than as
+ * corrupt — which is the same treatment `design` and `meta` already get in loadDocument. */
+export const storedChromeSchema = z
+  .object({
+    metaTextStyles: metaTextStylesSchema.optional(),
+    chromeSpacing: chromeSpacingSchema.optional(),
+  })
+  .partial();
+
 export const siteDocumentSchema = z.object({
   id: z.string().min(1),
   /** Output directory name under public/generated, and the Cloudflare Pages project name. ASCII only. */
@@ -404,16 +539,14 @@ export const siteDocumentSchema = z.object({
    * document-level record instead. Keyed the same way ("clinicName", "snsLinks.0.label", ...) via the
    * "meta." path prefix the visual editor uses to tell a meta field apart from a block field — see
    * resolveSelectionField in src/lib/site/blocks.ts. */
-  metaTextStyles: z.record(z.string().regex(fieldPathPattern), textStyleSchema).optional(),
+  metaTextStyles: metaTextStylesSchema.optional(),
   /** Spacing for the header/footer chrome, which (unlike every block) isn't inside `blocks` at all —
    * this is where their spacing override lives instead. Same shape and same "unify with the
    * section/region as a whole" reasoning as a block's own `spacing`. */
-  chromeSpacing: z
-    .object({
-      header: blockSpacingSchema.optional(),
-      footer: blockSpacingSchema.optional(),
-    })
-    .optional(),
+  chromeSpacing: chromeSpacingSchema.optional(),
+  /** The pages this document renders to. Always at least one; the first with `path: ""` is the home
+   * page. See normalizePages for the invariants, which are enforced on read AND on write. */
+  pages: z.array(pageSchema).default(defaultPages),
   blocks: z.array(blockSchema),
   /** Templates only: prose describing the atmosphere. This is what selectTemplate.ts shows the model,
    * so it must read as mood ("落ち着いた和モダン、年配の患者向け") and never as markup. */

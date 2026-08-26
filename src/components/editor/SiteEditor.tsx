@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { publishDocumentAction, saveDocumentAction } from "@/lib/site/editorActions";
 import { setFieldValue } from "@/lib/site/fieldPath";
 import type { Block, SiteDocument } from "@/lib/site/document";
+import { pageFileName } from "@/lib/site/pages";
 import { AddBlockPalette } from "./AddBlockPalette";
 import { BlockEditor } from "./BlockEditor";
 import { BlockList } from "./BlockList";
@@ -12,6 +13,7 @@ import { DesignPanel } from "./DesignPanel";
 import { GuidelineCheckButton } from "./GuidelineCheckButton";
 import { Inspector, type Selection } from "./Inspector";
 import { MetaPanel } from "./MetaPanel";
+import { PagePanel } from "./PagePanel";
 import { VisualCanvas } from "./VisualCanvas";
 
 /** The one editor, used for both design templates and generated clinic sites — they are the same
@@ -22,10 +24,11 @@ import { VisualCanvas } from "./VisualCanvas";
  * and a per-field autosave would fire a D1 write and a full re-render on every keystroke. The cost is
  * that unsaved work is real work, so leaving with changes pending is guarded below. */
 
-type Tab = "blocks" | "design" | "meta";
+type Tab = "blocks" | "pages" | "design" | "meta";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "blocks", label: "ブロック" },
+  { id: "pages", label: "ページ" },
   { id: "design", label: "デザイン" },
   { id: "meta", label: "基本情報・SEO" },
 ];
@@ -44,6 +47,7 @@ export function SiteEditor({
   const [doc, setDoc] = useState<SiteDocument>(initialDocument);
   const [dirty, setDirty] = useState(false);
   const [tab, setTab] = useState<Tab>("blocks");
+  const [pageId, setPageId] = useState<string>(initialDocument.pages[0].id);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // Separate from `selectedId` (which block is open in the left sidebar's form) — this is what was
   // last clicked directly on the canvas, addressed down to the individual field.
@@ -54,8 +58,23 @@ export function SiteEditor({
   const [publishing, setPublishing] = useState(false);
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
 
-  const assetBase = useMemo(() => previewUrl.replace(/index\.html$/, ""), [previewUrl]);
+  // ⚠️ Any page's file name, not just index.html — the canvas now shows about.html and the like, and
+  // an assetBase left pointing at ".../about.html" would resolve every uploaded image against a file
+  // instead of against the directory.
+  const assetBase = useMemo(() => previewUrl.replace(/[^/]+\.html$/, ""), [previewUrl]);
   const selected = doc.blocks.find((b) => b.id === selectedId) ?? null;
+
+  // A page deleted (or renamed away) from under the editor must not leave the canvas pointing at a
+  // page that no longer exists.
+  const currentPage = doc.pages.find((p) => p.id === pageId) ?? doc.pages[0];
+  const pagePreview = `${assetBase}${pageFileName(currentPage)}`;
+  const blocksOnPage = useMemo(() => doc.blocks.filter((b) => b.pageId === currentPage.id), [doc.blocks, currentPage.id]);
+
+  function selectPage(nextPageId: string) {
+    setPageId(nextPageId);
+    setSelectedId(null);
+    setCanvasSelection(null);
+  }
 
   const update = useCallback((next: (current: SiteDocument) => SiteDocument) => {
     setDoc((current) => next(current));
@@ -70,12 +89,24 @@ export function SiteEditor({
     return () => window.removeEventListener("beforeunload", handler);
   }, [dirty]);
 
+  /** Reorders within the CURRENT PAGE. `from`/`to` index that page's list, which is what BlockList
+   * shows — indexing `doc.blocks` directly, as this used to, silently moved a different block as
+   * soon as the list stopped being the whole document.
+   *
+   * Implemented by permuting the page's blocks and writing them back into the same document slots
+   * they already occupied. That leaves every other page's ordering untouched by construction, so
+   * `position` stays a single document-wide sequence with no second source of truth. */
   function reorder(from: number, to: number) {
-    if (to < 0 || to >= doc.blocks.length || from === to) return;
     update((current) => {
+      const slots = current.blocks.flatMap((b, i) => (b.pageId === currentPage.id ? [i] : []));
+      if (to < 0 || to >= slots.length || from === to) return current;
+      const onPage = slots.map((i) => current.blocks[i]);
+      const [moved] = onPage.splice(from, 1);
+      onPage.splice(to, 0, moved);
       const blocks = [...current.blocks];
-      const [moved] = blocks.splice(from, 1);
-      blocks.splice(to, 0, moved);
+      slots.forEach((slot, i) => {
+        blocks[slot] = onPage[i];
+      });
       return { ...current, blocks };
     });
   }
@@ -134,7 +165,7 @@ export function SiteEditor({
           <DesignCheckButton doc={doc} documentId={doc.id} />
           <GuidelineCheckButton doc={doc} documentId={doc.id} />
           <a
-            href={`${previewUrl}?v=${encodeURIComponent(previewVersion)}`}
+            href={`${pagePreview}?v=${encodeURIComponent(previewVersion)}`}
             target="_blank"
             rel="noreferrer"
             className="rounded-lg border border-slate-200 px-3 py-2 text-[13px] text-slate-600 transition-colors hover:bg-slate-50"
@@ -223,7 +254,7 @@ export function SiteEditor({
                   文章や画像は、右のプレビューを直接クリックして編集できます。ここでは、ブロックの追加・並べ替え・削除、リスト項目（FAQ・スタッフなど）の追加・削除を行います。
                 </p>
                 <BlockList
-                  blocks={doc.blocks}
+                  blocks={blocksOnPage}
                   selectedId={selectedId}
                   onSelect={setSelectedId}
                   onReorder={reorder}
@@ -240,7 +271,8 @@ export function SiteEditor({
                   }}
                 />
                 <AddBlockPalette
-                  blocks={doc.blocks}
+                  blocks={blocksOnPage}
+                  pageId={currentPage.id}
                   onAdd={(block) => {
                     update((current) => ({ ...current, blocks: [...current.blocks, block] }));
                     setSelectedId(block.id);
@@ -248,6 +280,10 @@ export function SiteEditor({
                 />
               </div>
             ))}
+
+          {tab === "pages" && (
+            <PagePanel doc={doc} currentPageId={currentPage.id} onSelect={selectPage} onChange={update} />
+          )}
 
           {tab === "design" && (
             <DesignPanel design={doc.design} onChange={(design) => update((current) => ({ ...current, design }))} />
@@ -267,14 +303,41 @@ export function SiteEditor({
         {/* --- center: the live, clickable canvas --- */}
         <div className="min-w-0 flex-1">
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white lg:sticky lg:top-[4.5rem]">
+            {/* Page tabs. Shown only when there is more than one page, so a single-page site's editor
+                looks exactly as it did. */}
+            {doc.pages.length > 1 && (
+              <div className="flex items-center gap-1 overflow-x-auto border-b border-slate-100 px-2 pt-2">
+                {doc.pages.map((page) => (
+                  <button
+                    key={page.id}
+                    type="button"
+                    onClick={() => selectPage(page.id)}
+                    className={`shrink-0 rounded-t-lg px-3 py-1.5 text-[13px] transition-colors ${
+                      page.id === currentPage.id
+                        ? "bg-slate-900 text-white"
+                        : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                    }`}
+                  >
+                    {page.navLabel || "（名前なし）"}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
               <span className="text-[12px] text-slate-400">テキストや画像をクリックすると編集できます</span>
-              {dirty && <span className="text-[12px] text-amber-600">保存すると構成の変更が反映されます</span>}
+              {dirty && (
+                <span className="text-[12px] text-amber-600">
+                  {doc.pages.length > 1
+                    ? "保存すると構成の変更と、他のページの編集内容が反映されます"
+                    : "保存すると構成の変更が反映されます"}
+                </span>
+              )}
             </div>
             <div className="h-[calc(100vh-12rem)] min-h-[520px] w-full">
               <VisualCanvas
+                key={currentPage.id}
                 doc={doc}
-                previewUrl={previewUrl}
+                previewUrl={pagePreview}
                 previewVersion={previewVersion}
                 assetBase={assetBase}
                 selection={canvasSelection}

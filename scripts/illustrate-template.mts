@@ -79,6 +79,15 @@ function subjectFor(slot: string, index: number): string {
       "different angle from the other interior photographs on this page."
     );
   }
+  // ⚠️ 背景写真は「絵」ではなく「地」。主題があると本文と喧嘩するので、焦点も対象も持たせない。
+  // CSS 側で --bg のスクリムが 88% 重なることも織り込んで、明るく淡いものを指示する。
+  if (slot === "backdrop") {
+    return (
+      "An extremely soft, almost abstract background texture for a web page: out-of-focus daylight on a " +
+      "pale plaster wall, with the faintest suggestion of a leaf shadow. No subject, no focal point, no " +
+      "objects, no people. Very low contrast, very bright, nothing that competes with text placed over it."
+    );
+  }
   if (slot.startsWith("greeting")) {
     return "A consultation desk by a window in a small clinic: a closed notebook, a stethoscope resting on the wood, a small plant. Nobody in the frame.";
   }

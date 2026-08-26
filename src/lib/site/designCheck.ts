@@ -4,7 +4,8 @@ import { BLOCK_DEFINITIONS, blockLabel, blockSummary } from "./blocks";
 import { contrastRatio, readableFill } from "./color";
 import { effectiveCardLayout } from "./composition";
 import { LOGO_SLOT, documentImageSlots, needsGeneratedFile, slotKey } from "./imagePaths";
-import type { Block, SiteDocument } from "./document";
+import { pageBlocks } from "./pages";
+import type { Block, PageDef, SiteDocument } from "./document";
 
 /** Checks a site document for the kinds of breakage a person only notices by opening the page.
  *
@@ -202,18 +203,61 @@ function checkRequiredText(doc: SiteDocument): DesignIssue[] {
 }
 
 /** Structural invariants of a clinic page. `singleton` already declares which block types a page can
- * only sensibly have one of (blocks.ts), so duplicates are detected from that rather than re-listed. */
+ * only sensibly have one of (blocks.ts), so duplicates are detected from that rather than re-listed.
+ *
+ * ⚠️ Most of these are PER PAGE, and which ones are not is the whole judgement here. "one hero" and
+ * "hero first" describe a page; two heroes on two pages is not a defect, it is the point of having
+ * pages. "there is a way to contact the clinic" describes the SITE — requiring a contact section on
+ * every page would fire on every multi-page site ever built, and a check that always fires is a
+ * check people learn to skip. */
 function checkStructure(doc: SiteDocument): DesignIssue[] {
   const issues: DesignIssue[] = [];
-  const visible = doc.blocks.filter((b) => b.visible);
+  const multiPage = doc.pages.length > 1;
+  const where = (page: PageDef, what: string) => (multiPage ? `${page.navLabel} / ${what}` : what);
+
+  if (!doc.pages.some((page) => page.path === "")) {
+    issues.push({
+      code: "structure-no-home",
+      location: "ページ構成",
+      reason: "トップページ（URLの直下）がありません。サイトを開いても何も表示されません。",
+      suggestion: "いずれかのページのURLを空にして、トップページにしてください。",
+      severity: "high",
+    });
+  }
+
+  for (const page of doc.pages) {
+    issues.push(...checkPageStructure(doc, page, where));
+  }
+
+  if (!doc.blocks.some((b) => b.visible && b.type === "contact")) {
+    issues.push({
+      code: "structure-no-contact",
+      location: "サイト全体",
+      reason: "お問い合わせセクションがどのページにもありません。電話・LINEの予約導線が無い状態です。",
+      suggestion: "いずれかのページにお問い合わせを追加してください。",
+      severity: "medium",
+    });
+  }
+
+  return issues;
+}
+
+function checkPageStructure(
+  doc: SiteDocument,
+  page: PageDef,
+  where: (page: PageDef, what: string) => string
+): DesignIssue[] {
+  const issues: DesignIssue[] = [];
+  const visible = pageBlocks(doc, page.id);
+  const isHome = page.path === "";
 
   if (visible.length === 0) {
     return [
       {
         code: "structure-empty",
-        location: "ページ全体",
+        location: where(page, "ページ全体"),
         reason: "表示されるセクションが1つもありません。空白のページになります。",
-        suggestion: "いずれかのセクションを表示にしてください。",
+        suggestion: "いずれかのセクションを表示にするか、このページを削除してください。",
         severity: "high",
       },
     ];
@@ -226,7 +270,7 @@ function checkStructure(doc: SiteDocument): DesignIssue[] {
     if (count > 1 && BLOCK_DEFINITIONS[type].singleton) {
       issues.push({
         code: "structure-duplicate-singleton",
-        location: blockLabel(type),
+        location: where(page, blockLabel(type)),
         reason: `1ページに1つだけのはずの「${blockLabel(type)}」が${count}個あります。`,
         suggestion: "余分なほうを削除するか非表示にしてください。",
         severity: "high",
@@ -234,31 +278,25 @@ function checkStructure(doc: SiteDocument): DesignIssue[] {
     }
   }
 
+  // Only the top page is required to have one. A 診療案内 page opening with its own heading rather
+  // than a second main visual is normal, not a defect.
   if (!counts.has("hero")) {
-    issues.push({
-      code: "structure-no-hero",
-      location: "ページ全体",
-      reason: "メインビジュアルがありません。ページの顔になる部分が欠けています。",
-      suggestion: "メインビジュアルを追加してください。",
-      severity: "high",
-    });
+    if (isHome) {
+      issues.push({
+        code: "structure-no-hero",
+        location: where(page, "ページ全体"),
+        reason: "メインビジュアルがありません。ページの顔になる部分が欠けています。",
+        suggestion: "メインビジュアルを追加してください。",
+        severity: "high",
+      });
+    }
   } else if (visible[0].type !== "hero") {
     issues.push({
       code: "structure-hero-not-first",
-      location: blockLabel("hero"),
+      location: where(page, blockLabel("hero")),
       reason: "メインビジュアルがページの先頭にありません。",
       suggestion: "先頭へ移動してください。",
       severity: "low",
-    });
-  }
-
-  if (!counts.has("contact")) {
-    issues.push({
-      code: "structure-no-contact",
-      location: "ページ全体",
-      reason: "お問い合わせセクションがありません。電話・LINEの予約導線が無い状態です。",
-      suggestion: "お問い合わせを追加してください。",
-      severity: "medium",
     });
   }
 
@@ -267,7 +305,7 @@ function checkStructure(doc: SiteDocument): DesignIssue[] {
   for (const label of new Set(duplicated)) {
     issues.push({
       code: "structure-duplicate-nav",
-      location: `メニュー / ${label}`,
+      location: where(page, `メニュー / ${label}`),
       reason: `メニュー項目「${label}」が重複しています。どちらへ飛ぶのか分かりません。`,
       suggestion: "片方の名前を変えてください。",
       severity: "low",
@@ -289,11 +327,9 @@ const MAX_LENGTHS = {
 
 function checkOverflowRisk(doc: SiteDocument): DesignIssue[] {
   const issues: DesignIssue[] = [];
-  let navTotal = 0;
 
   for (const block of doc.blocks) {
     if (!block.visible) continue;
-    navTotal += charCount(block.navLabel.trim());
 
     if (block.type === "hero" && charCount(block.data.headline) > MAX_LENGTHS.heroHeadline) {
       issues.push({
@@ -334,14 +370,25 @@ function checkOverflowRisk(doc: SiteDocument): DesignIssue[] {
     }
   }
 
-  if (navTotal > MAX_LENGTHS.navTotal) {
-    issues.push({
-      code: "overflow-nav",
-      location: "メニュー",
-      reason: `メニュー項目の合計が${navTotal}文字あります。PCのヘッダーで折り返し、ロゴと重なるおそれがあります。`,
-      suggestion: "項目名を短くするか、メニューに出さないセクションを増やしてください。",
-      severity: "low",
-    });
+  // ⚠️ Measured per page, on the row that is actually drawn: the page links plus THAT page's own
+  // section anchors. Summing every block in the document was right while there was one page and is
+  // now simply wrong — it would over-count a six-page site and under-count nothing, and it would
+  // miss the new way this fails (six page links plus six anchors on one row).
+  for (const page of doc.pages) {
+    const labels = [
+      ...doc.pages.filter((p) => p.inNav).map((p) => p.navLabel),
+      ...pageBlocks(doc, page.id).map((b) => b.navLabel),
+    ];
+    const navTotal = labels.reduce((total, label) => total + charCount(label.trim()), 0);
+    if (navTotal > MAX_LENGTHS.navTotal) {
+      issues.push({
+        code: "overflow-nav",
+        location: doc.pages.length > 1 ? `${page.navLabel} / メニュー` : "メニュー",
+        reason: `メニュー項目の合計が${navTotal}文字あります。PCのヘッダーで折り返し、ロゴと重なるおそれがあります。`,
+        suggestion: "項目名を短くするか、メニューに出さないセクションを増やしてください。",
+        severity: "low",
+      });
+    }
   }
 
   return issues;

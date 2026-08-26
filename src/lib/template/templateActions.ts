@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
+import { isArchetypeKey } from "@/lib/site/archetypes";
 import { deleteDocument, getDocument, saveDocument } from "@/lib/site/store";
 import { importTemplateFromUrl } from "./importFromUrl";
 import { importTemplateFromGeneratedSite } from "./importFromGeneratedSite";
@@ -48,6 +49,7 @@ export async function importTemplateAction(_prev: ImportState, formData: FormDat
   const url = readField(formData, "url");
   const imageUrls = splitUrls(formData.get("imageUrls") ?? formData.get("_1_imageUrls"));
   const name = readField(formData, "name");
+  const archetype = readField(formData, "archetype");
 
   if (!url && imageUrls.length === 0) {
     return { error: "参考サイトのURLか、参考画像のURLのどちらかを入力してください。", result: null };
@@ -58,6 +60,9 @@ export async function importTemplateAction(_prev: ImportState, formData: FormDat
       url: url || undefined,
       imageUrls,
       name: name || undefined,
+      // Validated inside the importer against the registry — a tampered form field falls back to
+      // the standard layout rather than being trusted or rejected.
+      archetype: isArchetypeKey(archetype) ? archetype : undefined,
     });
 
     revalidatePath("/admin/templates");
@@ -91,12 +96,17 @@ export async function importFromGeneratedSiteAction(_prev: ImportState, formData
 
   const slug = readField(formData, "slug");
   const name = readField(formData, "name");
+  const archetype = readField(formData, "archetype");
   if (!slug) {
     return { error: "テンプレート化する生成済みサイトを選んでください。", result: null };
   }
 
   try {
-    const { document, previewUrl } = await importTemplateFromGeneratedSite(slug, name || undefined);
+    const { document, previewUrl } = await importTemplateFromGeneratedSite(
+      slug,
+      name || undefined,
+      isArchetypeKey(archetype) ? archetype : undefined
+    );
     revalidatePath("/admin/templates");
     return {
       error: null,

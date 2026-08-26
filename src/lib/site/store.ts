@@ -6,11 +6,16 @@ import {
   designTokensSchema,
   siteDocumentSchema,
   siteMetaSchema,
+  storedChromeSchema,
+  defaultPages,
+  pageSchema,
   type Block,
   type BlockType,
   type SiteDocument,
   type SiteMeta,
 } from "./document";
+import { normalizePages } from "./pages";
+import { z } from "zod";
 
 /** D1 persistence for SiteDocument. Templates and sites share these tables — `sites.is_template` is
  * the only discriminator — which is what lets one editor and one renderer serve both.
@@ -19,6 +24,7 @@ import {
  *   site_sections.id       -> "<siteId>:<block.id>"  (see rowId / blockIdFromRow below)
  *   site_sections.sec_id   -> block.type             (one of the fixed catalog rows seeded in 0003)
  *   site_sections.content  -> block.data             (JSON, shape depends on the type)
+ *   site_sections.attrs    -> everything else on the block (JSON — see BLOCK_COLUMN_FIELDS)
  *
  * A block id only has to be unique WITHIN its document, and templates deliberately use readable ones
  * ("hero", "department") because they become the page's HTML anchors. `site_sections.id` is a global
@@ -55,6 +61,8 @@ type SiteRow = {
   source_url: string | null;
   thumbnail_url: string | null;
   updated_at: string | null;
+  chrome: string | null;
+  pages: string | null;
 };
 
 type SectionRow = {
@@ -65,6 +73,8 @@ type SectionRow = {
   position: number;
   visible: number;
   nav_label: string | null;
+  attrs: string | null;
+  page_id: string | null;
 };
 
 /** Header-only view for list screens and for the template auto-selector, which must not pay for
@@ -86,7 +96,7 @@ export type DocumentSummary = {
 };
 
 const SITE_COLUMNS = `id, name, is_template, can_sell, created_at, slug, owner_email, template_id,
-  design, meta, mood, tags, source_url, thumbnail_url, updated_at`;
+  design, meta, mood, tags, source_url, thumbnail_url, updated_at, chrome, pages`;
 
 function parseJson<T>(raw: string | null, fallback: T): T {
   if (!raw) return fallback;
@@ -127,27 +137,60 @@ function toSummary(row: SiteRow): DocumentSummary {
   };
 }
 
+/** Block fields that have a column of their own. Everything else a Block carries is presentational
+ * and is written to `attrs` by exclusion — which is the point of the shape: adding a field to
+ * `blockCommon` persists with no migration and no edit here. Keeping this set in step is the one
+ * obligation that creates.
+ *
+ * ⚠️ `data` is listed because it has its own column (`content`), not because it is skipped. */
+const BLOCK_COLUMN_FIELDS = new Set(["id", "type", "visible", "navLabel", "pageId", "data"]);
+
+/** The `attrs` blob for one block: variant, spacing, textStyles, containerStyles, and whatever is
+ * added later. `null` rather than "{}" when there is nothing to store, so the column stays a useful
+ * signal of "this block has no overrides". */
+function blockAttrsJson(block: Block): string | null {
+  const attrs = Object.fromEntries(
+    Object.entries(block).filter(([key, value]) => !BLOCK_COLUMN_FIELDS.has(key) && value !== undefined)
+  );
+  return Object.keys(attrs).length > 0 ? JSON.stringify(attrs) : null;
+}
+
 /** Rebuilds one block from its row. Returns null for a row that can't be validated — a single bad
- * row must not make the whole site unopenable in the editor, which is the one place it can be fixed. */
+ * row must not make the whole site unopenable in the editor, which is the one place it can be fixed.
+ *
+ * ⚠️ Two-stage on purpose. `attrs` is the one part of a row that can be stale in a way `content`
+ * cannot: a `textStyles` key that no longer matches `fieldPathPattern`, a `variant` written as a
+ * number by some future bug. A single parse would fail on that and return null — and a null here
+ * deletes the section from a published page. So a bad blob costs the block its styling, which is
+ * exactly the state it was in before this column existed, never the block itself. */
 function toBlock(row: SectionRow): Block | null {
-  const candidate = {
+  const base = {
     id: blockIdFromRow(row.site_id, row.id),
     type: row.sec_id as BlockType,
     visible: row.visible === 1,
     navLabel: row.nav_label ?? "",
+    // NULL means "written before multi-page rendering", and `pageId`'s schema default puts those on
+    // the home page — which is where they already were.
+    ...(row.page_id ? { pageId: row.page_id } : {}),
     data: parseJson<unknown>(row.content, {}),
   };
-  const parsed = blockSchema.safeParse(candidate);
-  if (!parsed.success) {
-    console.warn(`[site/store] ブロックを読み込めませんでした (id=${row.id}, type=${row.sec_id})`, parsed.error.issues);
+  // Spread attrs FIRST so a corrupt blob can never override id / type / visible / data.
+  const attrs = parseJson<Record<string, unknown>>(row.attrs, {});
+  const full = blockSchema.safeParse({ ...attrs, ...base });
+  if (full.success) return full.data;
+
+  const bare = blockSchema.safeParse(base);
+  if (!bare.success) {
+    console.warn(`[site/store] ブロックを読み込めませんでした (id=${row.id}, type=${row.sec_id})`, bare.error.issues);
     return null;
   }
-  return parsed.data;
+  console.warn(`[site/store] ブロックの表示設定を読み込めませんでした (id=${row.id})`, full.error.issues);
+  return bare.data;
 }
 
 async function loadDocument(row: SiteRow): Promise<SiteDocument> {
   const sections = await d1Query<SectionRow>(
-    "SELECT id, sec_id, site_id, content, position, visible, nav_label FROM site_sections WHERE site_id = ? ORDER BY position",
+    "SELECT id, sec_id, site_id, content, position, visible, nav_label, attrs, page_id FROM site_sections WHERE site_id = ? ORDER BY position",
     [row.id]
   );
 
@@ -155,12 +198,30 @@ async function loadDocument(row: SiteRow): Promise<SiteDocument> {
   // all. Falling back keeps them openable in the editor instead of hard-failing on legacy data.
   const design = designTokensSchema.safeParse(parseJson(row.design, null));
   const meta = siteMetaSchema.safeParse(parseJson(row.meta, null));
+  // Same treatment for the chrome overrides (migration 0005): every row written before it has NULL
+  // here, which must read as "no overrides" rather than as a broken document.
+  const chrome = storedChromeSchema.safeParse(parseJson(row.chrome, null));
+
+  // ⚠️ Parsed defensively BEFORE the whole-document parse below, which throws rather than falling
+  // back the way `design` and `meta` do. Without this, one malformed `pages` blob would make a site
+  // impossible to open in the editor AND impossible to re-render — i.e. unfixable through the UI.
+  const storedPages = z.array(pageSchema).safeParse(parseJson(row.pages, null));
+
+  const loaded = normalizePages(
+    storedPages.success && storedPages.data.length > 0 ? storedPages.data : defaultPages(),
+    sections.results.map(toBlock).filter((b): b is Block => b !== null)
+  );
 
   const doc = {
     ...toSummary(row),
-    design: design.success ? design.data : DEFAULT_DESIGN_TOKENS,
+    // ⚠️ structuredClone on the fallback path. Without it every document whose stored design failed
+    // to parse shares ONE object, so a single write (applyImagePaths sets design.layout.backdropImage)
+    // reaches all of them and the module constant besides.
+    design: design.success ? design.data : structuredClone(DEFAULT_DESIGN_TOKENS),
     meta: meta.success ? meta.data : EMPTY_META,
-    blocks: sections.results.map(toBlock).filter((b): b is Block => b !== null),
+    ...(chrome.success ? chrome.data : {}),
+    pages: loaded.pages,
+    blocks: loaded.blocks,
   };
 
   const parsed = siteDocumentSchema.safeParse(doc);
@@ -206,18 +267,42 @@ export async function listSiteDocuments(options?: { ownerEmail?: string }): Prom
     .results.map(toSummary);
 }
 
-/** Columns per block row in the bulk insert below. SQLite caps bound variables per statement
- * (999 on older builds), so blocks are inserted in chunks that stay comfortably under it. */
-const BLOCK_INSERT_COLUMNS = 7;
-const BLOCK_CHUNK_SIZE = 100;
+/** ⚠️ D1 caps bound parameters per query at 100 — not at SQLite's own 999, which is what an earlier
+ * comment here assumed. Measured: a 13-block document at 8 columns (104 parameters) fails outright
+ * with `too many SQL variables`, while the same document at 7 columns (91) succeeds.
+ *
+ * That means the previous `BLOCK_CHUNK_SIZE = 100` was never real. It happened to work only because
+ * no template had yet reached 15 blocks (15 x 7 = 105); a site with one more section would have
+ * failed to save with an error naming neither the site nor the block.
+ *
+ * So the chunk size is DERIVED rather than written down, and adding a column to the insert can no
+ * longer silently push the statement over the limit. */
+const D1_MAX_BOUND_PARAMS = 100;
+const BLOCK_INSERT_COLUMNS = 9;
+const BLOCK_CHUNK_SIZE = Math.floor(D1_MAX_BOUND_PARAMS / BLOCK_INSERT_COLUMNS);
+
+/** The `sites.chrome` blob: the two document-level styling records, or null when neither is set. */
+function chromeJson(doc: SiteDocument): string | null {
+  if (!doc.metaTextStyles && !doc.chromeSpacing) return null;
+  return JSON.stringify({ metaTextStyles: doc.metaTextStyles, chromeSpacing: doc.chromeSpacing });
+}
 
 export async function saveDocument(doc: SiteDocument): Promise<SiteDocument> {
-  const parsed = siteDocumentSchema.parse({ ...doc, updatedAt: new Date().toISOString() });
+  // ⚠️ Reconciled on the way IN as well as on the way out (loadDocument). A block pointing at a page
+  // that no longer exists renders on no page at all, and this is the last moment that is cheap to
+  // fix — after the write it is a live site quietly missing a section.
+  const reconciled = normalizePages(doc.pages, doc.blocks);
+  const parsed = siteDocumentSchema.parse({
+    ...doc,
+    pages: reconciled.pages,
+    blocks: reconciled.blocks,
+    updatedAt: new Date().toISOString(),
+  });
 
   await d1Query(
     `INSERT INTO sites (id, name, is_template, can_sell, created_at, slug, owner_email, template_id,
-       design, meta, mood, tags, source_url, thumbnail_url, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       design, meta, mood, tags, source_url, thumbnail_url, updated_at, chrome, pages)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        name = excluded.name,
        is_template = excluded.is_template,
@@ -231,7 +316,9 @@ export async function saveDocument(doc: SiteDocument): Promise<SiteDocument> {
        tags = excluded.tags,
        source_url = excluded.source_url,
        thumbnail_url = excluded.thumbnail_url,
-       updated_at = excluded.updated_at`,
+       updated_at = excluded.updated_at,
+       chrome = excluded.chrome,
+       pages = excluded.pages`,
     [
       parsed.id,
       parsed.name,
@@ -248,6 +335,8 @@ export async function saveDocument(doc: SiteDocument): Promise<SiteDocument> {
       parsed.sourceUrl ?? null,
       parsed.thumbnailUrl ?? null,
       parsed.updatedAt,
+      chromeJson(parsed),
+      JSON.stringify(parsed.pages),
     ]
   );
 
@@ -266,9 +355,11 @@ export async function saveDocument(doc: SiteDocument): Promise<SiteDocument> {
       start + i,
       block.visible ? 1 : 0,
       block.navLabel,
+      blockAttrsJson(block),
+      block.pageId,
     ]);
     await d1Query(
-      `INSERT INTO site_sections (id, sec_id, site_id, content, position, visible, nav_label) VALUES ${placeholders}`,
+      `INSERT INTO site_sections (id, sec_id, site_id, content, position, visible, nav_label, attrs, page_id) VALUES ${placeholders}`,
       params
     );
   }
@@ -310,7 +401,12 @@ export function instantiateTemplate(
     // Block ids carry over verbatim. They double as the page's HTML anchors, so "#department" reads
     // better than a random id, and `rowId` already namespaces the stored row by document — two sites
     // cloned from the same template cannot collide on insert.
-    blocks: template.blocks.map((block) => ({ ...block })),
+    //
+    // ⚠️ Deep, not shallow. `{...block}` left `data`, `spacing`, `textStyles` and `containerStyles`
+    // shared by reference with the template still in memory. That was harmless only for as long as
+    // those fields were discarded on save; now that they persist, editing the new site's spacing
+    // would reach into the template object the generator is still holding.
+    blocks: template.blocks.map((block) => structuredClone(block)),
     createdAt: now,
     updatedAt: now,
   };

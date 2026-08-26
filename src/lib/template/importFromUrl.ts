@@ -3,8 +3,18 @@ import { zodTextFormat } from "openai/helpers/zod";
 import { getOpenAIClient } from "@/lib/openai/client";
 import { assertPublicUrl } from "./safeFetch";
 import { describeSignals, extractDesignSignals, type DesignSignals } from "./extractDesignSignals";
-import { DEFAULT_DESIGN_TOKENS, designTokensSchema, type DesignTokens, type SiteDocument } from "@/lib/site/document";
-import { defaultTemplateBlocks } from "@/lib/site/defaultTemplate";
+import {
+  BLOCK_TYPES,
+  DEFAULT_DESIGN_TOKENS,
+  designTokensSchema,
+  type DesignTokens,
+  type SiteDocument,
+} from "@/lib/site/document";
+import { ARCHETYPES, ARCHETYPE_KEYS, archetypeBlocks, isArchetypeKey, type ArchetypeKey } from "@/lib/site/archetypes";
+import { VARIANT_DESCRIPTIONS, variantsFor } from "@/lib/site/composition";
+import { blockLabel } from "@/lib/site/blocks";
+import { checkDesign } from "@/lib/site/designCheck";
+import { ALLOWED_NAV_LABELS, resolveStructure } from "./blockPlan";
 import { deleteDocument, newDocumentId, saveDocument } from "@/lib/site/store";
 import { renderSiteFiles } from "@/lib/render/renderSiteFiles";
 import { applySampleCopy } from "./sampleCopy";
@@ -43,6 +53,8 @@ const aiTemplateSchema = z.object({
     baseSize: z.number(),
     lineHeight: z.number(),
     headingWeight: z.number(),
+    displayScale: z.number(),
+    headingLetterSpacing: z.number(),
   }),
   block: z.object({
     radius: z.number(),
@@ -58,6 +70,34 @@ const aiTemplateSchema = z.object({
     sectionDivider: z.enum(["none", "wave", "diagonal"]),
     background: z.enum(["plain", "gradient", "blobs", "dots", "grid"]),
     decoration: z.enum(["none", "accent", "rich"]),
+    rule: z.enum(["none", "hairline", "accent-bar"]),
+    ornament: z.enum(["none", "seigaiha", "asanoha", "dots-fine", "hairlines", "arc"]),
+    ornamentStrength: z.number(),
+    backdrop: z.enum(["none", "page", "sections"]),
+  }),
+  chrome: z.object({
+    header: z.enum(["bar", "stacked", "minimal"]),
+    footer: z.enum(["dark", "light", "compact", "band"]),
+  }),
+  /** The reference site's SKELETON. Loose everywhere it can be: `type` is a bare string rather than
+   * an enum because structured outputs would then reject the whole response over one typo, and
+   * `normalizeBlockPlan` drops what it does not recognise. */
+  structure: z.object({
+    archetype: z.enum([...ARCHETYPE_KEYS, "custom"]),
+    pages: z.array(
+      z.object({
+        path: z.string(),
+        navLabel: z.string(),
+        blocks: z.array(
+          z.object({
+            type: z.string(),
+            navLabel: z.string(),
+            variant: z.string().nullable(),
+            cardCount: z.number().nullable(),
+          })
+        ),
+      })
+    ),
   }),
   animation: z.object({
     reveal: z.enum(["none", "fade", "slide-up", "slide-left", "slide-right", "zoom", "pop", "flip", "blur"]),
@@ -65,6 +105,8 @@ const aiTemplateSchema = z.object({
     stagger: z.boolean(),
     parallaxHero: z.boolean(),
     variety: z.boolean(),
+    ambient: z.enum(["none", "drift", "float", "sheen"]),
+    progressBar: z.boolean(),
   }),
 });
 
@@ -128,6 +170,10 @@ export function normalizeDesignTokens(ai: AiTemplate): DesignTokens {
       baseSize: Math.round(clamp(ai.font.baseSize, 12, 22, d.font.baseSize)),
       lineHeight: Number(clamp(ai.font.lineHeight, 1.2, 2.4, d.font.lineHeight).toFixed(2)),
       headingWeight: Math.round(clamp(ai.font.headingWeight, 300, 900, d.font.headingWeight) / 100) * 100,
+      displayScale: Number(clamp(ai.font.displayScale, 1, 2.2, d.font.displayScale).toFixed(2)),
+      headingLetterSpacing: Number(
+        clamp(ai.font.headingLetterSpacing, -0.02, 0.3, d.font.headingLetterSpacing).toFixed(3)
+      ),
     },
     block: {
       radius: Math.round(clamp(ai.block.radius, 0, 48, d.block.radius)),
@@ -143,7 +189,16 @@ export function normalizeDesignTokens(ai: AiTemplate): DesignTokens {
       sectionDivider: ai.layout.sectionDivider,
       background: ai.layout.background,
       decoration: ai.layout.decoration,
+      rule: ai.layout.rule,
+      ornament: ai.layout.ornament,
+      ornamentStrength: Number(clamp(ai.layout.ornamentStrength, 0, 1, d.layout.ornamentStrength).toFixed(2)),
+      backdrop: ai.layout.backdrop,
+      // ⚠️ Never taken from the model. The path is filled by the image pipeline (BACKDROP_SLOT), and
+      // a value here could only be a URL on the reference site — which is exactly the image copying
+      // this importer refuses to do.
+      backdropImage: "",
     },
+    chrome: { header: ai.chrome.header, footer: ai.chrome.footer },
     animation: {
       reveal: ai.animation.reveal,
       // A reveal with a near-zero duration is an incoherent pair: the element still starts at
@@ -157,9 +212,54 @@ export function normalizeDesignTokens(ai: AiTemplate): DesignTokens {
       stagger: ai.animation.stagger,
       parallaxHero: ai.animation.parallaxHero,
       variety: ai.animation.variety,
+      // Ambient motion on a template that opted out of motion entirely is a contradiction the CSS
+      // already refuses to honour (every ambient rule is prefixed `html:not([data-reveal="none"])`).
+      // Resolving it here as well keeps the stored document from claiming something untrue.
+      ambient: ai.animation.reveal === "none" ? "none" : ai.animation.ambient,
+      progressBar: ai.animation.progressBar,
     },
   });
 }
+
+
+/** The half of the prompt that describes the SKELETON, generated from the registries rather than
+ * written out.
+ *
+ * ⚠️ Generated, not hand-written, for the same reason describeVariants is in generateContentPlan: a
+ * hand-listed vocabulary drifts the moment a block type or a variant is added, and a value the model
+ * was never told about is one it never returns — the feature then looks broken rather than unused. */
+const STRUCTURE_PROMPT = `# ページ構成（structure）の決め方
+参考サイトの「骨格」を写します。写すのはセクションの**種類・並び・枚数**だけで、文章や写真は写しません。
+
+## 使えるセクションの種類
+${BLOCK_TYPES.map((type) => {
+  const variants = variantsFor(type).map((v) => `${v}（${VARIANT_DESCRIPTIONS[`${type}:${v}`] ?? v}）`);
+  const cards = type === "rich" ? "。cardCount で項目数（2〜6）も指定できる" : "";
+  return `- ${type}（${blockLabel(type)}）${variants.length > 0 ? `: variant = ${variants.join(" / ")}` : ": variant なし"}${cards}`;
+}).join("\n")}
+variant に迷ったら null にしてください。null はテンプレート既定の見た目という意味です。
+
+## まず、手持ちの型に当てはまるかを見る
+${ARCHETYPE_KEYS.map((key) => `- ${key}（${ARCHETYPES[key].label}）: ${ARCHETYPES[key].description}`).join("\n")}
+- 近い型があれば structure.archetype にその名前を書き、structure.pages は空の配列にしてください。型は検証済みなので、そちらのほうが安全です。
+- どれにも当てはまらないときだけ structure.archetype を "custom" にして、structure.pages を自分で書きます。
+
+## structure.pages を書くときの決まり
+- 1ページ目が必ずトップページです。path は空文字（""）にします。
+- 2ページ目以降の path は英小文字・数字・ハイフンだけ（about, service, access など）。日本語は使えません。
+- ページは最大6つ、1ページのセクションは最大12個、全体で最大24個。
+- 参考サイトが1枚もの（ナビのリンクがすべて同じページ内）なら、ページを増やしてはいけません。
+- セクションの並びは参考サイトの並びに合わせます。「同じ形の項目が◯個」と書かれていたら、その数をそのまま cardCount にします。
+- お問い合わせ（contact）はサイト全体で1つだけ。最後のページの末尾に置くのが自然です。
+- メインビジュアル（hero）はトップページの先頭に置きます。下層ページには無くて構いません。
+
+## navLabel に使える言葉（これ以外は使えません）
+${[...ALLOWED_NAV_LABELS].join(" / ")}
+- 医院名・キャッチコピー・参考サイト独自の見出しは絶対に書かないでください。上のどれにも当てはまらない場合は空文字にしてください。
+
+# 参考サイトの文章・写真を写さないこと
+- 出力してよいのはセクションの種類・並び・枚数・レイアウト名だけです。
+- 参考サイトの見出し文・本文・医院名・電話番号・写真は、どの項目にも書いてはいけません。`;
 
 const SYSTEM_PROMPT = `あなたはWebデザインを数値化するアシスタントです。
 参考サイトのHTML/CSSから機械的に抽出した情報と、参考画像をもとに、そのサイトの「デザインの方向性」をテンプレート設定（JSON）として書き出してください。
@@ -186,7 +286,19 @@ const SYSTEM_PROMPT = `あなたはWebデザインを数値化するアシスタ
 - animation: @keyframes や transition が多いサイトほど動きのある設定にする。動きの気配が無ければ reveal を "fade" か "none" にすること。reveal は none / fade / slide-up / slide-left / slide-right / zoom / pop（弾む）/ flip（奥から起き上がる）/ blur（ぼけから像を結ぶ）から選ぶ。派手な動きの参考サイトには pop・flip・blur を積極的に使ってよい。
 - name はテンプレート名（日本語・15文字以内・「〜系」「〜調」のように雰囲気が分かる短い名前）。
 - mood は、このテンプレートがどんなクリニックに合うかを説明する日本語2〜3文。あとでAIがヒアリング内容と照らして自動選択する際の唯一の判断材料になるので、色やフォント名ではなく「誰に・どんな印象を与えるか」を書くこと。
-- tags は 3〜6個の短い日本語タグ（例: 小児科向け, 明るい, 高級感, 和モダン）。`;
+- tags は 3〜6個の短い日本語タグ（例: 小児科向け, 明るい, 高級感, 和モダン）。
+- font.displayScale: 見出しだけを何倍に大きくするか（1〜2.2）。写真が少なく文字で見せるサイトほど大きくする。ふつうのサイトは1〜1.2。
+- font.headingLetterSpacing: 見出しの字間（em単位、-0.02〜0.3）。和文の見出しがゆったり組まれていれば0.05〜0.15、詰まっていれば0。
+- layout.rule: セクション見出しの区切り方。太い下線でよければ "none"、細い罫線なら "hairline"、見出しの脇に色の棒があるなら "accent-bar"。
+- chrome.header: ロゴと横並びのメニューなら "bar"、ロゴが中央にありその下にメニューが並ぶなら "stacked"、ロゴだけでメニューがほとんど無いなら "minimal"。
+- chrome.footer: 濃い色地なら "dark"、明るい地なら "light"、情報が少なく小さいなら "compact"、ブランド色の帯なら "band"。
+- layout.ornament: セクションの地紋（模様）。無地なら "none"、和風の波柄なら "seigaiha"、和風の幾何格子なら "asanoha"、細かい点なら "dots-fine"、斜めの細い線なら "hairlines"、大きな円弧の意匠なら "arc"。⚠️ 参考サイトに柄が見当たらないのに付けてはいけない。迷ったら "none"。
+- layout.ornamentStrength: 地紋の濃さ（0〜1）。クリニックのページでは 0.1〜0.25 が自然。柄がはっきり見えるサイトでも 0.4 を超えないこと。
+- layout.backdrop: ページ全体に大きな背景写真が敷かれているなら "page"、一部のセクションだけなら "sections"、無ければ "none"。⚠️ 写真そのものは取り込まず、こちらで新しく生成する。
+- animation.ambient: 何も操作していなくても背景がずっと動いているなら、その動き方。ゆっくり流れるなら "drift"、ふわふわ上下するなら "float"、光が横切るなら "sheen"、動いていなければ "none"。⚠️ 参考サイトが静かなら必ず "none"。
+- animation.progressBar: 画面の最上部にスクロール量を示す細い線があるなら true。
+
+${STRUCTURE_PROMPT}`;
 
 export type ImportTemplateInput = {
   /** Reference site. Optional when the admin is working purely from images. */
@@ -195,6 +307,10 @@ export type ImportTemplateInput = {
   imageUrls?: string[];
   /** Overrides the AI-suggested name when the admin already knows what to call it. */
   name?: string;
+  /** Which block layout to build on. Left unset (the admin picked 「おまかせ」), the model reads the
+   * reference site's own skeleton — its nav, its section order, its card counts — and either names
+   * one of the archetypes or returns a page plan of its own. Set, it overrides that entirely. */
+  archetype?: ArchetypeKey;
 };
 
 export type ImportTemplateResult = {
@@ -295,6 +411,12 @@ export async function importTemplateFromUrl(input: ImportTemplateInput): Promise
   const now = new Date().toISOString();
   const id = newDocumentId();
   const name = (input.name ?? parsed.name).trim() || "新しいテンプレート";
+  // An explicit choice in the admin form wins. Left unset, the model's reading of the reference
+  // site's own skeleton decides — which is the whole point of reading the structure at all.
+  const chosen = input.archetype && isArchetypeKey(input.archetype) ? input.archetype : null;
+  const layout = chosen
+    ? archetypeBlocks(chosen)
+    : resolveStructure(parsed.structure.archetype, parsed.structure.pages);
 
   const document: SiteDocument = {
     id,
@@ -319,13 +441,34 @@ export async function importTemplateFromUrl(input: ImportTemplateInput): Promise
       },
       snsLinks: [],
     },
-    blocks: applySampleCopy(defaultTemplateBlocks()),
+    pages: layout.pages,
+    blocks: applySampleCopy(layout.blocks),
     mood: parsed.mood,
     tags: parsed.tags.map((t) => t.trim()).filter(Boolean).slice(0, 8),
     sourceUrl: signals?.finalUrl ?? undefined,
     createdAt: now,
     updatedAt: now,
   };
+
+  // Final gate on the SKELETON. checkDesign is the checker the rest of the app already trusts, so
+  // the importer reuses it rather than re-deriving "is this shaped like a clinic site" — and it runs
+  // after applySampleCopy, because an unwritten hero headline is itself a high-severity finding.
+  //
+  // ⚠️ Only `structure-*` findings count. A high-severity CONTRAST finding is about the palette the
+  // model chose, and throwing away a faithful page plan because the accent colour is too pale would
+  // be discarding the right thing for the wrong reason — the admin fixes colours in the editor.
+  const structural = checkDesign(document).issues.filter(
+    (issue) => issue.severity === "high" && issue.code.startsWith("structure-")
+  );
+  if (structural.length > 0) {
+    console.warn("[importFromUrl] 構成の検査に落ちたため既定の構成に戻します。", structural);
+    const fallback = archetypeBlocks("one-page-classic");
+    document.pages = fallback.pages;
+    document.blocks = applySampleCopy(fallback.blocks);
+    warnings.push(
+      "参考サイトの構成をうまく読み取れなかったため、標準のページ構成で作成しました。編集画面でセクションを入れ替えられます。"
+    );
+  }
 
   // Saving is two statements against D1 (the site row, then its blocks) with no transaction spanning
   // them, so a failure partway leaves a template with no blocks — which then shows up in the admin

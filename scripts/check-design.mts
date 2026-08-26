@@ -41,6 +41,7 @@ await loadEnv();
 
 const { checkDesign } = await import("../src/lib/site/designCheck");
 const { siteOutputPath } = await import("../src/lib/render/renderSiteFiles");
+const { pageFileName } = await import("../src/lib/site/pages");
 const { getDocument, getDocumentBySlug, listSiteDocuments, listTemplates } = await import("../src/lib/site/store");
 import type { DesignIssue } from "../src/lib/site/designCheck";
 import type { SiteDocument } from "../src/lib/site/document";
@@ -94,15 +95,19 @@ for (const doc of docs) {
   const { outDir } = siteOutputPath(doc);
   const issues = [...checkDesign(doc, { outDir }).issues];
 
-  const indexHtml = path.join(outDir, "index.html");
+  // Every page of the document, not just the home page — one browser measures them all.
+  const targets = doc.pages
+    .map((page) => ({ path: path.join(outDir, pageFileName(page)), label: doc.pages.length > 1 ? page.navLabel : "" }))
+    .filter((target) => existsSync(target.path));
+
   if (!staticOnly) {
-    if (!existsSync(indexHtml)) {
+    if (targets.length === 0) {
       renderSkipped++;
     } else {
       try {
-        const { checkRenderedSite } = await import("../src/lib/site/renderCheck");
-        issues.push(...(await checkRenderedSite(indexHtml)));
-        rendered++;
+        const { checkRenderedPages } = await import("../src/lib/site/renderCheck");
+        issues.push(...(await checkRenderedPages(targets)));
+        rendered += targets.length;
       } catch (err) {
         console.error(`\n描画検査を実行できませんでした: ${err instanceof Error ? err.message : String(err)}`);
         console.error("以降は静的検査のみで続行します（--static を付けるとこの警告は出ません）。");

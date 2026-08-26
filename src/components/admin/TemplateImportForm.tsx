@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ArchetypeSelect } from "./ArchetypeSelect";
 import { useActionState } from "react";
 import { importTemplateAction, type ImportState } from "@/lib/template/templateActions";
 import { inputClass } from "./adminStyles";
@@ -57,6 +58,8 @@ export function TemplateImportForm() {
           </label>
           <input id="name" name="name" className={inputClass} placeholder="空欄の場合はAIが名前を付けます" />
         </div>
+
+        <ArchetypeSelect allowAuto />
 
         <div className="flex items-center gap-3">
           <button

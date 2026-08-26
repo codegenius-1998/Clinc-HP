@@ -1,5 +1,7 @@
 import * as cheerio from "cheerio";
 import { safeFetchText } from "./safeFetch";
+import { normalizeColor } from "./cssColor";
+import { describeStructure, extractStructure, type StructureSignals } from "./extractStructure";
 
 /** Reads a reference site and reports what it can measure about its visual design: which colours it
  * actually uses and how often, which fonts, how round its corners are, whether it animates.
@@ -55,31 +57,10 @@ export type DesignSignals = {
   /** True when the page shipped almost no markup — a client-rendered SPA, where the colours and
    * fonts live in JS the importer never sees. Surfaced so the UI can say so plainly. */
   looksClientRendered: boolean;
+  /** How the page is BUILT, as opposed to how it looks. See extractStructure.ts. */
+  structure: StructureSignals;
 };
 
-function normalizeColor(raw: string): string | null {
-  const value = raw.trim().toLowerCase();
-
-  const hex = value.match(/^#([0-9a-f]{3,8})$/);
-  if (hex) {
-    const digits = hex[1];
-    if (digits.length === 3) return `#${digits[0]}${digits[0]}${digits[1]}${digits[1]}${digits[2]}${digits[2]}`;
-    if (digits.length === 6) return `#${digits}`;
-    // 4- and 8-digit hex carry alpha; drop it — a template token is an opaque colour.
-    if (digits.length === 4) return `#${digits[0]}${digits[0]}${digits[1]}${digits[1]}${digits[2]}${digits[2]}`;
-    if (digits.length === 8) return `#${digits.slice(0, 6)}`;
-    return null;
-  }
-
-  const rgb = value.match(/^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/);
-  if (rgb) {
-    const [r, g, b] = rgb.slice(1, 4).map((n) => Math.max(0, Math.min(255, Math.round(Number(n)))));
-    if ([r, g, b].some(Number.isNaN)) return null;
-    return `#${[r, g, b].map((n) => n.toString(16).padStart(2, "0")).join("")}`;
-  }
-
-  return null;
-}
 
 /** OpenAI's vision input accepts jpeg/png/gif/webp only — an SVG logo or an .ico favicon makes the
  * whole request fail, so unsupported formats are dropped at collection time rather than discovered
@@ -240,6 +221,8 @@ export async function extractDesignSignals(rawUrl: string): Promise<DesignSignal
     cssSources,
     cssBytes: css.length,
     looksClientRendered: bodyText.length < 400 && css.length < 5_000,
+    // Reuses the cheerio tree and the CSS text already in hand — no extra request, no new library.
+    structure: extractStructure($, css, page.url),
   };
 }
 
@@ -273,6 +256,8 @@ export function describeSignals(signals: DesignSignals): string {
   if (signals.keyframeNames.length > 0) {
     lines.push("", "## @keyframes の名前", ...signals.keyframeNames.map((k) => `- ${k}`));
   }
+  lines.push(describeStructure(signals.structure));
+
   if (signals.looksClientRendered) {
     lines.push(
       "",

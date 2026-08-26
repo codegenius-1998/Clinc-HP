@@ -5,7 +5,7 @@ import type { HearingSheet } from "@/lib/hearing";
 import type { Block, SiteDocument } from "@/lib/site/document";
 import { BLOCK_DEFINITIONS } from "@/lib/site/blocks";
 import { HONESTY_RULES, IMAGE_STYLE_RULES, LOGO_RULE, SEO_DESCRIPTION_LENGTH } from "@/lib/site/authoringRules";
-import { CARD_COUNT_RANGE, variantsFor, type PlannedSection } from "@/lib/site/composition";
+import { CARD_COUNT_RANGE, VARIANT_DESCRIPTIONS, variantsFor, type PlannedSection } from "@/lib/site/composition";
 
 /** Writes the copy for one clinic against a chosen template's actual block list.
  *
@@ -109,6 +109,30 @@ function sampleCardCount(block: Block): number | null {
   return null;
 }
 
+/** The layout menu, generated from composition.ts rather than written out here.
+ *
+ * ⚠️ This used to be seven hand-written lines. With the vocabulary now covering ten block types, a
+ * hand-written list drifts the first time a variant is added — and a variant the model was never
+ * told about is one it never picks, so `normalizeComposition` silently drops nothing and the feature
+ * simply appears not to work. Listing only the variants THIS document's blocks can actually take
+ * also keeps the prompt from describing layouts that are not on offer.
+ *
+ * The lookup falls back to the bare value: a variant added to BLOCK_VARIANTS without a description
+ * still reaches the model as a choosable name rather than vanishing. */
+function describeVariants(doc: SiteDocument): string {
+  const lines: string[] = [];
+  const seen = new Set<string>();
+  for (const block of authorableBlocks(doc)) {
+    for (const variant of variantsFor(block.type)) {
+      const key = `${block.type}:${variant}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      lines.push(`- ${variant}: ${VARIANT_DESCRIPTIONS[key] ?? variant}`);
+    }
+  }
+  return lines.join("\n");
+}
+
 function buildSystemPrompt(doc: SiteDocument): string {
   return `あなたは個人クリニックのホームページを一から作成するAIディレクター兼コピーライターです。
 渡された資料をもとに、このクリニックサイトの文章プラン（JSON）を1回で作成してください。**HTMLタグは一切出力しません**。出力はテキスト内容と画像の生成指示（プロンプト）だけです。ページの組み立て（HTML/CSS）はこの後コード側が行います。改行を入れたい場合でも \`<br>\` のようなタグは絶対に書かず、タグを含まないプレーンテキストのみを書くこと。
@@ -128,13 +152,7 @@ ${IMAGE_STYLE_RULES.map((r) => `- ${r}`).join("\n")}
 
 # レイアウトの選択（composition）
 「ブロック一覧」の各ブロックには、選べるレイアウトが示してある。医院の性格に合わせて1つ選び、composition 配列に書くこと。
-- full-bleed: 画像を全面に敷き、その上に文字を重ねる。写真の力で見せたい医院向け。
-- split: 画像と文字を左右に分ける。落ち着いた、読ませたい医院向け。
-- centered: 画像の下に文字を置く。情報量が多い医院向け。
-- grid: 写真つきのカードを格子状に並べる。項目が4つ前後で、視覚的に見せたいとき。
-- list: 写真を左、文章を右に置いた行を縦に積む。1項目ずつ説明が長いとき。
-- minimal: **写真を使わず**、番号と見出しと本文だけで並べる。項目名だけで伝わるとき、落ち着いた印象にしたいとき。
-- overlap: カードを少しずつずらして重ねる。雑誌的で、動きのある印象にしたいとき。
+${describeVariants(doc)}
 
 **隣り合うセクションで同じレイアウトを選ばないこと。** 同じものが続くと1つの長いセクションに見えてしまう。
 写真より文章で伝わる医院（心療内科、内科など）では minimal を積極的に使ってよい。

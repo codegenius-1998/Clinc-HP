@@ -33,7 +33,10 @@ export function applySampleCopy(blocks: Block[]): Block[] {
       case "rich":
         return {
           ...block,
-          data: { ...block.data, body: SAMPLE_BODY, cards: sampleCards(4) },
+          // ⚠️ block.cardCount, not a hardcoded 4. An archetype that asks for a 3-up or 6-up grid
+          // would otherwise have its choice silently overwritten here — the sample copy would say
+          // four cards no matter what the layout was designed around.
+          data: { ...block.data, body: SAMPLE_BODY, cards: sampleCards(block.cardCount ?? 4) },
         };
       case "hours":
         return {

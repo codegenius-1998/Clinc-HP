@@ -9,7 +9,7 @@ import { generateSiteImage, type ImageStyle } from "./openai/generateSiteImage";
 import { matchImagesToCategories, type ImageTarget as CategoryImageTarget } from "./openai/matchImageCategories";
 import type { HearingSheet } from "./hearing";
 import type { Block, SiteDocument } from "./site/document";
-import { LOGO_SLOT, documentImageSlots, needsGeneratedFile, slotKey } from "./site/imagePaths";
+import { BACKDROP_SLOT, LOGO_SLOT, documentImageSlots, needsGeneratedFile, slotKey } from "./site/imagePaths";
 import { checkDesign } from "./site/designCheck";
 import { applyComposition, derivePalette, normalizeComposition } from "./site/composition";
 import type { ImageCategoryKey } from "./imageCategories";
@@ -325,6 +325,13 @@ export function applyImagePaths(doc: SiteDocument, paths: Map<string, string>): 
   const logo = paths.get(LOGO_SLOT);
   if (logo) doc.meta.logoImage = logo;
   else if (needsGeneratedFile(doc.meta.logoImage)) doc.meta.logoImage = "";
+
+  // The backdrop lives on the design tokens rather than on a block, so it needs its own line here —
+  // but it follows exactly the same rule as every other slot: keep what was produced, clear anything
+  // still pointing into the output directory this run wiped.
+  const backdrop = paths.get(BACKDROP_SLOT);
+  if (backdrop) doc.design.layout.backdropImage = backdrop;
+  else if (needsGeneratedFile(doc.design.layout.backdropImage)) doc.design.layout.backdropImage = "";
 
   /** The produced path, the current one if it needs no file of ours, or "" when neither holds. */
   function resolve(slot: string, current: string | undefined): string {

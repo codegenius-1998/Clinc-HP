@@ -267,6 +267,41 @@ export function DesignPanel({
           onChange={(rule) => set("layout", { rule: rule as DesignTokens["layout"]["rule"] })}
         />
         <SelectField
+          label="セクションの地紋（模様）"
+          value={design.layout.ornament}
+          options={[
+            { value: "none", label: "なし" },
+            { value: "seigaiha", label: "青海波（波の弧）" },
+            { value: "asanoha", label: "麻の葉（三角格子）" },
+            { value: "dots-fine", label: "細かいドット" },
+            { value: "hairlines", label: "斜めの細い線" },
+            { value: "arc", label: "大きな弧（右上から）" },
+          ]}
+          hint="画像ファイルは使いません。CSSで描くので読み込みが増えず、色はテーマカラーに追従します。"
+          onChange={(ornament) => set("layout", { ornament: ornament as DesignTokens["layout"]["ornament"] })}
+        />
+        <NumberField
+          label="地紋の濃さ"
+          value={design.layout.ornamentStrength}
+          min={0}
+          max={1}
+          step={0.02}
+          unit=""
+          hint="0で見えなくなります。0.1〜0.2 が自然です。0.3を超えると柄が本文より目立ちます。"
+          onChange={(ornamentStrength) => set("layout", { ornamentStrength })}
+        />
+        <SelectField
+          label="背景写真"
+          value={design.layout.backdrop}
+          options={[
+            { value: "none", label: "なし" },
+            { value: "page", label: "ページ全体の背景に敷く" },
+            { value: "sections", label: "淡色セクションの背景に敷く" },
+          ]}
+          hint="写真はサイト生成時にAIが作ります。文字が読めるよう、必ず背景色の膜を重ねます。まだ写真が無い間は何も表示されません。"
+          onChange={(backdrop) => set("layout", { backdrop: backdrop as DesignTokens["layout"]["backdrop"] })}
+        />
+        <SelectField
           label="装飾の量"
           value={design.layout.decoration}
           options={[
@@ -316,6 +351,24 @@ export function DesignPanel({
           value={design.animation.variety}
           hint="登場の向きとカードの並びが4セクション周期で入れ替わり、同じ動きの繰り返しになりません。"
           onChange={(variety) => set("animation", { variety })}
+        />
+        <SelectField
+          label="地紋を動かし続ける"
+          value={design.animation.ambient}
+          options={[
+            { value: "none", label: "動かさない" },
+            { value: "drift", label: "ゆっくり流れる" },
+            { value: "float", label: "ふわふわ上下する" },
+            { value: "sheen", label: "光が横切る" },
+          ]}
+          hint="地紋（模様）だけが動きます。文字や写真は動かないので、読みやすさは変わりません。地紋が「なし」のときは何も起きません。"
+          onChange={(ambient) => set("animation", { ambient: ambient as DesignTokens["animation"]["ambient"] })}
+        />
+        <ToggleField
+          label="読み進み具合のバーを出す"
+          value={design.animation.progressBar}
+          hint="画面のいちばん上に細い線が出て、ページのどのあたりを読んでいるかを示します。"
+          onChange={(progressBar) => set("animation", { progressBar })}
         />
         <ToggleField
           label="メインビジュアルをゆっくり動かす（パララックス）"

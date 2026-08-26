@@ -156,10 +156,42 @@
     update();
   }
 
+  /** 読み進み具合のバー。テンプレートが有効にしたときだけ要素が出るので、
+   * 「要素が無ければ何もしない」だけで切り替えが済む（属性を1つ増やさなくてよい）。
+   *
+   * prefers-reduced-motion を見ていないのは意図的。これは演出ではなく、スクロール位置を
+   * 1:1 で示す指示器で、動きを控える設定の利用者にとっても意味が変わらない。CSS 側にも
+   * transition を置いていないので、勝手に補間して動くこともない。 */
+  function setupScrollProgress() {
+    var bar = document.querySelector(".scroll-progress");
+    if (!bar) return;
+
+    var ticking = false;
+    var update = function () {
+      var scrollable = document.documentElement.scrollHeight - window.innerHeight;
+      // 1画面に収まるページでは 0 除算になる。その場合はバーを出さない（進みようがない）。
+      var ratio = scrollable > 0 ? Math.min(Math.max(window.scrollY / scrollable, 0), 1) : 0;
+      bar.style.setProperty("--scroll-progress", (ratio * 100).toFixed(2) + "%");
+      ticking = false;
+    };
+    window.addEventListener(
+      "scroll",
+      function () {
+        if (ticking) return;
+        ticking = true;
+        window.requestAnimationFrame(update);
+      },
+      { passive: true }
+    );
+    window.addEventListener("resize", update);
+    update();
+  }
+
   setupFaqAccordion();
   setupMobileNavAutoClose();
   trackHeaderHeight();
   setupHeaderScrollState();
   setupScrollReveal();
   setupParallaxHero();
+  setupScrollProgress();
 })();

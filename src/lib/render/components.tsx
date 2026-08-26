@@ -1,7 +1,8 @@
 import type { CSSProperties } from "react";
-import { navBlocks, type Block, type BlockOf, type DesignTokens, type SiteDocument } from "@/lib/site/document";
+import type { Block, BlockOf, DesignTokens, SiteDocument } from "@/lib/site/document";
+import { findPage, homeHref, navItems, pageBlocks, type NavItem } from "@/lib/site/pages";
 import { readableFill, readableOn } from "@/lib/site/color";
-import { effectiveCardLayout, effectiveHeroLayout } from "@/lib/site/composition";
+import { effectiveCardLayout, effectiveHeroLayout, sectionVariantClass } from "@/lib/site/composition";
 import { blockSupportsPadding } from "@/lib/site/blocks";
 
 /** Renders a SiteDocument to a static page. The page is driven entirely by `doc.blocks` in array
@@ -71,7 +72,47 @@ function themeStyle(design: DesignTokens): CSSProperties {
     "--accent-fill": readableFill(design.colors.accent, design.colors.accentInverse),
 
     "--reveal-duration": `${design.animation.duration}ms`,
+
+    /* The decorative layer. The PATTERN is a CSS mask (site.css) so it is painted in `--primary` and
+     * follows the palette; only its strength is a number, and only the number needs to come from
+     * here. The backdrop PHOTO is not a variable at all — see backdropCss. */
+    "--ornament-strength": String(design.layout.ornamentStrength),
+
+    /* The footer's colours were literal hex values in site.css with no token behind them, so a
+     * template could restyle every other surface and still ship the same charcoal footer. These
+     * defaults ARE those literals, so nothing changes until a chrome variant asks it to. */
+    ...footerColors(design),
   } as CSSProperties;
+}
+
+/** The backdrop photograph's CSS, emitted into the page rather than living in site.css.
+ *
+ * ⚠️ This is not a style preference. A relative `url()` is resolved against the STYLESHEET that uses
+ * it, and site.css is served from `css/site.css` — so `url("images/backdrop.jpg")` reaching site.css
+ * through a custom property resolved to `css/images/backdrop.jpg` and the photograph silently never
+ * appeared (measured in Chromium: the computed value came back with the `css/` segment in it).
+ * A `<style>` element's base URL is the DOCUMENT's, so writing the declaration here — with the path
+ * written literally, no `var()` in between — makes it resolve exactly like every `<img src>` on the
+ * page. The site's flat output (see site/pages.ts) is what lets one relative path work from every
+ * page, locally and at a domain root alike.
+ *
+ * The scrim is what keeps the design check honest: `checkContrast` compares TOKENS, so text over a
+ * photograph is invisible to it. Holding the effective background at `--bg` means the check is still
+ * measuring the thing that is actually behind the words. */
+function backdropCss(mode: "page" | "sections", image: string): string {
+  const target = mode === "page" ? "html[data-backdrop=\"page\"] body" : "html[data-backdrop=\"sections\"] .section-alt";
+  const paint = `linear-gradient(var(--backdrop-scrim), var(--backdrop-scrim)), url("${image}")`;
+  return [
+    `${target}{background-image:${paint};background-size:cover;background-position:center;background-repeat:no-repeat;background-attachment:fixed;}`,
+    // 淡色セクションに敷く場合、ベタ塗りの --light が写真を完全に覆ってしまう。
+    mode === "sections" ? `html[data-backdrop="sections"] .section-alt{background-color:var(--bg);}` : "",
+    // ⚠️ background-attachment: fixed はアニメーションではないので、prefers-reduced-motion の
+    // 一括指定（animation-duration: 0.01ms）では止まらない。明示的に外す。スマートフォンでは
+    // 実装差で崩れる（iOS は事実上 scroll 扱い）ので、そちらでも外す。
+    `@media (prefers-reduced-motion: reduce),(max-width:767px){${target}{background-attachment:scroll;}}`,
+  ]
+    .filter(Boolean)
+    .join("");
 }
 
 // --- per-field/per-block style overrides (visual editor) -----------------------------------------
@@ -147,11 +188,30 @@ function lineHref(line: string): string {
   return `https://line.me/R/ti/p/${encodeURIComponent(line.startsWith("@") ? line : `@${line}`)}`;
 }
 
-function Header({ doc }: { doc: SiteDocument }) {
+/** `--footer-bg` / `--footer-text` for the chosen footer form. "dark" reproduces the values that
+ * were hardcoded in site.css. "band" reuses `readableFill`, so the brand colour is deepened exactly
+ * as it is for the nav bar and the phone button rather than by a second, divergent rule. */
+function footerColors(design: DesignTokens): Record<string, string> {
+  switch (design.chrome.footer) {
+    case "light":
+      return { "--footer-bg": design.colors.light, "--footer-text": design.colors.text };
+    case "band":
+      return {
+        "--footer-bg": readableFill(design.colors.primary, design.colors.primaryInverse),
+        "--footer-text": design.colors.primaryInverse,
+      };
+    default:
+      return { "--footer-bg": "#2b2f36", "--footer-text": "#dcdfe4" };
+  }
+}
+
+function Header({ doc, pageId }: { doc: SiteDocument; pageId: string }) {
   const { meta } = doc;
   return (
     <header className="site-header">
-      <a className="brand" href="#top" aria-label={meta.clinicName}>
+      {/* "#top" on the home page, "index.html" everywhere else — a brand mark that reloads the page
+          you are already on reads as a broken link. */}
+      <a className="brand" href={homeHref(doc, pageId)} aria-label={meta.clinicName}>
         {meta.logoImage && <img src={meta.logoImage} alt={meta.clinicName} />}
         <span className="clinic-name">{meta.clinicName}</span>
       </a>
@@ -171,16 +231,22 @@ function Header({ doc }: { doc: SiteDocument }) {
   );
 }
 
-function Nav({ items }: { items: { id: string; label: string }[] }) {
+/** The page's own navigation: the site's pages, then this page's sections. Both kinds are plain
+ * links — `aria-current` is what tells a screen reader (and the CSS) which page is open, since a
+ * static site has no other way to say so. */
+function Nav({ items }: { items: NavItem[] }) {
   return (
     <nav className="site-nav">
       <ul>
-        <li>
-          <a href="#top">ホーム</a>
-        </li>
         {items.map((item) => (
-          <li key={item.id}>
-            <a href={`#${item.id}`}>{item.label}</a>
+          <li key={item.key}>
+            <a
+              href={item.href}
+              className={item.kind === "page" && item.current ? "is-current" : undefined}
+              aria-current={item.kind === "page" && item.current ? "page" : undefined}
+            >
+              {item.label}
+            </a>
           </li>
         ))}
       </ul>
@@ -206,9 +272,10 @@ function CtaButtons({ tel, line }: { tel?: string; line?: string }) {
   );
 }
 
-function Footer({ doc }: { doc: SiteDocument }) {
+function Footer({ doc, pageId }: { doc: SiteDocument; pageId: string }) {
   const { meta } = doc;
-  const items = navBlocks(doc);
+  // Same list as the header's, so the two can never disagree about what this site contains.
+  const items = navItems(doc, pageId);
   return (
     <footer className="site-footer">
       <div className="footer-grid">
@@ -226,9 +293,8 @@ function Footer({ doc }: { doc: SiteDocument }) {
           )}
         </div>
         <nav className="footer-nav">
-          <a href="#top">ホーム</a>
           {items.map((item) => (
-            <a key={item.id} href={`#${item.id}`}>
+            <a key={item.key} href={item.href}>
               {item.label}
             </a>
           ))}
@@ -245,20 +311,38 @@ function Footer({ doc }: { doc: SiteDocument }) {
  * main.js's IntersectionObserver; `id` doubles as the nav anchor. */
 function Section({
   block,
+  doc,
   className,
+  cycle,
   children,
 }: {
   block: Block;
+  doc: SiteDocument;
   className?: string;
+  /** This section's position in the 4-step `data-variety` cycle, counted per page. See SitePage. */
+  cycle?: number;
   children: React.ReactNode;
 }) {
   return (
     <section
       id={block.id}
-      className={`section${className ? ` ${className}` : ""}`}
+      // The variant class is added here rather than by each block component: there is one <section>
+      // per block and this is it, so nine components do not each have to remember.
+      className={["section", className, sectionVariantClass(block)].filter(Boolean).join(" ")}
       style={sectionCss(block)}
       data-container="section"
+      data-cycle={cycle === undefined ? undefined : String(cycle)}
     >
+      {/* The decorative layer, and the ONLY thing ambient motion is ever allowed to move.
+          ⚠️ Emitted only when the template asked for a pattern, so a document with `ornament: "none"`
+          — which is every document written before this existed — produces byte-identical HTML.
+          ⚠️ A real element rather than `.section::before`: `data-divider="wave"` already owns
+          `.section-alt::before` AND `::after`, and `.section-alt` is the same element as `.section`,
+          so a pseudo-element here would silently delete the wave divider on tinted sections.
+          ⚠️ `position: absolute; inset: 0` inside a box with `overflow-x: clip` (site.css) is what
+          makes it structurally impossible for a decoration to bring back the 390px horizontal-scroll
+          bug. Nothing decorative may be positioned by a negative margin. */}
+      {doc.design.layout.ornament !== "none" && <span className="ornament" aria-hidden="true" />}
       <div className="section-inner reveal" style={containerCss(block, "inner")} data-container="inner">
         {children}
       </div>
@@ -296,11 +380,11 @@ function HeroBlock({ block, doc }: { block: BlockOf<"hero">; doc: SiteDocument }
  * images render in whichever layout the template chose. "minimal" drops card images entirely in
  * favour of a numbered accent, which is why the <img> must not render at all (an empty broken image
  * would still occupy layout) rather than merely being hidden in CSS. */
-function RichBlock({ block, doc }: { block: BlockOf<"rich">; doc: SiteDocument }) {
+function RichBlock({ block, doc, cycle }: { block: BlockOf<"rich">; doc: SiteDocument; cycle?: number }) {
   const layout = effectiveCardLayout(block, doc.design);
   const showCardImages = layout !== "minimal";
   return (
-    <Section block={block}>
+    <Section block={block} doc={doc} cycle={cycle}>
       <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
         {block.data.heading}
       </h2>
@@ -349,9 +433,9 @@ function RichBlock({ block, doc }: { block: BlockOf<"rich">; doc: SiteDocument }
   );
 }
 
-function HoursBlock({ block }: { block: BlockOf<"hours"> }) {
+function HoursBlock({ block, doc, cycle }: { block: BlockOf<"hours">; doc: SiteDocument; cycle?: number }) {
   return (
-    <Section block={block} className="section-alt">
+    <Section block={block} doc={doc} cycle={cycle} className="section-alt">
       <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
         {block.data.heading}
       </h2>
@@ -381,10 +465,10 @@ function HoursBlock({ block }: { block: BlockOf<"hours"> }) {
 /** `mapQuery` has no `data-field` — it never renders as visible text (it only feeds the embedded
  * map's URL), so there's nothing on the page a click could land on. It stays editable only via the
  * sidebar's BlockEditor form. */
-function AccessBlock({ block }: { block: BlockOf<"access"> }) {
+function AccessBlock({ block, doc, cycle }: { block: BlockOf<"access">; doc: SiteDocument; cycle?: number }) {
   const query = block.data.mapQuery || encodeURIComponent(block.data.address);
   return (
-    <Section block={block}>
+    <Section block={block} doc={doc} cycle={cycle}>
       <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
         {block.data.heading}
       </h2>
@@ -412,9 +496,9 @@ function AccessBlock({ block }: { block: BlockOf<"access"> }) {
   );
 }
 
-function NewsBlock({ block }: { block: BlockOf<"news"> }) {
+function NewsBlock({ block, doc, cycle }: { block: BlockOf<"news">; doc: SiteDocument; cycle?: number }) {
   return (
-    <Section block={block} className="section-alt">
+    <Section block={block} doc={doc} cycle={cycle} className="section-alt">
       <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
         {block.data.heading}
       </h2>
@@ -441,9 +525,9 @@ function NewsBlock({ block }: { block: BlockOf<"news"> }) {
   );
 }
 
-function StaffBlock({ block }: { block: BlockOf<"staff"> }) {
+function StaffBlock({ block, doc, cycle }: { block: BlockOf<"staff">; doc: SiteDocument; cycle?: number }) {
   return (
-    <Section block={block}>
+    <Section block={block} doc={doc} cycle={cycle}>
       <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
         {block.data.heading}
       </h2>
@@ -469,9 +553,9 @@ function StaffBlock({ block }: { block: BlockOf<"staff"> }) {
   );
 }
 
-function FaqBlock({ block }: { block: BlockOf<"faq"> }) {
+function FaqBlock({ block, doc, cycle }: { block: BlockOf<"faq">; doc: SiteDocument; cycle?: number }) {
   return (
-    <Section block={block} className="section-alt">
+    <Section block={block} doc={doc} cycle={cycle} className="section-alt">
       <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
         {block.data.heading}
       </h2>
@@ -498,9 +582,9 @@ function FaqBlock({ block }: { block: BlockOf<"faq"> }) {
   );
 }
 
-function PricingBlock({ block }: { block: BlockOf<"pricing"> }) {
+function PricingBlock({ block, doc, cycle }: { block: BlockOf<"pricing">; doc: SiteDocument; cycle?: number }) {
   return (
-    <Section block={block}>
+    <Section block={block} doc={doc} cycle={cycle}>
       <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
         {block.data.heading}
       </h2>
@@ -547,9 +631,9 @@ function PricingBlock({ block }: { block: BlockOf<"pricing"> }) {
   );
 }
 
-function ContactBlock({ block, doc }: { block: BlockOf<"contact">; doc: SiteDocument }) {
+function ContactBlock({ block, doc, cycle }: { block: BlockOf<"contact">; doc: SiteDocument; cycle?: number }) {
   return (
-    <Section block={block} className="contact-section">
+    <Section block={block} doc={doc} cycle={cycle} className="contact-section">
       <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
         {block.data.heading}
       </h2>
@@ -563,9 +647,9 @@ function ContactBlock({ block, doc }: { block: BlockOf<"contact">; doc: SiteDocu
   );
 }
 
-function FreeTextBlock({ block }: { block: BlockOf<"freeText"> }) {
+function FreeTextBlock({ block, doc, cycle }: { block: BlockOf<"freeText">; doc: SiteDocument; cycle?: number }) {
   return (
-    <Section block={block} className={`free-text align-${block.data.align}`}>
+    <Section block={block} doc={doc} cycle={cycle} className={`free-text align-${block.data.align}`}>
       {block.data.heading && (
         <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
           {block.data.heading}
@@ -606,9 +690,9 @@ function ImageBannerBlock({ block }: { block: BlockOf<"imageBanner"> }) {
   );
 }
 
-function GalleryBlock({ block }: { block: BlockOf<"gallery"> }) {
+function GalleryBlock({ block, doc, cycle }: { block: BlockOf<"gallery">; doc: SiteDocument; cycle?: number }) {
   return (
-    <Section block={block}>
+    <Section block={block} doc={doc} cycle={cycle}>
       <h2 data-block-id={block.id} data-field="heading" style={textStyleCss(block, "heading")}>
         {block.data.heading}
       </h2>
@@ -625,6 +709,17 @@ function GalleryBlock({ block }: { block: BlockOf<"gallery"> }) {
             )}
           </figure>
         ))}
+        {/* The second lap of the marquee. A strip that scrolls has to hold its own content twice or
+            it shows a gap every time it wraps; the CSS translates the row by exactly -50%.
+            ⚠️ No `data-block-id` and no `data-field` on the copy, deliberately. Those attributes are
+            the join between the page and the visual editor's click-to-select, and a duplicate of
+            `images.0.src` would give one field two elements — the editor would select and live-update
+            whichever it reached first, and the other would sit there showing the old photo.
+            Hidden from assistive technology for the same reason: it is the same pictures again. */}
+        {sectionVariantClass(block) === "v-gallery-marquee" &&
+          block.data.images.map((image, i) =>
+            image.src ? <img key={`lap2-${i}`} className="marquee-copy" src={image.src} alt="" aria-hidden="true" loading="lazy" /> : null
+          )}
       </div>
     </Section>
   );
@@ -632,32 +727,32 @@ function GalleryBlock({ block }: { block: BlockOf<"gallery"> }) {
 
 /** One block -> one element. Exhaustive over BlockType: adding a type to document.ts without adding
  * it here is a compile error, not a silently missing section. */
-function renderBlock(block: Block, doc: SiteDocument) {
+function renderBlock(block: Block, doc: SiteDocument, cycle?: number) {
   switch (block.type) {
     case "hero":
       return <HeroBlock key={block.id} block={block} doc={doc} />;
     case "rich":
-      return <RichBlock key={block.id} block={block} doc={doc} />;
+      return <RichBlock key={block.id} block={block} doc={doc} cycle={cycle} />;
     case "hours":
-      return <HoursBlock key={block.id} block={block} />;
+      return <HoursBlock key={block.id} block={block} doc={doc} cycle={cycle} />;
     case "access":
-      return <AccessBlock key={block.id} block={block} />;
+      return <AccessBlock key={block.id} block={block} doc={doc} cycle={cycle} />;
     case "news":
-      return <NewsBlock key={block.id} block={block} />;
+      return <NewsBlock key={block.id} block={block} doc={doc} cycle={cycle} />;
     case "staff":
-      return <StaffBlock key={block.id} block={block} />;
+      return <StaffBlock key={block.id} block={block} doc={doc} cycle={cycle} />;
     case "faq":
-      return <FaqBlock key={block.id} block={block} />;
+      return <FaqBlock key={block.id} block={block} doc={doc} cycle={cycle} />;
     case "pricing":
-      return <PricingBlock key={block.id} block={block} />;
+      return <PricingBlock key={block.id} block={block} doc={doc} cycle={cycle} />;
     case "contact":
-      return <ContactBlock key={block.id} block={block} doc={doc} />;
+      return <ContactBlock key={block.id} block={block} doc={doc} cycle={cycle} />;
     case "freeText":
-      return <FreeTextBlock key={block.id} block={block} />;
+      return <FreeTextBlock key={block.id} block={block} doc={doc} cycle={cycle} />;
     case "imageBanner":
       return <ImageBannerBlock key={block.id} block={block} />;
     case "gallery":
-      return <GalleryBlock key={block.id} block={block} />;
+      return <GalleryBlock key={block.id} block={block} doc={doc} cycle={cycle} />;
     default: {
       const exhaustive: never = block;
       return exhaustive;
@@ -667,17 +762,31 @@ function renderBlock(block: Block, doc: SiteDocument) {
 
 // --- page ----------------------------------------------------------------------------------------
 
-export function SitePage({ doc }: { doc: SiteDocument }) {
+export function SitePage({ doc, pageId }: { doc: SiteDocument; pageId: string }) {
   const { design, meta } = doc;
-  const visible = doc.blocks.filter((b) => b.visible);
+  // ⚠️ A backdrop with no photograph behind it would render as a flat scrim — a faint wash the admin
+  // cannot explain and did not ask for. Until the image exists the whole treatment is off.
+  const backdrop = design.layout.backdropImage ? design.layout.backdrop : "none";
+  const page = findPage(doc, pageId);
+  const visible = pageBlocks(doc, page.id);
   const fontsHref = googleFontsHref(design.font.googleFonts);
+
+  // ⚠️ Counts only the blocks that render a `.section`, and does so PER PAGE. The `data-variety`
+  // rules used to be `main > .section:nth-of-type(4n + 2)`, where the `+2` was really "skip the
+  // hero", since HeroBlock renders a <section> without the `.section` class. On a sub-page with no
+  // hero every one of those rules landed one section early. Counting the sections themselves says
+  // what was actually meant, and the CSS selectors keep the same specificity — see site.css.
+  let sectionIndex = 0;
+  const cycleOf = (block: Block): number | undefined =>
+    block.type === "hero" || block.type === "imageBanner" ? undefined : sectionIndex++ % 4;
+
 
   return (
     <html
       lang="ja"
       style={themeStyle(design)}
       data-card-layout={design.block.cardLayout}
-      data-hero={effectiveHeroLayout(doc)}
+      data-hero={effectiveHeroLayout(doc, page.id)}
       data-divider={design.layout.sectionDivider}
       data-reveal={design.animation.reveal}
       data-stagger={design.animation.stagger ? "1" : "0"}
@@ -685,13 +794,21 @@ export function SitePage({ doc }: { doc: SiteDocument }) {
       data-bg={design.layout.background}
       data-decoration={design.layout.decoration}
       data-rule={design.layout.rule}
+      data-header={design.chrome.header}
+      data-footer={design.chrome.footer}
       data-variety={design.animation.variety ? "1" : "0"}
+      data-ornament={design.layout.ornament}
+      data-ambient={design.animation.ambient}
+      data-backdrop={backdrop}
     >
       <head>
         <meta charSet="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>{meta.seo.title}</title>
-        <meta name="description" content={meta.seo.metaDescription} />
+        {/* A page may title itself; empty falls back to the site's own SEO title, which is what a
+            one-page document has always used. og:* stays document-level — it describes the clinic,
+            not the section of the site you happened to open. */}
+        <title>{page.title || meta.seo.title}</title>
+        <meta name="description" content={page.metaDescription || meta.seo.metaDescription} />
         <meta property="og:type" content="business.business" />
         <meta property="og:title" content={meta.seo.ogTitle} />
         <meta property="og:description" content={meta.seo.ogDescription} />
@@ -704,17 +821,24 @@ export function SitePage({ doc }: { doc: SiteDocument }) {
           </>
         )}
         <link rel="stylesheet" href="css/site.css" />
+        {backdrop !== "none" && (
+          <style dangerouslySetInnerHTML={{ __html: backdropCss(backdrop, design.layout.backdropImage) }} />
+        )}
       </head>
       <body>
         <a id="top" />
+        {/* Reading progress. Fixed, 3px tall and outside the flow, so it cannot affect layout; the
+            width comes from a custom property main.js writes. Kept out of the accessibility tree —
+            it repeats information the scrollbar already gives. */}
+        {design.animation.progressBar && <div className="scroll-progress" aria-hidden="true" />}
         {/* Sibling of <nav> on purpose — `.nav-toggle:checked ~ nav.site-nav` is what opens the
             mobile menu, and the general sibling combinator only reaches elements with the same
             parent. Its label sits inside the header. */}
         <input type="checkbox" id="nav-toggle" className="nav-toggle" />
-        <Header doc={doc} />
-        <Nav items={navBlocks(doc)} />
-        <main>{visible.map((block) => renderBlock(block, doc))}</main>
-        <Footer doc={doc} />
+        <Header doc={doc} pageId={page.id} />
+        <Nav items={navItems(doc, page.id)} />
+        <main>{visible.map((block) => renderBlock(block, doc, cycleOf(block)))}</main>
+        <Footer doc={doc} pageId={page.id} />
         <script src="js/main.js" defer></script>
       </body>
     </html>

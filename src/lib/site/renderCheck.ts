@@ -36,9 +36,11 @@ type Measurements = {
   heroOverlap: number;
 };
 
-function issuesFrom(viewport: Viewport, m: Measurements): DesignIssue[] {
+function issuesFrom(viewport: Viewport, m: Measurements, pageLabel = ""): DesignIssue[] {
   const issues: DesignIssue[] = [];
-  const at = (what: string) => `${viewport.name} / ${what}`;
+  // Without the page name a multi-page finding says only "スマートフォン(390px) / ページ全体", which
+  // is the one thing the reader needs and cannot get anywhere else.
+  const at = (what: string) => `${viewport.name}${pageLabel ? ` / ${pageLabel}` : ""} / ${what}`;
 
   // Deliberately keyed on real scrollability rather than on scrollWidth. `overflow-x: clip` leaves
   // scrollWidth reporting the un-clipped width forever, so a page that is correctly clipped would
@@ -102,13 +104,34 @@ function issuesFrom(viewport: Viewport, m: Measurements): DesignIssue[] {
   return issues;
 }
 
-/** Launches a browser once and measures `indexHtmlPath` at every viewport.
+/** How long to wait for a page whose head links an external stylesheet before giving up on the
+ * network and measuring with system fonts. Generous enough for a slow-but-working connection,
+ * short enough that a hung one does not look like a crash. */
+const EXTERNAL_BUDGET_MS = 12_000;
+
+/** Set once per process so a multi-page run explains itself once rather than per page per viewport. */
+let warnedOffline = false;
+
+/** One HTML file to measure, and the page label to name it by in any finding. */
+export type RenderTarget = { path: string; label: string };
+
+/** Measures one page. Kept as the single-target entry point every existing caller already uses. */
+export async function checkRenderedSite(indexHtmlPath: string): Promise<DesignIssue[]> {
+  return checkRenderedPages([{ path: indexHtmlPath, label: "" }]);
+}
+
+/** Launches a browser once and measures every target at every viewport.
+ *
+ * ⚠️ One browser for ALL pages, not one per page. The launch is by far the most expensive part of
+ * this check — a six-page site would otherwise pay for six cold Chromium starts to measure six files
+ * that are each a few hundred milliseconds of work.
  *
  * Falls back to the locally installed Chrome when Playwright's own Chromium hasn't been downloaded —
  * `npx playwright install chromium` needs network access that a CI box or a locked-down machine may
  * not have, and having the check refuse to run is worse than running it in a slightly different
  * browser. Throws only when neither is available, so the caller can say so plainly. */
-export async function checkRenderedSite(indexHtmlPath: string): Promise<DesignIssue[]> {
+export async function checkRenderedPages(targets: RenderTarget[]): Promise<DesignIssue[]> {
+  if (targets.length === 0) return [];
   const { chromium } = await import("playwright");
 
   let browser;
@@ -126,16 +149,56 @@ export async function checkRenderedSite(indexHtmlPath: string): Promise<DesignIs
     }
   }
 
-  const url = pathToFileURL(path.resolve(indexHtmlPath)).href;
   const issues: DesignIssue[] = [];
   try {
+    for (const target of targets) {
+      issues.push(...(await measureOne(browser, target)));
+    }
+  } finally {
+    await browser.close();
+  }
+  return issues;
+}
+
+async function measureOne(
+  browser: Awaited<ReturnType<Awaited<typeof import("playwright")>["chromium"]["launch"]>>,
+  target: RenderTarget
+): Promise<DesignIssue[]> {
+  const url = pathToFileURL(path.resolve(target.path)).href;
+  const issues: DesignIssue[] = [];
+  {
     for (const viewport of VIEWPORTS) {
       const page = await browser.newPage({ viewport: { width: viewport.width, height: viewport.height } });
       // "load" would wait on every subresource, including the Google Fonts stylesheet a template may
       // reference — which never resolves on a machine without outbound network and timed the whole
       // check out. Waiting for it separately, and shrugging if it never comes, keeps the check usable
       // offline at the cost of measuring with fallback fonts.
-      await page.goto(url, { waitUntil: "domcontentloaded" });
+      //
+      // ⚠️ `domcontentloaded` is NOT enough on its own: a <link rel=stylesheet> in the head is
+      // render-blocking, so DOMContentLoaded itself waits on the Google Fonts request. A network that
+      // FAILS is fine (the request errors immediately); a network that HANGS — a captive portal, a
+      // flaky uplink, DNS black-holing — stalls the whole check with a bare 30-second navigation
+      // timeout that names no page and no cause. Measured: that is exactly what happened.
+      //
+      // So the first attempt is given a short budget, and a timeout retries with every non-local
+      // request blocked. The fallback measures with system fonts, which is the same trade this
+      // function already accepts when there is no network at all — and it says so, rather than
+      // failing.
+      try {
+        await page.goto(url, { waitUntil: "domcontentloaded", timeout: EXTERNAL_BUDGET_MS });
+      } catch {
+        await page.route("**/*", (route) =>
+          route.request().url().startsWith("file://") ? route.continue() : route.abort()
+        );
+        await page.goto(url, { waitUntil: "domcontentloaded" });
+        if (!warnedOffline) {
+          warnedOffline = true;
+          console.warn(
+            "[renderCheck] 外部リソース（Google Fonts など）の読み込みが終わらないため、" +
+              "以降はシステムフォントで計測します。文字幅がわずかに変わるため、はみ出しの判定が実際より甘くなることがあります。"
+          );
+        }
+      }
       await page.waitForLoadState("load", { timeout: 8000 }).catch(() => {});
       // Web fonts change every text measurement, and a page measured mid-swap reports overflow that
       // is gone a moment later. (`.then(() => undefined)` because the FontFaceSet itself is not
@@ -234,11 +297,9 @@ export async function checkRenderedSite(indexHtmlPath: string): Promise<DesignIs
         };
       })) as Omit<Measurements, "canScrollHorizontally">;
 
-      issues.push(...issuesFrom(viewport, { ...measurements, canScrollHorizontally }));
+      issues.push(...issuesFrom(viewport, { ...measurements, canScrollHorizontally }, target.label));
       await page.close();
     }
-  } finally {
-    await browser.close();
   }
   return issues;
 }
