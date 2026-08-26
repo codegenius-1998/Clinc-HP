@@ -252,6 +252,23 @@ export async function listTemplates(options?: { sellableOnly?: boolean }): Promi
   return (await d1Query<SiteRow>(sql)).results.map(toSummary);
 }
 
+/** Which section patterns existing templates already use, so a freshly imported one can pick a
+ * different one (see site/decoration.ts).
+ *
+ * ⚠️ One statement, reading only the `design` column, rather than `listTemplates()` plus a
+ * `getDocument()` per row — d1.ts sends exactly one statement per round trip, so the obvious version
+ * would cost one HTTP request per existing template on every import. A malformed row is skipped
+ * rather than thrown on: decoration is a nicety, and failing an import over it would be absurd. */
+export async function usedOrnaments(): Promise<Set<string>> {
+  const rows = await d1Query<{ design: string | null }>("SELECT design FROM sites WHERE is_template = 1");
+  const used = new Set<string>();
+  for (const row of rows.results) {
+    const ornament = parseJson<{ layout?: { ornament?: string } }>(row.design, {}).layout?.ornament;
+    if (ornament && ornament !== "none") used.add(ornament);
+  }
+  return used;
+}
+
 /** Generated (non-template) sites. Pass `ownerEmail` for /mypage, which must never leak another
  * clinic's sites; omit it for the admin screens. */
 export async function listSiteDocuments(options?: { ownerEmail?: string }): Promise<DocumentSummary[]> {

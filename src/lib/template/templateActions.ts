@@ -7,6 +7,7 @@ import { deleteDocument, getDocument, saveDocument } from "@/lib/site/store";
 import { importTemplateFromUrl } from "./importFromUrl";
 import { importTemplateFromGeneratedSite } from "./importFromGeneratedSite";
 import { UnsafeUrlError } from "./safeFetch";
+import { illustrateTemplate, isIllustrating, planIllustration } from "./illustrateTemplate";
 
 /** Server Actions for the template library. Every one starts with `requireAdmin()` — a Server Action
  * is a directly POST-able endpoint, so gating the admin layout alone would leave these wide open. */
@@ -139,4 +140,46 @@ export async function deleteTemplateAction(id: string): Promise<void> {
   await requireAdmin();
   await deleteDocument(id);
   revalidatePath("/admin/templates");
+}
+
+/** How many pictures this template is still missing, and how many places it has for one.
+ *
+ * ⚠️ Deliberately its own action rather than something the list page computes. The list renders from
+ * `DocumentSummary`, which carries no blocks; counting slots for every row would mean a full
+ * `getDocument` each — and d1.ts sends one statement per round trip. This loads exactly the one
+ * template the admin is asking about, when they ask. */
+export async function countTemplateImagesAction(id: string): Promise<{ total: number; remaining: number }> {
+  await requireAdmin();
+  const document = await getDocument(id);
+  if (!document) return { total: 0, remaining: 0 };
+  const plan = await planIllustration(document);
+  return { total: plan.length, remaining: plan.filter((item) => !item.onDisk).length };
+}
+
+/** Starts filling in the rest of a template's photographs.
+ *
+ * ⚠️ Starts, and does not wait. Fifteen images take minutes and Cloudflare cuts any origin response
+ * at 100 seconds — the same constraint that made site generation fire-and-forget
+ * (`void runGeneration` in contentActions.ts). The button polls `templateImageStatusAction`.
+ *
+ * ⚠️ This one spends money, so it is only ever reached by an explicit click; nothing calls it on
+ * render. The double-click guard is inside illustrateTemplate. */
+export async function illustrateTemplateAction(id: string): Promise<{ started: boolean }> {
+  await requireAdmin();
+  const document = await getDocument(id);
+  if (!document || isIllustrating(id)) return { started: false };
+
+  void illustrateTemplate(document).then(
+    () => revalidatePath("/admin/templates"),
+    (err) => console.warn("[templateActions] テンプレートの写真生成に失敗しました。", err)
+  );
+  return { started: true };
+}
+
+export async function templateImageStatusAction(id: string): Promise<{ running: boolean; remaining: number }> {
+  await requireAdmin();
+  const running = isIllustrating(id);
+  const document = await getDocument(id);
+  if (!document) return { running, remaining: 0 };
+  return { running, remaining: (await planIllustration(document)).filter((item) => !item.onDisk).length };
 }

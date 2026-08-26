@@ -24,6 +24,7 @@ const { renderSiteHtml } = await import("../src/lib/render/renderSiteHtml");
 const { renderSiteFiles, siteOutputPath } = await import("../src/lib/render/renderSiteFiles");
 const { checkRenderedPages } = await import("../src/lib/site/renderCheck");
 const { documentImageSlots, BACKDROP_SLOT, LOGO_SLOT } = await import("../src/lib/site/imagePaths");
+const { decorationFor, fillMissingDecoration } = await import("../src/lib/site/decoration");
 const { applyImagePaths } = await import("../src/lib/siteGenerator");
 import type { DesignTokens, SiteDocument } from "../src/lib/site/document";
 
@@ -167,6 +168,54 @@ console.log("\n5. 背景写真が画像の台帳（imagePaths）に載るか");
   check("生成された背景写真が書き戻る", on.design.layout.backdropImage === "images/backdrop.jpg", on.design.layout.backdropImage);
   applyImagePaths(on, new Map());
   check("生成されなかったら消える（存在しないファイルを指さない）", on.design.layout.backdropImage === "", on.design.layout.backdropImage);
+}
+
+// ── 5b. 装飾の自動割り当て ──────────────────────────────────────────────────────────────────────
+// ⚠️ ここが「Phase 0〜4 を入れても画面が変わらなかった」ことへの答え。参考サイトを忠実に真似ると
+// 既定値（柄なし・動きなし・bar・dark）になるので、装飾はこちらで必ず割り当てる。
+console.log("\n5b. 装飾の自動割り当て（decorationFor）");
+{
+  const seeds = ["t1", "t2", "t3", "t4", "t5"];
+  const taken = new Set<string>();
+  const chosen = seeds.map((seed) => {
+    const d = decorationFor(seed, taken, { hasPhone: true });
+    taken.add(d.ornament);
+    return d;
+  });
+  check("5件とも違う地紋になる", new Set(chosen.map((d) => d.ornament)).size === 5, chosen.map((d) => d.ornament).join(","));
+  check("地紋が none になることは無い", chosen.every((d) => d.ornament !== "none"));
+  check("常に動く（ambient が none にならない）", chosen.every((d) => d.ambient !== "none"), chosen.map((d) => d.ambient).join(","));
+  check(
+    "濃さは 0.10〜0.22",
+    chosen.every((d) => d.ornamentStrength >= 0.1 && d.ornamentStrength <= 0.22),
+    chosen.map((d) => d.ornamentStrength).join(",")
+  );
+  // ⚠️ minimal ヘッダーは .header-tel を消す。医院の電話導線を装飾の都合で落としてはいけない。
+  check("電話番号があるテンプレートに minimal ヘッダーを当てない", chosen.every((d) => d.header !== "minimal"));
+  check("電話番号が無ければ minimal も候補に入る", ["bar", "stacked", "minimal"].includes(decorationFor("t1", new Set()).header));
+
+  // 決定的であること — 作り直すたびに勝手に化粧が変わってはいけない（derivePalette と同じ約束）。
+  check("同じ seed なら何度呼んでも同じ", JSON.stringify(decorationFor("t3", new Set())) === JSON.stringify(decorationFor("t3", new Set())));
+
+  // 軸ごとの上書き。モデルが「柄がある」と答えた軸は残り、既定値のままの軸だけ埋まる。
+  const partly = buildDoc("partly", (d) => {
+    d.layout.ornament = "arc";
+    d.chrome.footer = "band";
+  });
+  fillMissingDecoration(partly.design, decorationFor("zzz", new Set(), { hasPhone: true }));
+  check("モデルが答えた地紋は残る", partly.design.layout.ornament === "arc", partly.design.layout.ornament);
+  check("モデルが答えたフッターは残る", partly.design.chrome.footer === "band", partly.design.chrome.footer);
+  check("既定値のままのヘッダーは埋まる", partly.design.chrome.header !== "bar", partly.design.chrome.header);
+
+  // ⚠️ 実際に出荷されてしまった状態：ambient があるのに ornament が none。動かす要素が0個になる。
+  const bare = buildDoc("bare", (d) => {
+    d.animation.ambient = "float";
+  });
+  const html = await renderSiteHtml(bare);
+  check(
+    "地紋なしで ambient だけ、という組み合わせは装飾要素を持たない（この状態を作らないのが decorationFor の役目）",
+    !html.includes('class="ornament"') && html.includes('data-ambient="float"')
+  );
 }
 
 // ── 6. 実際に描画して測る ────────────────────────────────────────────────────────────────────────

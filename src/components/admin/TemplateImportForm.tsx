@@ -61,6 +61,16 @@ export function TemplateImportForm() {
 
         <ArchetypeSelect allowAuto />
 
+        <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-[13px] leading-relaxed text-slate-500">
+          配色・書体・ページ構成は参考サイトに合わせます。
+          <b className="font-medium text-slate-700">地紋（模様）・動き・ヘッダーとフッターの形は、テンプレートごとに違うものを自動で割り当てます</b>
+          — 実在のクリニックサイトにはまず地紋も常時の動きも無いため、忠実に写すと全部が同じ見た目になるからです。
+          気に入らなければ、作成後に編集画面の「デザイン」タブで全部変えられます。
+          <br />
+          あわせて、ロゴとメインビジュアルなど<b className="font-medium text-slate-700">5枚の写真を自動で生成します</b>（1分ほど）。
+          残りはテンプレート一覧の「写真を作る」から、枚数を確認して追加できます。
+        </p>
+
         <div className="flex items-center gap-3">
           <button
             type="submit"

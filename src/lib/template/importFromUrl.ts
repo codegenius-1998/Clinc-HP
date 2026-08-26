@@ -15,7 +15,9 @@ import { VARIANT_DESCRIPTIONS, variantsFor } from "@/lib/site/composition";
 import { blockLabel } from "@/lib/site/blocks";
 import { checkDesign } from "@/lib/site/designCheck";
 import { ALLOWED_NAV_LABELS, resolveStructure } from "./blockPlan";
-import { deleteDocument, newDocumentId, saveDocument } from "@/lib/site/store";
+import { illustrateTemplate } from "./illustrateTemplate";
+import { deleteDocument, newDocumentId, saveDocument, usedOrnaments } from "@/lib/site/store";
+import { decorationFor, fillMissingDecoration } from "@/lib/site/decoration";
 import { renderSiteFiles } from "@/lib/render/renderSiteFiles";
 import { applySampleCopy } from "./sampleCopy";
 
@@ -215,7 +217,12 @@ export function normalizeDesignTokens(ai: AiTemplate): DesignTokens {
       // Ambient motion on a template that opted out of motion entirely is a contradiction the CSS
       // already refuses to honour (every ambient rule is prefixed `html:not([data-reveal="none"])`).
       // Resolving it here as well keeps the stored document from claiming something untrue.
-      ambient: ai.animation.reveal === "none" ? "none" : ai.animation.ambient,
+      // ⚠️ Two ways to end up claiming motion that never happens, both seen in real output:
+      // a template that opted out of motion entirely, and — the one actually shipped —
+      // `ambient: "float"` with `ornament: "none"`, where the element the animation targets is
+      // never emitted at all, so the page carries the attribute and moves nothing.
+      ambient:
+        ai.animation.reveal === "none" || ai.layout.ornament === "none" ? "none" : ai.animation.ambient,
       progressBar: ai.animation.progressBar,
     },
   });
@@ -299,6 +306,10 @@ const SYSTEM_PROMPT = `あなたはWebデザインを数値化するアシスタ
 - animation.progressBar: 画面の最上部にスクロール量を示す細い線があるなら true。
 
 ${STRUCTURE_PROMPT}`;
+
+/** How many pictures a newly imported template gets for free. Small on purpose: enough that the
+ * preview stops looking broken, few enough that browsing reference sites is not expensive. */
+const INITIAL_IMAGE_COUNT = 5;
 
 export type ImportTemplateInput = {
   /** Reference site. Optional when the admin is working purely from images. */
@@ -411,6 +422,16 @@ export async function importTemplateFromUrl(input: ImportTemplateInput): Promise
   const now = new Date().toISOString();
   const id = newDocumentId();
   const name = (input.name ?? parsed.name).trim() || "新しいテンプレート";
+
+  // ⚠️ Decoration is assigned, not copied. See site/decoration.ts: reading a real clinic site
+  // faithfully yields "no pattern, no motion, nav bar, dark footer" — which is the default set, so
+  // every faithful import came out looking like every other one. Only the axes the model left at
+  // their default are filled; an observation that the reference DOES have a pattern is kept.
+  const design = normalizeDesignTokens(parsed);
+  fillMissingDecoration(
+    design,
+    decorationFor(id, await usedOrnaments().catch(() => new Set<string>()), { hasPhone: true })
+  );
   // An explicit choice in the admin form wins. Left unset, the model's reading of the reference
   // site's own skeleton decides — which is the whole point of reading the structure at all.
   const chosen = input.archetype && isArchetypeKey(input.archetype) ? input.archetype : null;
@@ -425,7 +446,7 @@ export async function importTemplateFromUrl(input: ImportTemplateInput): Promise
     isTemplate: true,
     // New templates are held back from the auto-selector until an admin has looked at them.
     canSell: false,
-    design: normalizeDesignTokens(parsed),
+    design,
     meta: {
       clinicName: "サンプルクリニック",
       phone: "00-0000-0000",
@@ -482,5 +503,18 @@ export async function importTemplateFromUrl(input: ImportTemplateInput): Promise
   }
 
   const { previewUrl } = await renderSiteFiles(saved);
+
+  // The few photographs that decide whether the preview reads as a design or as a wireframe: the
+  // logo (in the header of every page) and the opening image. The rest are left to the admin's
+  // 「写真を作る」 button, so a template that gets thrown away costs five pictures and not twenty.
+  //
+  // ⚠️ Not awaited. Cloudflare cuts any origin response at 100 seconds and this request has already
+  // spent a model call on the analysis — the same reason `void runGeneration(slug)` exists in
+  // contentActions.ts. A failure here leaves a template with placeholder images, which is exactly
+  // what it had a moment ago, so it must not be allowed to fail the import.
+  void illustrateTemplate(saved, { limit: INITIAL_IMAGE_COUNT }).catch((err) => {
+    console.warn("[importFromUrl] テンプレートの写真生成に失敗しました。", err);
+  });
+
   return { document: saved, signals, previewUrl, warnings };
 }
