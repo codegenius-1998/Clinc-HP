@@ -315,8 +315,13 @@ function buildImageJobs(doc: SiteDocument, hearing: HearingSheet, plan: ContentP
  * resolves to nothing (see the gap-filling loop in buildImageJobs), so anything still pointing inside
  * the wiped output directory is cleared rather than kept: a section with no photo beats a broken one,
  * and it keeps the stored document honest about what exists on disk. Paths that live outside the site
- * directory — uploads, anything under public/ — are untouched. */
-function applyImagePaths(doc: SiteDocument, paths: Map<string, string>): void {
+ * directory — uploads, anything under public/ — are untouched.
+ *
+ * Exported for scripts/illustrate-template.mts, which fills a seeded template's placeholder images.
+ * That script has no hearing sheet and no content plan, but it ends up needing to write paths back
+ * into blocks in exactly this way — and a second implementation of "which field holds this slot" is
+ * precisely the duplication that produced BUG-01. */
+export function applyImagePaths(doc: SiteDocument, paths: Map<string, string>): void {
   const logo = paths.get(LOGO_SLOT);
   if (logo) doc.meta.logoImage = logo;
   else if (needsGeneratedFile(doc.meta.logoImage)) doc.meta.logoImage = "";

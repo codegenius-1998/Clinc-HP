@@ -31,6 +31,28 @@
   --color-brand: #2f5d4e;
   --color-brand-deep: #1f473b;
   --color-brand-soft: #eaf0ec;
+  /* The highlighter stroke behind a keyword (see `.marker` below). Warm gold rather than the brand
+   * green, because a stroke in the same family as the text reads as a shadow instead of a mark —
+   * and light enough (contrast 1.15:1 against paper) that the ink on top of it stays at 16.7:1. */
+  --color-highlight: #f2e4b4;
+}
+
+/* ⚠️ Both of these, and `clip` rather than `hidden`.
+ *
+ * The reveal animations below park elements a few dozen pixels to the side of where they belong
+ * until they scroll into view, and on a 390px phone that is enough to make the page scrollable
+ * sideways before the reader has touched anything — the same defect the generated sites had (see the
+ * matching note in src/lib/render/site.css), and one no amount of looking at a desktop browser
+ * reveals. Measured: without the `body` rule the document still scrolls to 398px, because a root-only
+ * clip does not stop the overflow propagating out of <body>.
+ *
+ * `hidden` would also stop it, by turning the element into a scroll container — which silently kills
+ * `position: sticky` on every descendant, and the admin and mypage screens both use sticky bars.
+ * `clip` cuts the overflow without creating one. Panes that genuinely need to scroll sideways (wide
+ * admin tables) carry their own `overflow-x: auto` and are unaffected. */
+html,
+body {
+  overflow-x: clip;
 }
 
 body {
@@ -57,4 +79,196 @@ body {
       opacity 700ms cubic-bezier(0.22, 0.68, 0.3, 1),
       transform 700ms cubic-bezier(0.22, 0.68, 0.3, 1);
   }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Motion for the public landing page.
+ *
+ * Everything below is decoration and must never be load-bearing: the page has to read correctly with
+ * no JavaScript, and it has to read correctly for someone who has asked their OS for less motion.
+ * That is enforced structurally rather than by remembering — anything that HIDES content is nested
+ * inside both `html.js` (set by Reveal.tsx on mount) and `prefers-reduced-motion: no-preference`, so
+ * a browser missing either one simply shows the finished state.
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+/* Reveal directions. The base class and its `-in` counterpart are defined further up; these only
+ * change WHICH way an element travels, so a section can move against the reading direction of the
+ * one before it instead of every block on the page sliding up in unison. */
+@media (prefers-reduced-motion: no-preference) {
+  html.js .app-reveal[data-move="left"] {
+    transform: translateX(-32px);
+  }
+  html.js .app-reveal[data-move="right"] {
+    transform: translateX(32px);
+  }
+  html.js .app-reveal[data-move="scale"] {
+    transform: scale(0.965);
+  }
+  html.js .app-reveal[data-move="none"] {
+    transform: none;
+  }
+  html.js .app-reveal-in[data-move] {
+    transform: none;
+  }
+}
+
+/* The highlighter stroke behind a keyword in a headline, drawn left-to-right when the line arrives.
+ *
+ * Painted as a background rather than a wrapping element so the stroke breaks across lines with the
+ * text instead of boxing it, and sat at 78% of the line box so it reads as a marker pen under the
+ * characters rather than a filled label. It starts at full width and is only collapsed under the
+ * animation guards, which is why a no-JS reader sees a finished highlight instead of none. */
+.marker {
+  background-image: linear-gradient(transparent 0, var(--marker-color, var(--color-highlight)) 0);
+  background-repeat: no-repeat;
+  background-position: 0 82%;
+  background-size: 100% 40%;
+  padding-inline: 0.12em;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html.js .app-reveal .marker {
+    background-size: 0% 40%;
+  }
+  html.js .app-reveal-in .marker {
+    background-size: 100% 40%;
+    transition: background-size 900ms cubic-bezier(0.22, 0.68, 0.3, 1) 250ms;
+  }
+}
+
+/* A rule that draws itself. Used for the line running through 制作の流れ and under section headings. */
+.draw-line {
+  transform-origin: left center;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html.js .app-reveal .draw-line {
+    transform: scaleX(0);
+  }
+  html.js .app-reveal-in .draw-line {
+    transform: scaleX(1);
+    transition: transform 1100ms cubic-bezier(0.22, 0.68, 0.3, 1) 150ms;
+  }
+}
+
+/* Hover behaviour. Guarded on `hover: hover` because on a touch screen `:hover` sticks after a tap —
+ * the card would stay lifted until something else was touched, which reads as a rendering fault. */
+@media (hover: hover) {
+  .lift {
+    transition:
+      transform 420ms cubic-bezier(0.22, 0.68, 0.3, 1),
+      border-color 420ms ease,
+      box-shadow 420ms ease;
+  }
+  .lift:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 18px 40px -28px rgb(22 32 29 / 0.45);
+  }
+  .zoom-frame img {
+    transition: transform 1200ms cubic-bezier(0.22, 0.68, 0.3, 1);
+  }
+  .zoom-frame:hover img {
+    transform: scale(1.06);
+  }
+  .arrow-slide {
+    transition: transform 320ms cubic-bezier(0.22, 0.68, 0.3, 1);
+  }
+  .group:hover .arrow-slide,
+  a:hover > .arrow-slide,
+  button:hover > .arrow-slide {
+    transform: translateX(5px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lift,
+  .zoom-frame img,
+  .arrow-slide {
+    transition: none;
+  }
+}
+
+/* Scroll-driven effects.
+ *
+ * `animation-timeline` is a progressive enhancement on purpose: where the browser does not support it
+ * the @supports block never applies and the element simply sits still, which is a perfectly good
+ * version of the page. Doing the same thing with a scroll listener would mean shipping JavaScript
+ * that runs on every frame to move a decorative photograph a few pixels. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    /* The hero photograph drifts against the page as it scrolls. Kept to a few percent — enough to
+     * feel like depth, not enough to notice as an effect. */
+    .parallax-slow {
+      animation: parallax-drift linear both;
+      animation-timeline: view();
+      animation-range: cover 0% cover 100%;
+    }
+
+    /* The reading-progress rule across the top of the page. */
+    .scroll-progress {
+      transform-origin: 0 50%;
+      animation: scroll-progress linear both;
+      animation-timeline: scroll(root block);
+    }
+  }
+}
+
+@keyframes parallax-drift {
+  from {
+    transform: translate3d(0, -7%, 0) scale(1.14);
+  }
+  to {
+    transform: translate3d(0, 7%, 0) scale(1.14);
+  }
+}
+
+@keyframes scroll-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* The mockup breathing in the hero, and the scroll cue under it. Both are pure decoration on
+ * elements that carry no text, so there is nothing to fail to read if they never run. */
+@media (prefers-reduced-motion: no-preference) {
+  .float-soft {
+    animation: float-soft 7s ease-in-out infinite;
+  }
+  .cue-drop {
+    animation: cue-drop 1.9s ease-in-out infinite;
+  }
+}
+
+@keyframes float-soft {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes cue-drop {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translateY(9px);
+    opacity: 1;
+  }
+}
+
+/* The faint ruled grid behind the pale sections. A background image rather than an element, so it
+ * costs no DOM and cannot be tabbed to or read aloud. */
+.grid-field {
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--color-line) 55%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--color-line) 55%, transparent) 1px, transparent 1px);
+  background-size: 88px 88px;
 }

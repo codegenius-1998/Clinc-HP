@@ -1,0 +1,498 @@
+[
+  {
+    "id": "509382c9-e5f0-406a-8196-912eb1deb3a0",
+    "name": "余白と明朝の静かなクリニック",
+    "mood": "余白と字間で見せる、静かで洗練された印象。写真は最小限で、院内の空気感だけを担う。明朝体の見出しと細い罫線で構成し、装飾や影は使わない。審美・自由診療、歯科、皮膚科、心療内科など、落ち着いた大人の患者に向けた医院に合う。にぎやかさや親しみやすさより、信頼と品位を優先したい医院向け。",
+    "tags": [
+      "文字主体",
+      "余白",
+      "上質",
+      "明朝",
+      "落ち着き",
+      "写真少なめ"
+    ],
+    "previewUrl": "/generated/_templates/509382c9-e5f0-406a-8196-912eb1deb3a0/index.html",
+    "desktop": {
+      "src": "/landing/templates/509382c9-e5f0-406a-8196-912eb1deb3a0-desktop.jpg",
+      "width": 1360,
+      "height": 7295
+    },
+    "mobile": {
+      "src": "/landing/templates/509382c9-e5f0-406a-8196-912eb1deb3a0-mobile.jpg",
+      "width": 390,
+      "height": 10463
+    },
+    "sections": [
+      {
+        "id": "hero",
+        "label": "トップ",
+        "ratios": {
+          "desktop": 0.016860863605209046,
+          "mobile": 0.006021217624008411
+        }
+      },
+      {
+        "id": "philosophy",
+        "label": "医院の理念",
+        "ratios": {
+          "desktop": 0.09910897875257026,
+          "mobile": 0.08114307559973238
+        }
+      },
+      {
+        "id": "news",
+        "label": "お知らせ",
+        "ratios": {
+          "desktop": 0.12611377655928718,
+          "mobile": 0.10608812004205295
+        }
+      },
+      {
+        "id": "department",
+        "label": "診療案内",
+        "ratios": {
+          "desktop": 0.17587388622344072,
+          "mobile": 0.14794991876134952
+        }
+      },
+      {
+        "id": "greeting",
+        "label": "ご挨拶",
+        "ratios": {
+          "desktop": 0.24386566141192598,
+          "mobile": 0.25126636719870016
+        }
+      },
+      {
+        "id": "hours",
+        "label": "診療時間",
+        "ratios": {
+          "desktop": 0.36819739547635366,
+          "mobile": 0.4049507789352958
+        }
+      },
+      {
+        "id": "features",
+        "label": "当院の特徴",
+        "ratios": {
+          "desktop": 0.42659355723098014,
+          "mobile": 0.44843735066424545
+        }
+      },
+      {
+        "id": "gallery",
+        "label": "院内のご案内",
+        "ratios": {
+          "desktop": 0.4944482522275531,
+          "mobile": 0.5518493739845168
+        }
+      },
+      {
+        "id": "staff",
+        "label": "スタッフ紹介",
+        "ratios": {
+          "desktop": 0.5731322823851953,
+          "mobile": 0.581955462104559
+        }
+      },
+      {
+        "id": "pricing",
+        "label": "料金表",
+        "ratios": {
+          "desktop": 0.6626456477039068,
+          "mobile": 0.7428079900602121
+        }
+      },
+      {
+        "id": "faq",
+        "label": "よくある質問",
+        "ratios": {
+          "desktop": 0.7110349554489376,
+          "mobile": 0.7753034502532734
+        }
+      },
+      {
+        "id": "access",
+        "label": "アクセス",
+        "ratios": {
+          "desktop": 0.7897189856065798,
+          "mobile": 0.8302590079327152
+        }
+      },
+      {
+        "id": "contact",
+        "label": "お問い合わせ",
+        "ratios": {
+          "desktop": 0.8694996572995202,
+          "mobile": 0.8858835897926025
+        }
+      }
+    ]
+  },
+  {
+    "id": "a4d9424a-0e50-449c-b1dd-ad3ce228c722",
+    "name": "身近な安心医療系",
+    "mood": "消化器内科や内視鏡診療など、不安を抱えて来院する患者に、親しみやすさと確かな安心感を届けたいクリニックに合います。清潔で明るい印象を保ちながら、専門的な診療を身近に感じてもらえるデザインです。",
+    "tags": [
+      "消化器内科向け",
+      "内視鏡検査向け",
+      "安心感",
+      "清潔感",
+      "親しみやすい",
+      "明るい"
+    ],
+    "previewUrl": "/generated/_templates/a4d9424a-0e50-449c-b1dd-ad3ce228c722/index.html",
+    "desktop": {
+      "src": "/landing/templates/a4d9424a-0e50-449c-b1dd-ad3ce228c722-desktop.jpg",
+      "width": 1360,
+      "height": 9055
+    },
+    "mobile": {
+      "src": "/landing/templates/a4d9424a-0e50-449c-b1dd-ad3ce228c722-mobile.jpg",
+      "width": 390,
+      "height": 14616
+    },
+    "sections": [
+      {
+        "id": "hero",
+        "label": "トップ",
+        "ratios": {
+          "desktop": 0.01402540033130867,
+          "mobile": 0.0050629447181171315
+        }
+      },
+      {
+        "id": "news",
+        "label": "お知らせ",
+        "ratios": {
+          "desktop": 0.07929320817228051,
+          "mobile": 0.056581828133552274
+        }
+      },
+      {
+        "id": "department",
+        "label": "診療案内",
+        "ratios": {
+          "desktop": 0.12015461071231363,
+          "mobile": 0.08654898741105638
+        }
+      },
+      {
+        "id": "greeting",
+        "label": "ご挨拶",
+        "ratios": {
+          "desktop": 0.18961899503036997,
+          "mobile": 0.2194854953475643
+        }
+      },
+      {
+        "id": "features",
+        "label": "当院の特徴",
+        "ratios": {
+          "desktop": 0.39006073992269463,
+          "mobile": 0.38019978106185004
+        }
+      },
+      {
+        "id": "facility",
+        "label": "施設案内",
+        "ratios": {
+          "desktop": 0.45521811154058534,
+          "mobile": 0.513136288998358
+        }
+      },
+      {
+        "id": "hours",
+        "label": "診療時間",
+        "ratios": {
+          "desktop": 0.6132523467697405,
+          "mobile": 0.6739189928845101
+        }
+      },
+      {
+        "id": "staff",
+        "label": "スタッフ紹介",
+        "ratios": {
+          "desktop": 0.6604086140254003,
+          "mobile": 0.7049808429118773
+        }
+      },
+      {
+        "id": "pricing",
+        "label": "料金表",
+        "ratios": {
+          "desktop": 0.7344008834897846,
+          "mobile": 0.8192391899288451
+        }
+      },
+      {
+        "id": "faq",
+        "label": "よくある質問",
+        "ratios": {
+          "desktop": 0.7738266151297626,
+          "mobile": 0.8428434592227696
+        }
+      },
+      {
+        "id": "access",
+        "label": "アクセス",
+        "ratios": {
+          "desktop": 0.8366648260629487,
+          "mobile": 0.8817049808429118
+        }
+      },
+      {
+        "id": "contact",
+        "label": "お問い合わせ",
+        "ratios": {
+          "desktop": 0.9001656543346217,
+          "mobile": 0.9210454296661194
+        }
+      }
+    ]
+  },
+  {
+    "id": "a3dea670-229a-4eaa-bb9c-80057e1d3d19",
+    "name": "親しみ青空クリニック",
+    "mood": "日常的な体調不良から健康管理まで、気負わず相談したい地域の患者様に向く、明るく開放的なテンプレートです。清潔感と親しみやすさを両立し、内科・消化器内科などで「専門的でも話しかけやすい」印象を伝えます。",
+    "tags": [
+      "内科向け",
+      "消化器内科向け",
+      "親しみやすい",
+      "清潔感",
+      "地域密着",
+      "明るい"
+    ],
+    "previewUrl": "/generated/_templates/a3dea670-229a-4eaa-bb9c-80057e1d3d19/index.html",
+    "desktop": {
+      "src": "/landing/templates/a3dea670-229a-4eaa-bb9c-80057e1d3d19-desktop.jpg",
+      "width": 1360,
+      "height": 8722
+    },
+    "mobile": {
+      "src": "/landing/templates/a3dea670-229a-4eaa-bb9c-80057e1d3d19-mobile.jpg",
+      "width": 390,
+      "height": 13773
+    },
+    "sections": [
+      {
+        "id": "hero",
+        "label": "トップ",
+        "ratios": {
+          "desktop": 0.014560880531988077,
+          "mobile": 0.005372830901038263
+        }
+      },
+      {
+        "id": "news",
+        "label": "お知らせ",
+        "ratios": {
+          "desktop": 0.09252465030956203,
+          "mobile": 0.032817831990125605
+        }
+      },
+      {
+        "id": "department",
+        "label": "診療案内",
+        "ratios": {
+          "desktop": 0.13127722999312083,
+          "mobile": 0.06222319029986205
+        }
+      },
+      {
+        "id": "greeting",
+        "label": "ご挨拶",
+        "ratios": {
+          "desktop": 0.19731712909883053,
+          "mobile": 0.19886734916140275
+        }
+      },
+      {
+        "id": "features",
+        "label": "当院の特徴",
+        "ratios": {
+          "desktop": 0.3984177940839257,
+          "mobile": 0.3651346838016409
+        }
+      },
+      {
+        "id": "facility",
+        "label": "施設案内",
+        "ratios": {
+          "desktop": 0.4601008942903004,
+          "mobile": 0.5017788426631816
+        }
+      },
+      {
+        "id": "hours",
+        "label": "診療時間",
+        "ratios": {
+          "desktop": 0.6204998853473974,
+          "mobile": 0.6679735714804327
+        }
+      },
+      {
+        "id": "staff",
+        "label": "スタッフ紹介",
+        "ratios": {
+          "desktop": 0.6657876633799588,
+          "mobile": 0.6985406229579613
+        }
+      },
+      {
+        "id": "pricing",
+        "label": "料金表",
+        "ratios": {
+          "desktop": 0.7389360238477414,
+          "mobile": 0.817468961010673
+        }
+      },
+      {
+        "id": "faq",
+        "label": "よくある質問",
+        "ratios": {
+          "desktop": 0.7763127722999312,
+          "mobile": 0.8401945836056052
+        }
+      },
+      {
+        "id": "access",
+        "label": "アクセス",
+        "ratios": {
+          "desktop": 0.8377665673010777,
+          "mobile": 0.8791839105496261
+        }
+      },
+      {
+        "id": "contact",
+        "label": "お問い合わせ",
+        "ratios": {
+          "desktop": 0.9000229305205228,
+          "mobile": 0.918608872431569
+        }
+      }
+    ]
+  },
+  {
+    "id": "d18596bf-4321-49e7-91d0-1cc534c42cc9",
+    "name": "安心感ある上質医療調",
+    "mood": "消化器内科や内視鏡検査など、不安や緊張を抱えて受診する患者に、丁寧で確かな診療を印象づけたいクリニックに適しています。親しみやすさを保ちながらも、落ち着きと専門性のある信頼感を伝えたい場合に向いています。",
+    "tags": [
+      "消化器内科向け",
+      "内視鏡検査向け",
+      "安心感",
+      "上質感",
+      "信頼感",
+      "落ち着き"
+    ],
+    "previewUrl": "/generated/_templates/d18596bf-4321-49e7-91d0-1cc534c42cc9/index.html",
+    "desktop": {
+      "src": "/landing/templates/d18596bf-4321-49e7-91d0-1cc534c42cc9-desktop.jpg",
+      "width": 1360,
+      "height": 8878
+    },
+    "mobile": {
+      "src": "/landing/templates/d18596bf-4321-49e7-91d0-1cc534c42cc9-mobile.jpg",
+      "width": 390,
+      "height": 10581
+    },
+    "sections": [
+      {
+        "id": "hero",
+        "label": "トップ",
+        "ratios": {
+          "desktop": 0.014305023653976122,
+          "mobile": 0.006993667895284
+        }
+      },
+      {
+        "id": "news",
+        "label": "お知らせ",
+        "ratios": {
+          "desktop": 0.0754674476233386,
+          "mobile": 0.07362253095170589
+        }
+      },
+      {
+        "id": "department",
+        "label": "診療案内",
+        "ratios": {
+          "desktop": 0.11353908537959,
+          "mobile": 0.11199319535015594
+        }
+      },
+      {
+        "id": "greeting",
+        "label": "ご挨拶",
+        "ratios": {
+          "desktop": 0.21998197792295562,
+          "mobile": 0.20669123901332578
+        }
+      },
+      {
+        "id": "features",
+        "label": "当院の特徴",
+        "ratios": {
+          "desktop": 0.37035368326199597,
+          "mobile": 0.3398544561005576
+        }
+      },
+      {
+        "id": "facility",
+        "label": "施設案内",
+        "ratios": {
+          "desktop": 0.47679657580536156,
+          "mobile": 0.43455249976372745
+        }
+      },
+      {
+        "id": "hours",
+        "label": "診療時間",
+        "ratios": {
+          "desktop": 0.6271682811444019,
+          "mobile": 0.5677157168509592
+        }
+      },
+      {
+        "id": "staff",
+        "label": "スタッフ紹介",
+        "ratios": {
+          "desktop": 0.6716602838477135,
+          "mobile": 0.6075985256592005
+        }
+      },
+      {
+        "id": "pricing",
+        "label": "料金表",
+        "ratios": {
+          "desktop": 0.7435233160621761,
+          "mobile": 0.7624043096115679
+        }
+      },
+      {
+        "id": "faq",
+        "label": "よくある質問",
+        "ratios": {
+          "desktop": 0.7802432980400992,
+          "mobile": 0.791985634628107
+        }
+      },
+      {
+        "id": "access",
+        "label": "アクセス",
+        "ratios": {
+          "desktop": 0.84061725613877,
+          "mobile": 0.84264247235611
+        }
+      },
+      {
+        "id": "contact",
+        "label": "お問い合わせ",
+        "ratios": {
+          "desktop": 0.9017796801081325,
+          "mobile": 0.8939608732633967
+        }
+      }
+    ]
+  }
+]
