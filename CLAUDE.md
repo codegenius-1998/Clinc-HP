@@ -65,7 +65,7 @@ Tables:
 | Table | Module | What it holds |
 |---|---|---|
 | `users`, `sessions` | `src/lib/auth.ts` | auth (scrypt password, session cookie) |
-| `departments`, `services`, `features`, `targets` | `src/lib/content.ts` | admin-managed master data / taxonomy for the application form |
+| `departments`, `services`, `features`, `targets`, `sections` | `src/lib/content.ts` | admin-managed master data / taxonomy for the application form |
 | `hearings` | `src/lib/hearing.ts` | one row per submitted application. Columns: `slug`, `owner_email`, `clinic_name`, `created_at`; everything the applicant filled in is one JSON blob in `data`, fixed at submission time. Admin views/deletes only — there is no update path. |
 
 ### Auth and access
@@ -103,9 +103,68 @@ file is absent. It touches no D1 write path and no removed module.
 - Public: `/` (landing), `/login`, `/signup`
 - Clinic owner (`clinic_owner` session): `/home`, `/mypage/apply`, `/mypage/requests`
 - Admin (`admin` session): `/admin` (login), `/admin/dashboard`, `/admin/users`, `/admin/requests`,
-  `/admin/departments` (+ `/[id]`), `/admin/features`, `/admin/targets`
+  `/admin/departments` (+ `/[id]`), `/admin/features`, `/admin/targets`, `/admin/sections`
 
 App-shell screens use Tailwind (`src/app/globals.css`).
+
+### Clinic-site previews and static export
+
+`src/app/preview/<slug>/page.tsx` renders a standalone clinic homepage, fully scoped under
+`<div class="nj-site">` — its own tokens/resets in `src/components/sections/site.css`, sections as
+`src/components/sections/<Name>/` (`.tsx` + CSS Module) resolved through `registry.ts`.
+
+**Everything content-shaped is one JSON: `src/components/sections/data/template.json`** (schema:
+`template.schema.json`). It holds `meta`, `theme` (`colors` + `fonts`), `brand`, `contact`, `layout`
+(`{type, variant}[]`), `nav`, and `sections.<name>` (headings, copy, list items, and `image` slots
+`{src, alt}` — `src: null` ⇒ the built-in placeholder SVG). `data/template.ts` types it and exposes:
+`themeStyle` (inline `--nj-*` CSS vars for the `.nj-site` div — overrides `site.css` defaults),
+`fontHref` (Google-Fonts `<link>` built from `theme.fonts`), `content` (per-section, typed), plus
+back-compat `clinic` / `treatments` / `layout` re-exported by `data/{clinic,departments,sections}.ts`
+(thin shims — don't add logic there). **To make a new site: copy `template.json`, edit values, done**
+— section components take no hardcoded strings. The `layout` mirrors the D1 `sections` master
+(ファーストビュー→`hero`, 診療内容→`medical`, 料金→`fees`, …; `header`/`footer`/`schedule` are
+structural); `nav` is kept 1:1 with the section anchors.
+
+**All imagery is inline SVG unless `template.json` supplies an image `src`** — decorative line-art
+icons come from `src/components/sections/ui/Illustration.tsx` (`name` → SVG, `currentColor`), used in
+`Medical` and `Reasons` (icon name per item in the JSON). Nothing here touches the app's
+D1/auth/Tailwind.
+
+One small progressive-enhancement script, `public/nj-motion.js` (no deps), loaded by `page.tsx` as
+`<script src="/nj-motion.js" defer>`: scroll-reveal via `IntersectionObserver` (`.nj-reveal` /
+`[data-nj-anim]` → `.is-visible`, `site.css` holds the `.nj-js`-gated initial state), `[data-nj-count]`
+count-up, header shadow + `.nj-progress` scroll bar + `[data-nj-parallax]` hero, and anchor-click
+scroll that subtracts the sticky-header height (measured into `--nj-header-h`; `#top` goes to page
+top) + mobile-menu close. No scroll-spy / active-nav highlight — deliberately removed. The site
+renders fully without it (menu is still CSS `:checked`); `prefers-reduced-motion` disables the motion.
+Pure-CSS decoration (no JS): `@keyframes nj-twinkle` sparkles on every `SectionHeading` + the hero
+(4-point stars carrying the global class `nj-spark` — global so CSS-Modules doesn't rename the
+animation), `@keyframes nj-float` bob on `.nj-float` illustrations, and a `blur(6px)→0` on reveal.
+All in `site.css`, all `prefers-reduced-motion`-gated.
+
+To hand a preview to a client as plain files:
+
+```bash
+npm run build && npm run start        # another terminal, port 3000
+npm run export -- <slug>              # → public/_generated/<slug>/
+```
+
+`scripts/export-static.mjs` fetches `/preview/<slug>` from the running server (sending
+`PREVIEW_BASIC_AUTH`), strips every Next.js artefact, keeps the Google-Fonts `<link>` (found by its
+`data-nj-font` marker) as a CDN reference, and writes a clean `index.html`. The theme travels with
+the export as the inline `style="--nj-*: …"` on the `.nj-site` div (no build step needed for a
+re-themed `template.json` — just re-export). **CSS, JS and HTML are split per section** (spec): the
+`.nj-site` CSS bundle (identified by content — NOT `globals.css`) is partitioned back into
+`css/site.css` (tokens/resets), `css/ui.css` (Container/SectionHeading), and one
+`css/<section>.css` per section actually used — split on the dev build's per-file comment markers,
+with a `<Name>-module__` prefix fallback for minified prod builds. `html/<section>.html` holds each
+top-level `.nj-site` child's raw markup (keyed the same `<Name>-module__` way; `<header>`/`<footer>`
+by tag), each prefixed with the `<header>` menu so it stands alone — `index.html` itself is left
+assembled. Unused modules (`HeroSplit`, `Button`) are dropped.
+`js/motion.js` is `public/nj-motion.js` copied verbatim (the page's `<script>` is stripped from the
+extracted body and re-added pointing at the local file). `<link>`/`<script>` order in `index.html`:
+fonts → site → ui → sections → motion.js. `--all` exports every `src/app/preview/*` dir. Output is
+gitignored.
 
 ## Docs
 

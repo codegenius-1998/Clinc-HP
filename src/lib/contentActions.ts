@@ -16,6 +16,9 @@ import {
   createTarget,
   updateTarget,
   deleteTarget,
+  createSection,
+  updateSection,
+  deleteSection,
 } from "./content";
 
 export type ActionState = { error: string | null };
@@ -219,4 +222,43 @@ export async function deleteTargetAction(id: string): Promise<void> {
   await requireAdmin();
   await deleteTarget(id);
   revalidatePath("/admin/targets");
+}
+
+// --- Sections (flat name-only master) ---
+
+export async function createSectionAction(_prevState: ActionState, formData: FormData): Promise<ActionState> {
+  await requireAdmin();
+  const name = field(formData, "name");
+  if (!name) {
+    return { error: "セクション名を入力してください。" };
+  }
+  try {
+    await createSection(name);
+  } catch (err) {
+    return { error: errorMessage(err, "セクションの作成に失敗しました。") };
+  }
+  revalidatePath("/admin/sections");
+  return { error: null };
+}
+
+export async function updateSectionAction(_prevState: ActionState, formData: FormData): Promise<ActionState> {
+  await requireAdmin();
+  const id = field(formData, "id");
+  const name = field(formData, "name");
+  if (!id || !name) {
+    return { error: "セクション名を入力してください。" };
+  }
+  try {
+    await updateSection(id, name);
+  } catch (err) {
+    return { error: errorMessage(err, "セクションの更新に失敗しました。") };
+  }
+  revalidatePath("/admin/sections");
+  return { error: null };
+}
+
+export async function deleteSectionAction(id: string): Promise<void> {
+  await requireAdmin();
+  await deleteSection(id);
+  revalidatePath("/admin/sections");
 }

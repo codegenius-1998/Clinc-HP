@@ -1,0 +1,6 @@
+.container {
+  width: 100%;
+  max-width: var(--nj-container);
+  margin-inline: auto;
+  padding-inline: var(--nj-gutter);
+}

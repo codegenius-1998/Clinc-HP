@@ -1,0 +1,78 @@
+.section {
+  position: relative;
+  padding-block: var(--nj-section-pad);
+  background: var(--nj-tint);
+  overflow: hidden;
+}
+
+/* signature: 上端に青い植物文様(マスクで --nj-primary を塗る、低不透明度) */
+.section::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 60px;
+  background: var(--nj-primary);
+  opacity: 0.1;
+  -webkit-mask: var(--nj-botanical) repeat-x top center / 120px 60px;
+  mask: var(--nj-botanical) repeat-x top center / 120px 60px;
+  pointer-events: none;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  min-width: 520px;
+  margin-inline: auto;
+  border-collapse: collapse;
+  background: var(--nj-paper);
+  border-radius: var(--nj-radius-md);
+  overflow: hidden;
+}
+
+.table th,
+.table td {
+  padding: var(--nj-s4) var(--nj-s3);
+  text-align: center;
+  font-size: 0.95rem;
+  border-bottom: 1px solid var(--nj-line);
+}
+
+.table thead th {
+  font-family: var(--nj-font-head);
+  color: var(--nj-primary);
+  background: var(--nj-tint);
+}
+
+.table tbody th {
+  font-weight: 400;
+  color: var(--nj-ink-soft);
+  white-space: nowrap;
+}
+
+.table tbody tr:last-child th,
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.corner {
+  text-align: left !important;
+  color: var(--nj-ink-soft) !important;
+}
+
+.tri {
+  color: var(--nj-accent);
+  font-weight: 700;
+}
+
+.notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nj-s2);
+  margin-top: var(--nj-s6);
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--nj-ink-soft);
+}

@@ -1,0 +1,494 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://clinc-hp/template.schema.json",
+  "title": "クリニックサイト テンプレート設定",
+  "description": "1ファイルで1サイト。すべての文言・画像・フォント・カラーをここで指定する。src/components/sections/data/template.ts が読み込み、/preview/<slug> と静的エクスポートを駆動する。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["meta", "theme", "brand", "contact", "layout", "nav", "sections"],
+  "properties": {
+    "$schema": { "type": "string" },
+
+    "meta": {
+      "type": "object",
+      "description": "<title> と <meta name=description>。",
+      "additionalProperties": false,
+      "required": ["title", "description"],
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" }
+      }
+    },
+
+    "theme": {
+      "type": "object",
+      "description": "カラーとフォント。`.nj-site` にインライン CSS 変数として載り、site.css の既定値を上書きする。",
+      "additionalProperties": false,
+      "required": ["colors", "fonts"],
+      "properties": {
+        "colors": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "primary",
+            "primaryDeep",
+            "accent",
+            "tint",
+            "paper",
+            "ink",
+            "inkSoft",
+            "line"
+          ],
+          "properties": {
+            "primary": { "$ref": "#/$defs/color", "description": "主色。見出し・リンク・アクセント面。" },
+            "primaryDeep": { "$ref": "#/$defs/color", "description": "濃色。フッター地色・見出しの締め。" },
+            "accent": { "$ref": "#/$defs/color", "description": "補助アクセント(英字ラベル・きらきら)。" },
+            "tint": { "$ref": "#/$defs/color", "description": "交互セクションの淡い地色。" },
+            "paper": { "$ref": "#/$defs/color", "description": "基本の背景色。" },
+            "ink": { "$ref": "#/$defs/color", "description": "本文色。" },
+            "inkSoft": { "$ref": "#/$defs/color", "description": "弱い本文色(補足・キャプション)。" },
+            "line": { "$ref": "#/$defs/color", "description": "罫線色。" }
+          }
+        },
+        "fonts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["useGoogleFonts", "heading", "body", "headingTracking"],
+          "properties": {
+            "useGoogleFonts": {
+              "type": "boolean",
+              "description": "true なら heading/body の family+weights から Google Fonts の <link> を組み立てる。false なら fallback だけで表示。"
+            },
+            "heading": { "$ref": "#/$defs/font" },
+            "body": { "$ref": "#/$defs/font" },
+            "headingTracking": {
+              "type": "string",
+              "description": "見出しの字間(letter-spacing)。例: \"0.1em\"。"
+            }
+          }
+        }
+      }
+    },
+
+    "brand": {
+      "type": "object",
+      "description": "医院名とロゴ。ヘッダー・フッター・署名で使う。",
+      "additionalProperties": false,
+      "required": ["name", "nameEn", "logo"],
+      "properties": {
+        "name": { "type": "string" },
+        "nameEn": { "type": "string" },
+        "logo": { "$ref": "#/$defs/image" }
+      }
+    },
+
+    "contact": {
+      "type": "object",
+      "description": "サイト全体で使う連絡先・予約導線。",
+      "additionalProperties": false,
+      "required": ["phone", "phoneCaption", "reserveUrl", "reserveLabel", "address"],
+      "properties": {
+        "phone": { "type": "string", "description": "表示用の電話番号。tel: リンクは数字だけ抽出して生成。" },
+        "phoneCaption": { "type": "string", "description": "電話番号の上の小さな添え書き(ヘッダー)。" },
+        "reserveUrl": { "type": "string", "description": "予約/問い合わせの遷移先(LINE 等)。" },
+        "reserveLabel": { "type": "string", "description": "予約ボタンの文言。" },
+        "address": { "type": "string" }
+      }
+    },
+
+    "layout": {
+      "type": "array",
+      "description": "セクションの並び。type がコンポーネントの役割、variant がデザイン差分(registry.ts が解決)。並べ替え・削除・重複可。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "variant"],
+        "properties": {
+          "type": {
+            "enum": [
+              "header",
+              "hero",
+              "schedule",
+              "news",
+              "reasons",
+              "greeting",
+              "philosophy",
+              "medical",
+              "fees",
+              "flow",
+              "faq",
+              "access",
+              "contact",
+              "footer"
+            ]
+          },
+          "variant": { "type": "string" }
+        }
+      }
+    },
+
+    "nav": {
+      "type": "array",
+      "description": "ヘッダーのメニュー。各セクションのアンカー(#id)と1対1にするのが基本。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["href", "ja", "en"],
+        "properties": {
+          "href": { "type": "string", "description": "\"#top\" などページ内アンカー。" },
+          "ja": { "type": "string" },
+          "en": { "type": "string" }
+        }
+      }
+    },
+
+    "header": {
+      "type": "object",
+      "description": "ヘッダーの追加設定。",
+      "additionalProperties": false,
+      "properties": {
+        "actionBar": {
+          "type": "array",
+          "description": "モバイル下部の固定バー。href は \"tel\"(電話) / \"reserve\"(予約URL) / \"#id\" のいずれか。",
+          "items": { "$ref": "#/$defs/link" }
+        }
+      }
+    },
+
+    "sections": {
+      "type": "object",
+      "description": "セクションごとの中身。layout に載っていないセクションのキーは無視される。",
+      "additionalProperties": false,
+      "properties": {
+        "hero": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["image", "headlineLines", "sub", "reserveLabel"],
+          "properties": {
+            "image": { "$ref": "#/$defs/image", "description": "背景写真。src が null ならグレーのプレースホルダ SVG。" },
+            "headlineLines": {
+              "type": "array",
+              "description": "見出し。1要素=1行。`*…*` で囲むとアクセント色になる。例: \"早めに*気づいて*、\"",
+              "items": { "type": "string" }
+            },
+            "sub": { "type": "string" },
+            "reserveLabel": { "type": "string" }
+          }
+        },
+        "schedule": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["heading", "cornerLabel", "emptyMark", "days", "rows", "notes"],
+          "properties": {
+            "heading": { "$ref": "#/$defs/heading" },
+            "cornerLabel": { "type": "string", "description": "表の左上セル。" },
+            "emptyMark": { "type": "string", "description": "休診コマの表示(例: \"／\")。" },
+            "days": { "type": "array", "items": { "type": "string" }, "description": "曜日の見出し。" },
+            "rows": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["label", "marks"],
+                "properties": {
+                  "label": { "type": "string", "description": "時間帯(行見出し)。" },
+                  "marks": {
+                    "type": "array",
+                    "description": "days と同じ長さ。診療は \"●\"、半日は \"▲\"、休診は null。",
+                    "items": { "type": ["string", "null"] }
+                  }
+                }
+              }
+            },
+            "notes": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "news": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["heading", "items"],
+          "properties": {
+            "heading": { "$ref": "#/$defs/heading" },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["date", "title"],
+                "properties": {
+                  "date": { "type": "string" },
+                  "title": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "reasons": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["heading", "items"],
+          "properties": {
+            "heading": { "$ref": "#/$defs/heading" },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["no", "icon", "title", "body"],
+                "properties": {
+                  "no": { "type": "string", "description": "連番(例: \"01\")。" },
+                  "icon": { "$ref": "#/$defs/illustration" },
+                  "title": { "type": "string" },
+                  "body": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "greeting": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["heading", "image", "doctorName", "doctorRole", "message"],
+          "properties": {
+            "heading": { "$ref": "#/$defs/heading" },
+            "image": { "$ref": "#/$defs/image", "description": "院長ポートレート。src が null ならプレースホルダ。" },
+            "doctorName": { "type": "string" },
+            "doctorRole": { "type": "string" },
+            "message": { "type": "array", "items": { "type": "string" }, "description": "段落の配列。" }
+          }
+        },
+        "philosophy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["heading", "lead", "body"],
+          "properties": {
+            "heading": { "$ref": "#/$defs/heading" },
+            "lead": { "type": "string", "description": "大きく出す一文。" },
+            "body": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "medical": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["heading", "items"],
+          "properties": {
+            "heading": { "$ref": "#/$defs/heading" },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["key", "icon", "ja", "en", "lead"],
+                "properties": {
+                  "key": { "type": "string", "description": "一意キー(React key)。" },
+                  "icon": { "$ref": "#/$defs/illustration" },
+                  "ja": { "type": "string" },
+                  "en": { "type": "string" },
+                  "lead": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "fees": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["heading", "disclaimer", "groups"],
+          "properties": {
+            "heading": { "$ref": "#/$defs/heading" },
+            "disclaimer": { "type": "string" },
+            "groups": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["group", "items"],
+                "properties": {
+                  "group": { "type": "string" },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["name", "price"],
+                      "properties": {
+                        "name": { "type": "string" },
+                        "price": { "type": "string" },
+                        "note": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "flow": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["heading", "steps"],
+          "properties": {
+            "heading": { "$ref": "#/$defs/heading" },
+            "steps": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["no", "title", "body"],
+                "properties": {
+                  "no": { "type": "string", "description": "連番(例: \"01\")。JS で 0 からカウントアップする。" },
+                  "title": { "type": "string" },
+                  "body": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "faq": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["heading", "items"],
+          "properties": {
+            "heading": { "$ref": "#/$defs/heading" },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["q", "a"],
+                "properties": {
+                  "q": { "type": "string" },
+                  "a": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "access": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["heading", "image", "points", "info"],
+          "properties": {
+            "heading": { "$ref": "#/$defs/heading" },
+            "image": { "$ref": "#/$defs/image", "description": "地図画像。src が null ならプレースホルダ。" },
+            "points": { "type": "array", "items": { "type": "string" }, "description": "行き方の箇条書き。" },
+            "info": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["term", "lines"],
+                "properties": {
+                  "term": { "type": "string", "description": "定義リストの見出し(例: 診療時間)。" },
+                  "lines": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            }
+          }
+        },
+        "contact": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["heading", "lead", "reserveLabel", "phoneCaption", "note"],
+          "properties": {
+            "heading": { "$ref": "#/$defs/heading" },
+            "lead": { "type": "string" },
+            "reserveLabel": { "type": "string" },
+            "phoneCaption": { "type": "string" },
+            "note": { "type": "string" }
+          }
+        },
+        "footer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["nav", "copyright"],
+          "properties": {
+            "nav": { "type": "array", "items": { "$ref": "#/$defs/link" } },
+            "copyright": { "type": "string" }
+          }
+        }
+      }
+    }
+  },
+
+  "$defs": {
+    "color": {
+      "type": "string",
+      "description": "CSS カラー。#rrggbb 推奨。",
+      "pattern": "^(#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})|rgb|rgba|hsl|hsla)"
+    },
+    "font": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["family", "weights", "fallback"],
+      "properties": {
+        "family": { "type": "string", "description": "フォント名(Google Fonts の family と一致させる)。" },
+        "weights": {
+          "type": "array",
+          "items": { "type": "integer" },
+          "description": "読み込むウェイト。例: [400, 500, 700]。"
+        },
+        "fallback": {
+          "type": "string",
+          "description": "family の後ろに続くフォールバック指定(そのまま CSS に入る)。"
+        }
+      }
+    },
+    "image": {
+      "type": "object",
+      "description": "画像スロット。src が null / 未指定なら組み込みのプレースホルダ SVG を出す。src には URL か data URI を入れる。",
+      "additionalProperties": false,
+      "required": ["src"],
+      "properties": {
+        "src": { "type": ["string", "null"] },
+        "alt": { "type": "string" }
+      }
+    },
+    "heading": {
+      "type": "object",
+      "description": "セクション見出し(和文 + 英字の2段)。",
+      "additionalProperties": false,
+      "required": ["ja", "en"],
+      "properties": {
+        "ja": { "type": "string" },
+        "en": { "type": "string" }
+      }
+    },
+    "link": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["href", "label"],
+      "properties": {
+        "href": { "type": "string" },
+        "label": { "type": "string" }
+      }
+    },
+    "illustration": {
+      "type": "string",
+      "description": "組み込みイラスト名(Illustration.tsx)。未知の名前は general にフォールバック。",
+      "enum": [
+        "explain",
+        "shopping",
+        "kids",
+        "caries",
+        "perio",
+        "ortho",
+        "general",
+        "pediatric",
+        "preventive",
+        "oral-surgery",
+        "whitening",
+        "skin",
+        "allergy",
+        "cosmetic",
+        "derm-surgery",
+        "uv",
+        "piercing",
+        "mole",
+        "certified",
+        "pin",
+        "clock"
+      ]
+    }
+  }
+}

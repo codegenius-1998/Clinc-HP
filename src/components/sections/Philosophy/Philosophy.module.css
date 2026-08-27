@@ -1,0 +1,40 @@
+.section {
+  position: relative;
+  padding-block: var(--nj-section-pad);
+  background: var(--nj-primary);
+  overflow: hidden;
+}
+
+.section::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  opacity: 0.06;
+  -webkit-mask: var(--nj-botanical) repeat center / 160px 80px;
+  mask: var(--nj-botanical) repeat center / 160px 80px;
+  pointer-events: none;
+}
+
+.inner {
+  position: relative;
+  text-align: center;
+}
+
+.inner .lead {
+  font-family: var(--nj-font-head);
+  font-size: clamp(1.3rem, 1rem + 1.4vw, 1.7rem);
+  letter-spacing: 0.08em;
+  text-align: center;
+  color: #fff;
+}
+
+.inner .text {
+  max-width: 40em;
+  margin-inline: auto;
+  margin-top: var(--nj-s5);
+  font-size: 0.95rem;
+  line-height: 2.1;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.9);
+}

@@ -1,0 +1,214 @@
+.hero {
+  position: relative;
+  display: grid;
+  min-height: min(78vh, 620px);
+  overflow: hidden;
+}
+
+.media,
+.scrim,
+.ph {
+  grid-area: 1 / 1;
+  width: 100%;
+  height: 100%;
+}
+
+/* nj-motion.js が .media に transform(視差)を掛けると .media が新しい重ね合わせ
+ * コンテキストになり、通常フローの .scrim / .copy より前面に来てしまう。
+ * scrim と copy を positioned + z-index で上に固定しておく。 */
+.scrim {
+  position: relative;
+  z-index: 1;
+}
+
+.copy {
+  position: relative;
+  z-index: 2;
+}
+
+/* --- きらきら(写真の上・文字にかからない右側に散らす) --- */
+.sparkles {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.sparkles i {
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  background: color-mix(in srgb, var(--nj-accent) 35%, #fff);
+  clip-path: polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%);
+  opacity: 0;
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--nj-accent) 30%, transparent));
+}
+
+.sparkles i:nth-child(1) {
+  right: 11%;
+  top: 22%;
+}
+.sparkles i:nth-child(2) {
+  right: 27%;
+  top: 42%;
+  width: 9px;
+  height: 9px;
+  animation-delay: 0.8s;
+}
+.sparkles i:nth-child(3) {
+  right: 7%;
+  top: 60%;
+  width: 20px;
+  height: 20px;
+  animation-delay: 1.5s;
+}
+.sparkles i:nth-child(4) {
+  right: 19%;
+  top: 12%;
+  width: 8px;
+  height: 8px;
+  animation-delay: 2.1s;
+}
+
+@media (max-width: 560px) {
+  .sparkles i:nth-child(1),
+  .sparkles i:nth-child(4) {
+    display: none;
+  }
+}
+
+.ph {
+  object-fit: cover;
+}
+
+/* テーマ色に追従。color-mix で --nj-primary-deep を透過させる。 */
+.scrim {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--nj-primary-deep) 58%, transparent) 0%,
+    color-mix(in srgb, var(--nj-primary-deep) 30%, transparent) 45%,
+    color-mix(in srgb, var(--nj-primary-deep) 6%, transparent) 100%
+  );
+}
+
+.copy {
+  grid-area: 1 / 1;
+  align-self: center;
+  max-width: var(--nj-container);
+  width: 100%;
+  margin-inline: auto;
+  padding: var(--nj-s8) var(--nj-gutter);
+}
+
+.headline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nj-s2);
+  font-size: clamp(1.9rem, 1.2rem + 3.2vw, 3rem);
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 2px 10px rgba(0, 30, 60, 0.4);
+}
+
+.headline em {
+  font-style: normal;
+  /* アクセント色を白で明るくして写真の上でも読めるように。 */
+  color: color-mix(in srgb, var(--nj-accent) 45%, #fff);
+}
+
+.copy .sub {
+  max-width: 34em;
+  margin-top: var(--nj-s5);
+  font-size: 0.95rem;
+  line-height: 2;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 1px 6px rgba(0, 30, 60, 0.45);
+}
+
+.copy .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nj-s3);
+  margin-top: var(--nj-s6);
+}
+
+.actions .reserve,
+.actions .tel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.9rem 1.8rem;
+  border-radius: var(--nj-radius-sm);
+  font-family: var(--nj-font-head);
+  letter-spacing: 0.06em;
+  font-weight: 700;
+}
+
+.actions .reserve {
+  background: #fff;
+  color: var(--nj-primary-deep);
+}
+
+.actions .tel {
+  background: transparent;
+  color: #fff;
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+  font-size: 1.05rem;
+}
+
+.scroll {
+  position: absolute;
+  left: 50%;
+  bottom: 1rem;
+  z-index: 2;
+  width: 1px;
+  height: 44px;
+  background: rgba(255, 255, 255, 0.5);
+  overflow: hidden;
+}
+
+.scroll::after {
+  content: "";
+  position: absolute;
+  left: -1px;
+  width: 3px;
+  height: 50%;
+  background: #fff;
+  animation: nj-scroll 2.6s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+}
+
+@keyframes nj-scroll {
+  0% {
+    top: -55%;
+    opacity: 0;
+  }
+  25% {
+    opacity: 1;
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .scrim {
+    background: linear-gradient(180deg, rgba(0, 61, 122, 0.3) 0%, rgba(0, 61, 122, 0.62) 100%);
+  }
+  .copy .actions {
+    flex-direction: column;
+  }
+  .actions .reserve,
+  .actions .tel {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll::after {
+    animation: none;
+  }
+}

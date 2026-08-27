@@ -5,6 +5,7 @@ export type Department = { id: string; name: string };
 export type Service = { id: string; department_id: string; name: string };
 export type Feature = { id: string; name: string };
 export type Target = { id: string; name: string };
+export type Section = { id: string; name: string };
 
 // --- Departments (診療科) and their services ---
 
@@ -93,4 +94,22 @@ export async function updateTarget(id: string, name: string): Promise<void> {
 
 export async function deleteTarget(id: string): Promise<void> {
   await d1Query("DELETE FROM targets WHERE id = ?", [id]);
+}
+
+// --- Sections (flat name-only master) ---
+
+export async function listSections(): Promise<Section[]> {
+  return (await d1Query<Section>("SELECT id, name FROM sections ORDER BY name")).results;
+}
+
+export async function createSection(name: string): Promise<void> {
+  await d1Query("INSERT INTO sections (id, name) VALUES (?, ?)", [randomUUID(), name]);
+}
+
+export async function updateSection(id: string, name: string): Promise<void> {
+  await d1Query("UPDATE sections SET name = ? WHERE id = ?", [name, id]);
+}
+
+export async function deleteSection(id: string): Promise<void> {
+  await d1Query("DELETE FROM sections WHERE id = ?", [id]);
 }

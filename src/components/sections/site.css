@@ -1,0 +1,221 @@
+/* さつき歯科クリニック — /preview/nojima
+ *
+ * Design DNA source: nojima.dental-net.jp (地域のスーパー2階にある、通いやすく誠実な歯科医院。
+ * 青と白で清潔、和の植物文様がやわらかさを添える。丸ゴシック見出し。影を使わないフラット設計)。
+ * 参考サイトの文言・画像・ロゴ・className は一切流用していない — 取り込んだのは比率と印象だけ。
+ *
+ * すべて `.nj-site` の下にスコープしてあるので、アプリ本体の globals.css には一切影響しない。
+ * セクション固有のスタイルは各 *.module.css。ここに置くのはトークンと共有ベースのみ。 */
+
+.nj-site {
+  /* --- color (観測値から。本文色は黒でも灰でもない温かいブラウングレー) --- */
+  --nj-primary: #1b75bf;
+  --nj-primary-deep: #003d7a; /* 濃紺。フッター地色・見出しの締め色 */
+  --nj-accent: #0092db;
+  --nj-tint: #eefdff; /* 交互セクションの地色 */
+  --nj-paper: #ffffff;
+  --nj-ink: #574a49;
+  --nj-ink-soft: #8a7f7e;
+  --nj-line: #e2e8ee;
+
+  /* --- type ---
+   * 見出し = 丸ゴシック(参考サイトは M PLUS Rounded 1c)。フォントは page.tsx の <link> で
+   * Google Fonts から読み込む。CDN に到達できない環境では Hiragino Maru Gothic ProN 等に
+   * フォールバックする(いずれも丸ゴシックなので印象は保たれる)。 */
+  --nj-font-head: "M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", "Hiragino Maru Gothic Pro", "Yu Gothic", sans-serif;
+  --nj-font-body: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", "Yu Gothic Medium", sans-serif;
+  --nj-head-tracking: 0.1em;
+
+  /* --- layout --- */
+  --nj-container: 1100px;
+  --nj-gutter: clamp(1.25rem, 5vw, 2.5rem);
+  /* セクション間の上下余白。全セクションがこの1つのトークンを使う。 */
+  --nj-section-pad: 56px;
+
+  /* --- spacing scale (観測: セクション上下 64–112px) --- */
+  --nj-s1: 4px;
+  --nj-s2: 8px;
+  --nj-s3: 12px;
+  --nj-s4: 16px;
+  --nj-s5: 24px;
+  --nj-s6: 32px;
+  --nj-s7: 48px;
+  --nj-s8: 64px;
+  --nj-s9: 80px;
+  --nj-s10: 112px;
+
+  /* --- radius (控えめ。影トークンは無い — DNA がフラット) --- */
+  --nj-radius-sm: 5px;
+  --nj-radius-md: 15px;
+  --nj-radius-lg: 20px;
+
+  /* signature: 青い植物文様。arc を並べたタイルを --nj-primary で塗ったマスク。 */
+  --nj-botanical: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='60' viewBox='0 0 120 60'%3E%3Cg fill='none' stroke='%23000' stroke-width='2'%3E%3Cpath d='M10 55 Q30 5 50 55 M20 55 Q30 20 40 55'/%3E%3Cpath d='M70 55 Q90 5 110 55 M80 55 Q90 20 100 55'/%3E%3Ccircle cx='30' cy='14' r='3'/%3E%3Ccircle cx='90' cy='14' r='3'/%3E%3C/g%3E%3C/svg%3E");
+
+  font-family: var(--nj-font-body);
+  color: var(--nj-ink);
+  background: var(--nj-paper);
+  line-height: 1.75;
+  letter-spacing: 0.02em;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
+}
+
+.nj-site *,
+.nj-site *::before,
+.nj-site *::after {
+  box-sizing: border-box;
+}
+
+/* Margin reset via :where() so it has ZERO specificity — a section module's own
+ * `.foo { margin: … }` (a single class) then wins on source order instead of being
+ * silently clobbered by this reset. (This bit centered text in Philosophy once.) */
+.nj-site :where(h1, h2, h3, h4, p, figure, dl, dd) {
+  margin: 0;
+}
+
+.nj-site h1,
+.nj-site h2,
+.nj-site h3,
+.nj-site h4 {
+  font-family: var(--nj-font-head);
+  font-weight: 500;
+  letter-spacing: var(--nj-head-tracking);
+  line-height: 1.5;
+  word-break: auto-phrase;
+}
+
+/* :where() → zero specificity, so a section module's own `.foo` rule always wins. */
+.nj-site :where(a) {
+  color: inherit;
+  text-decoration: none;
+}
+
+.nj-site :where(img) {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.nj-site :where(ul) {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* --- モーション -----------------------------------------------------------------
+ * 動きは public/nj-motion.js が駆動する(依存なしの進歩的拡張)。スクリプトは読み込むと
+ * .nj-site に .nj-js を付け、IntersectionObserver で要素に .is-visible を足していく。
+ * 初期状態(opacity:0)は .nj-js の下にだけ置いてあるので、JS が無効/未読込なら
+ * すべて最初から見える。prefers-reduced-motion では動きを止めて即表示する。 */
+
+.nj-site.nj-js :where(.nj-reveal, [data-nj-anim]) {
+  opacity: 0;
+  transform: translateY(28px);
+  filter: blur(6px);
+  transition: opacity 0.7s cubic-bezier(0.22, 0.68, 0.3, 1),
+    transform 0.7s cubic-bezier(0.22, 0.68, 0.3, 1),
+    filter 0.7s cubic-bezier(0.22, 0.68, 0.3, 1);
+  transition-delay: var(--nj-anim-delay, 0s);
+}
+
+/* 変奏(要素側で data-nj-anim="left|right|zoom" を指定) */
+.nj-site.nj-js [data-nj-anim="left"] {
+  transform: translateX(-34px);
+}
+.nj-site.nj-js [data-nj-anim="right"] {
+  transform: translateX(34px);
+}
+.nj-site.nj-js [data-nj-anim="zoom"] {
+  transform: scale(0.94);
+}
+
+.nj-site.nj-js .nj-reveal.is-visible,
+.nj-site.nj-js [data-nj-anim].is-visible {
+  opacity: 1;
+  transform: none;
+  filter: none;
+}
+
+/* きらきら(見出し・Hero の装飾)と、イラストのゆっくりした上下。 */
+@keyframes nj-twinkle {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.3) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1) rotate(45deg);
+  }
+}
+
+@keyframes nj-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .nj-site .nj-float {
+    animation: nj-float 3.6s ease-in-out infinite;
+  }
+  /* きらきら。位置・大きさ・遅延は各モジュール側、動きの本体はここ(グローバル keyframe)。
+   * CSS Modules 内で animation 名を書くとスコープ名に書き換わってしまうため。 */
+  .nj-site .nj-spark {
+    animation: nj-twinkle 2.8s ease-in-out infinite;
+  }
+}
+
+/* Hero 背景の視差。scale で寄せてから translate するので端に隙間が出ない。 */
+.nj-site.nj-js [data-nj-parallax] {
+  transform: scale(1.12);
+  will-change: transform;
+}
+
+/* 上部のスクロール進捗バー */
+.nj-site .nj-progress {
+  position: fixed;
+  inset: 0 auto auto 0;
+  z-index: 60;
+  width: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--nj-accent), var(--nj-primary-deep));
+  pointer-events: none;
+  transition: width 0.1s linear;
+}
+
+/* ヘッダー: スクロールすると影が付く */
+.nj-site header[data-nj-scrolled] {
+  box-shadow: 0 6px 22px rgba(0, 61, 122, 0.1);
+}
+
+/* アンカー遷移時に sticky ヘッダーの下に見出しが潜らないよう、その分だけ手前で止める。
+ * --nj-header-h は nj-motion.js が実測して入れる(JS 無しは 84px で代用)。#top(ホーム)は
+ * ページ最上部なので対象外。 */
+.nj-site section[id]:not(#top) {
+  scroll-margin-top: var(--nj-header-h, 84px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nj-site.nj-js :where(.nj-reveal, [data-nj-anim]) {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    transition: none;
+  }
+  .nj-site.nj-js [data-nj-parallax] {
+    transform: none;
+  }
+  .nj-site .nj-progress {
+    display: none;
+  }
+  .nj-site .nj-float,
+  .nj-site .nj-spark {
+    animation: none;
+  }
+}

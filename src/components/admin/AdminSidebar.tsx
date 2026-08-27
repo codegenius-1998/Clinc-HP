@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { href: "/admin/departments", label: "部門管理" },
   { href: "/admin/features", label: "特徴管理" },
   { href: "/admin/targets", label: "ターゲット管理" },
+  { href: "/admin/sections", label: "セクション管理" },
 ];
 
 export function AdminSidebar() {
