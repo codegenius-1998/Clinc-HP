@@ -176,15 +176,28 @@ export function normalizeBlockPlan(planned: AiPagePlan[]): NormalizedPlan {
       if (navLabel !== "" && usedLabels.has(navLabel)) navLabel = "";
       if (navLabel !== "") usedLabels.add(navLabel);
 
-      pageBlocks.push(
-        createBlock(type, {
-          id: uniqueId(type, takenIds),
-          pageId,
-          navLabel,
-          variant: safeVariant(type, entry.variant),
-          cardCount: safeCardCount(type, entry.cardCount),
-        })
-      );
+      const block = createBlock(type, {
+        id: uniqueId(type, takenIds),
+        pageId,
+        navLabel,
+        variant: safeVariant(type, entry.variant),
+        cardCount: safeCardCount(type, entry.cardCount),
+      });
+      // ⚠️ The section's own heading, taken from the nav label.
+      //
+      // Without this a model-planned structure arrives with unnamed 文章＋カード sections: nothing
+      // in the pipeline fills `data.heading` for them — `applySampleCopy` writes the body and the
+      // cards but never the heading, and the archetypes only have headings because a person wrote
+      // them. Measured on a real import: four sections reported as 「見出しが空です」 by checkDesign.
+      //
+      // The nav label is the right source and needs no new text: it is what the section is called in
+      // the menu, it has already been through the allow-list, and a section whose menu entry and
+      // heading disagree is confusing anyway. Only set when the type actually shows a heading and
+      // the label is not the empty "keep this out of the nav" marker.
+      if (navLabel && "heading" in block.data && !block.data.heading) {
+        (block.data as { heading: string }).heading = navLabel;
+      }
+      pageBlocks.push(block);
     }
 
     if (pageBlocks.length === 0) continue;

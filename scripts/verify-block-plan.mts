@@ -73,6 +73,13 @@ console.log("1. まともな案はそのまま通るか");
   check("2ページ目以降の path が残る", out.pages[1].path === "about" && out.pages[2].path === "access");
   check("ブロックの型と並びが保たれる", out.blocks.map((b) => b.type).join(",") === "hero,news,rich,hours,rich-2,staff,access,contact".replace(/-2/g, ""), out.blocks.map((b) => b.type));
   check("cardCount が残る", out.blocks.find((b) => b.type === "rich")?.cardCount === 3);
+  // ⚠️ 見出しが空のままだと checkDesign が「見出しが空です」を出す。実測で取り込んだテンプレートの
+  // 文章セクション4つがこの状態だった — 誰も data.heading を埋めていなかった。
+  check(
+    "見出しがナビ名から埋まる",
+    out.blocks.every((b) => b.navLabel === "" || !("heading" in b.data) || String((b.data as Record<string, unknown>).heading ?? "").length > 0),
+    out.blocks.map((b) => `${b.id}:${b.navLabel}:${(b.data as Record<string, unknown>).heading ?? "-"}`).join(" ")
+  );
   check("すべてのブロックが実在するページを指す", out.blocks.every((b) => out.pages.some((p) => p.id === b.pageId)));
   check("ブロックIDは文書全体で一意", new Set(out.blocks.map((b) => b.id)).size === out.blocks.length, out.blocks.map((b) => b.id));
 

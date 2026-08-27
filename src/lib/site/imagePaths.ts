@@ -30,6 +30,14 @@ export function slotKey(blockId: string, index?: number): string {
   return base.replace(/[^A-Za-z0-9_-]/g, "-");
 }
 
+/** The slot for a section's own background photograph (`Block.backgroundImage`).
+ *
+ * ⚠️ Cannot collide with `slotKey(blockId, i)`: an item slot's suffix is always a number, so
+ * "<id>-bg" is a name no card, photo or staff portrait can ever produce. */
+export function backgroundSlotKey(blockId: string): string {
+  return `${slotKey(blockId)}-bg`;
+}
+
 /** True when a path can only resolve if the generator writes the file itself. Absolute URLs (an
  * uploaded photo on Supabase) and root-relative paths (anything already under public/) live outside
  * the site directory and survive on their own; a bare "images/foo.jpg" does not — and generateSite
@@ -59,8 +67,29 @@ function where(block: Block, field: string): string {
   return `${blockLabel(block.type)}「${blockSummary(block)}」/ ${field}`;
 }
 
-/** Every image placement inside one block, whether filled or not. */
+/** Every image placement inside one block, whether filled or not.
+ *
+ * The section's own background photograph is prepended when — and only when — the block already
+ * names one. See the note on `Block.backgroundImage`: an always-present slot would mean every
+ * section of every site is billed for a photograph nothing asked for. */
 export function blockImageSlots(block: Block, cardLayout: CardLayout): ImageSlot[] {
+  const content = contentImageSlots(block, cardLayout);
+  if (!block.backgroundImage) return content;
+  return [
+    {
+      slot: backgroundSlotKey(block.id),
+      field: "backgroundImage",
+      value: block.backgroundImage,
+      label: where(block, "セクションの背景写真"),
+      aspect: "16:9",
+      rendered: true,
+    },
+    ...content,
+  ];
+}
+
+/** The images belonging to the block's CONTENT — its hero photo, its cards, its portraits. */
+function contentImageSlots(block: Block, cardLayout: CardLayout): ImageSlot[] {
   const own = slotKey(block.id);
   switch (block.type) {
     case "hero":

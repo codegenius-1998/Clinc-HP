@@ -1,4 +1,5 @@
-import type { Block } from "@/lib/site/document";
+import type { Block, SiteMeta } from "@/lib/site/document";
+import type { SampleCopy } from "@/lib/openai/generateSampleCopy";
 
 /** Neutral placeholder copy for a freshly imported template.
  *
@@ -121,6 +122,111 @@ export function applySampleCopy(blocks: Block[]): Block[] {
             ],
           },
         };
+      default:
+        return block;
+    }
+  });
+}
+
+
+/** Writes a generated sample into a template's blocks and meta.
+ *
+ * Runs AFTER `applySampleCopy`, never instead of it: the hand-written pass fills every field, and
+ * this replaces the ones the model actually wrote. A model that skips a section leaves the generic
+ * words there rather than a hole.
+ *
+ * ⚠️ Phone, address, price rows and opening hours are NOT touched, deliberately. They stay the
+ * obviously-fake `00-0000-0000` / 〇〇 placeholders this app has always used. A template preview that
+ * carries a plausible-looking phone number is carrying somebody's real number, and a plausible price
+ * list is a claim about a business that does not exist. The words may vary; the facts may not.
+ *
+ * ⚠️ `applyFactualContent` overwrites hours, prices, staff, news, FAQ and address from the real
+ * hearing sheet when a clinic's site is generated, so nothing written here can reach a live site. */
+export function applyGeneratedSampleCopy(blocks: Block[], meta: SiteMeta, copy: SampleCopy): Block[] {
+  const byId = new Map(copy.blocks.map((b) => [b.blockId, b]));
+
+  if (copy.clinicName.trim()) {
+    meta.clinicName = copy.clinicName.trim();
+    meta.seo.ogSiteName = meta.clinicName;
+    meta.seo.title = `${meta.clinicName}｜テンプレートプレビュー`;
+    meta.seo.ogTitle = meta.clinicName;
+  }
+
+  return blocks.map((block): Block => {
+    const written = byId.get(block.id);
+
+    switch (block.type) {
+      case "hero":
+        return copy.heroHeadline.trim()
+          ? {
+              ...block,
+              data: { ...block.data, headline: copy.heroHeadline, subheadline: copy.heroSubheadline },
+            }
+          : block;
+
+      case "rich":
+        if (!written) return block;
+        return {
+          ...block,
+          data: {
+            ...block.data,
+            heading: written.heading || block.data.heading,
+            body: written.body || block.data.body,
+            // Keeps each card's image path — the model writes words, not pictures.
+            cards:
+              written.cards.length > 0
+                ? written.cards.map((card, i) => ({
+                    ...(block.data.cards[i] ?? { image: block.data.cards[0]?.image }),
+                    heading: card.heading,
+                    body: card.body,
+                  }))
+                : block.data.cards,
+          },
+        };
+
+      case "freeText":
+        if (!written) return block;
+        return { ...block, data: { ...block.data, heading: written.heading, body: written.body || block.data.body } };
+
+      case "contact":
+        return {
+          ...block,
+          data: {
+            ...block.data,
+            heading: written?.heading || block.data.heading,
+            lead: copy.contactLead || block.data.lead,
+          },
+        };
+
+      case "gallery":
+        return written?.heading ? { ...block, data: { ...block.data, heading: written.heading } } : block;
+
+      case "staff":
+        return copy.staff.length > 0
+          ? {
+              ...block,
+              data: {
+                ...block.data,
+                members: copy.staff.slice(0, 4).map((member, i) => ({
+                  ...(block.data.members[i] ?? { image: "images/placeholder.svg" }),
+                  name: member.name,
+                  role: member.role,
+                  comment: member.comment,
+                })),
+              },
+            }
+          : block;
+
+      case "news":
+        return copy.news.length > 0 ? { ...block, data: { ...block.data, items: copy.news.slice(0, 4) } } : block;
+
+      case "faq":
+        return copy.faq.length > 0 ? { ...block, data: { ...block.data, items: copy.faq.slice(0, 5) } } : block;
+
+      case "hours":
+        // ⚠️ `rows` は触らない。診療時間そのものは架空でも「もっともらしい事実」になってしまう。
+        return copy.hoursNote ? { ...block, data: { ...block.data, note: copy.hoursNote } } : block;
+
       default:
         return block;
     }

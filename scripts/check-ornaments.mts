@@ -26,6 +26,7 @@ const { checkRenderedPages } = await import("../src/lib/site/renderCheck");
 const { documentImageSlots, BACKDROP_SLOT, LOGO_SLOT } = await import("../src/lib/site/imagePaths");
 const { decorationFor, fillMissingDecoration } = await import("../src/lib/site/decoration");
 const { applyImagePaths } = await import("../src/lib/siteGenerator");
+const { DEFAULT_DESIGN_TOKENS } = await import("../src/lib/site/document");
 import type { DesignTokens, SiteDocument } from "../src/lib/site/document";
 
 let failures = 0;
@@ -41,6 +42,10 @@ const AMBIENTS: DesignTokens["animation"]["ambient"][] = ["drift", "float", "she
  * table, a photo grid and the scrolling strip. */
 function buildDoc(name: string, tweak: (design: DesignTokens) => void): SiteDocument {
   const doc = buildDefaultTemplate();
+  // ⚠️ 素の既定値に戻してから測る。テンプレートが JSON になった時点で buildDefaultTemplate() は
+  // 「標準テンプレート」＝地紋も常時アニメも持つドキュメントを返すようになった。この検査が見たいのは
+  // 「何も指定していないドキュメントには何も足されない」なので、土台は既定値でなければならない。
+  doc.design = structuredClone(DEFAULT_DESIGN_TOKENS);
   doc.slug = `__orn-${name}`;
   doc.name = `装飾確認 ${name}`;
   doc.isTemplate = false;

@@ -33,10 +33,32 @@ function check(label: string, ok: boolean, detail = "") {
   console.log(`  ${ok ? "✅" : "⛔"} ${label}${ok || !detail ? "" : `\n       ${detail}`}`);
 }
 
-/** Compares only what the renderer and the image pipeline actually consume. `pageId` is excluded:
- * it did not exist when the fixture was captured, and every one of these blocks is on the home page. */
+/** The parts of a block that must not drift, compared against the fixture.
+ *
+ * `pageId` is excluded: it did not exist when the fixture was captured, and every one of these
+ * blocks is on the home page.
+ *
+ * ⚠️ `data` was compared IN FULL until templates moved into `src/lib/site/templates/*.json`. It
+ * cannot be any more, and the reason is the point of that change: each template now carries its own
+ * fictional clinic's words, so `data` is SUPPOSED to differ from the fixture — that fixture holds
+ * the state before any copy existed. Comparing it would turn "the sample copy was written" into a
+ * failure.
+ *
+ * The section's own `heading` went the same way, and for the same reason: 「ご予約・お問い合わせ」 on
+ * a by-appointment-only clinic and 「お問い合わせ・ご予約」 on a walk-in one is the per-template voice
+ * this change exists to allow, not a regression.
+ *
+ * What still has to match is what the fixture was written to protect, stated in this file's header:
+ * the block ids, because they are the page's HTML anchors AND (via slotKey) the filenames of the
+ * generated photographs. `type`, `navLabel` and `visible` come along because they describe the shape
+ * rather than the words. */
 function shape(blocks: { id: string; type: string; navLabel: string; visible: boolean; data: unknown }[]) {
-  return blocks.map((b) => ({ id: b.id, type: b.type, navLabel: b.navLabel, visible: b.visible, data: b.data }));
+  return blocks.map((b) => ({
+    id: b.id,
+    type: b.type,
+    navLabel: b.navLabel,
+    visible: b.visible,
+  }));
 }
 
 console.log("1. 置き換え前のブロック構成と一致するか");

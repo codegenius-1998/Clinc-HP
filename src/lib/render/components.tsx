@@ -4,6 +4,7 @@ import { findPage, homeHref, navItems, pageBlocks, type NavItem } from "@/lib/si
 import { readableFill, readableOn } from "@/lib/site/color";
 import { effectiveCardLayout, effectiveHeroLayout, sectionVariantClass } from "@/lib/site/composition";
 import { blockSupportsPadding } from "@/lib/site/blocks";
+import { resolveStyleKit } from "./kits";
 
 /** Renders a SiteDocument to a static page. The page is driven entirely by `doc.blocks` in array
  * order — there is no fixed section list and no per-type visibility logic left in here, because a
@@ -52,6 +53,7 @@ function themeStyle(design: DesignTokens): CSSProperties {
     "--border-width": `${design.block.borderWidth}px`,
     "--border-color": design.block.borderColor,
     "--shadow": SHADOWS[design.block.shadow],
+    "--btn-scale": String(design.block.buttonScale),
 
     "--max-width": `${design.layout.maxWidth}px`,
     "--space-scale": String(design.layout.spacingScale),
@@ -172,9 +174,37 @@ function containerCss(block: Block, path: string): CSSProperties | undefined {
   return Object.keys(style).length > 0 ? style : undefined;
 }
 
-/** Outer <section> style = spacing override (padding/margin) + container override (colours). */
+/** The section's own background photograph, under a scrim of the page background.
+ *
+ * ⚠️ Emitted inline, and that is the whole reason it lives here rather than in site.css. A relative
+ * `url()` resolves against the STYLESHEET that uses it, and site.css is served from `css/site.css` —
+ * so `images/x.jpg` reaching it would resolve to `css/images/x.jpg` and the photograph would silently
+ * never appear. This is the same trap `backdropCss` documents above; an element's `style` attribute
+ * has the DOCUMENT's base URL, so here the path resolves exactly like every `<img src>` on the page.
+ *
+ * ⚠️ The scrim is not decoration. `checkContrast` compares design TOKENS and cannot see text sitting
+ * on a photograph, so holding the effective background near `--bg` is what keeps that check honest
+ * (see the note on `Block.backgroundScrim`).
+ *
+ * ⚠️ Longhands, deliberately. `containerCss` may have already written the `background` SHORTHAND for
+ * this same element, and a shorthand resets `background-image` to `none`. Emitting the longhands
+ * afterwards — which the spread order below guarantees — is what lets a section carry a colour and a
+ * photograph at once. */
+function backgroundImageCss(block: Block): CSSProperties | undefined {
+  if (!block.backgroundImage) return undefined;
+  const scrim = `color-mix(in srgb, var(--bg) ${Math.round(block.backgroundScrim * 100)}%, transparent)`;
+  return {
+    backgroundImage: `linear-gradient(${scrim}, ${scrim}), url("${block.backgroundImage}")`,
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    backgroundRepeat: "no-repeat",
+  };
+}
+
+/** Outer <section> style = spacing override (padding/margin) + container override (colours) + the
+ * section's background photograph. The photograph goes last so its longhands survive — see above. */
 function sectionCss(block: Block): CSSProperties | undefined {
-  const merged = { ...spacingCss(block), ...containerCss(block, "section") };
+  const merged = { ...spacingCss(block), ...containerCss(block, "section"), ...backgroundImageCss(block) };
   return Object.keys(merged).length > 0 ? merged : undefined;
 }
 
@@ -341,8 +371,14 @@ function Section({
           so a pseudo-element here would silently delete the wave divider on tinted sections.
           ⚠️ `position: absolute; inset: 0` inside a box with `overflow-x: clip` (site.css) is what
           makes it structurally impossible for a decoration to bring back the 390px horizontal-scroll
-          bug. Nothing decorative may be positioned by a negative margin. */}
-      {doc.design.layout.ornament !== "none" && <span className="ornament" aria-hidden="true" />}
+          bug. Nothing decorative may be positioned by a negative margin.
+          ⚠️ A style kit gets the same layer even with `ornament: "none"`, and that is deliberate:
+          it hands every kit one safe, already-clipped, already-unclickable canvas to draw on, so a
+          kit never has to position anything itself. site.css blanks it (`background: none`) when no
+          pattern was asked for, so a kit that ignores the layer still renders nothing. */}
+      {(doc.design.layout.ornament !== "none" || resolveStyleKit(doc.design.layout.styleKit)) && (
+        <span className="ornament" aria-hidden="true" />
+      )}
       <div className="section-inner reveal" style={containerCss(block, "inner")} data-container="inner">
         {children}
       </div>
@@ -770,6 +806,8 @@ export function SitePage({ doc, pageId }: { doc: SiteDocument; pageId: string })
   const page = findPage(doc, pageId);
   const visible = pageBlocks(doc, page.id);
   const fontsHref = googleFontsHref(design.font.googleFonts);
+  // Resolved here rather than trusted: an unknown key renders the plain page (see kits/index.ts).
+  const kit = resolveStyleKit(design.layout.styleKit);
 
   // ⚠️ Counts only the blocks that render a `.section`, and does so PER PAGE. The `data-variety`
   // rules used to be `main > .section:nth-of-type(4n + 2)`, where the `+2` was really "skip the
@@ -800,6 +838,7 @@ export function SitePage({ doc, pageId }: { doc: SiteDocument; pageId: string })
       data-ornament={design.layout.ornament}
       data-ambient={design.animation.ambient}
       data-backdrop={backdrop}
+      {...(kit ? { "data-kit": design.layout.styleKit } : {})}
     >
       <head>
         <meta charSet="UTF-8" />
@@ -821,6 +860,10 @@ export function SitePage({ doc, pageId }: { doc: SiteDocument; pageId: string })
           </>
         )}
         <link rel="stylesheet" href="css/site.css" />
+        {/* AFTER site.css on purpose: a kit is meant to override the shared stylesheet, and at equal
+            specificity the later sheet wins. Before the backdrop <style> for the same reason — the
+            backdrop is a document-level decision the kit must not be able to undo by accident. */}
+        {kit && <link rel="stylesheet" href="css/kit.css" />}
         {backdrop !== "none" && (
           <style dangerouslySetInnerHTML={{ __html: backdropCss(backdrop, design.layout.backdropImage) }} />
         )}
@@ -840,6 +883,9 @@ export function SitePage({ doc, pageId }: { doc: SiteDocument; pageId: string })
         <main>{visible.map((block) => renderBlock(block, doc, cycleOf(block)))}</main>
         <Footer doc={doc} pageId={page.id} />
         <script src="js/main.js" defer></script>
+        {/* `defer` preserves document order, so a kit's script always runs after main.js has set up
+            the reveal observer and the progress bar — a kit adds to that rather than racing it. */}
+        {kit?.js && <script src="js/kit.js" defer></script>}
       </body>
     </html>
   );

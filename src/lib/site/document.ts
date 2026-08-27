@@ -57,6 +57,13 @@ export const designTokensSchema = z.object({
     /** The biggest structural lever a template has. "minimal" renders no card image at all, which is
      * why image generation must consult it (see buildImageJobs) rather than leaving it to CSS. */
     cardLayout: z.enum(["grid", "list", "minimal", "overlap"]),
+    /** Multiplies the CTA buttons' padding and label size. 1 is the size every site shipped with
+     * before this field existed, so a template that says nothing is unchanged.
+     *
+     * A separate knob from `font.baseSize` on purpose: how loud the 電話 / LINE buttons are is a
+     * decision about the page's call to action, not about its reading size. A quiet editorial layout
+     * wants small buttons at a normal reading size; a 集患 landing page wants the opposite. */
+    buttonScale: z.number().min(0.8).max(1.8).default(1),
   }),
   layout: z.object({
     heroLayout: z.enum(["full-bleed", "split", "centered"]),
@@ -102,6 +109,14 @@ export const designTokensSchema = z.object({
     /** Filled by the image pipeline, like every other image path in the document — see
      * BACKDROP_SLOT in site/imagePaths.ts. Empty means the backdrop renders as nothing at all. */
     backdropImage: z.string().default(""),
+    /** The name of a style kit — one template's own CSS and JS, held in the repository under
+     * `src/lib/render/kits/`. Empty (the default) is the plain page every site rendered as before
+     * kits existed.
+     *
+     * ⚠️ A NAME, never the code. That distinction is the whole security model: see the header of
+     * `src/lib/render/kits/index.ts`. A key naming no kit resolves to nothing, exactly as an
+     * unrecognised `variant` falls back to the template's own layout. */
+    styleKit: z.string().default(""),
   }),
   /** The header and footer — the two regions that are not blocks and so have no per-block variant.
    *
@@ -176,6 +191,7 @@ export const DEFAULT_DESIGN_TOKENS: DesignTokens = {
     borderColor: "#eeeeee",
     shadow: "soft",
     cardLayout: "grid",
+    buttonScale: 1,
   },
   layout: {
     heroLayout: "full-bleed",
@@ -189,6 +205,7 @@ export const DEFAULT_DESIGN_TOKENS: DesignTokens = {
     ornamentStrength: 0.16,
     backdrop: "none",
     backdropImage: "",
+    styleKit: "",
   },
   chrome: {
     header: "bar",
@@ -402,6 +419,28 @@ const blockCommon = {
    * A block naming a page that does not exist would render on NO page — see normalizePages. */
   pageId: z.string().default(HOME_PAGE_ID),
   visible: z.boolean(),
+  /** A photograph behind THIS section, under a scrim. Empty (the default, and what every block
+   * written before this field has) means the section paints as it always did.
+   *
+   * ⚠️ Deliberately a block field rather than a `containerStyles["section"]` entry. Two reasons, both
+   * structural: `containerStyles` is pruned on save by `pruneOrphanedStyles` (a path that no longer
+   * resolves to a real container is deleted), and every image in a document has to be reachable from
+   * `documentImageSlots` — the single ledger that tells the pipeline what to generate and what to
+   * write back. A field the ledger can walk is the only kind of image path this codebase supports.
+   *
+   * ⚠️ Filling this costs a billed image. `blockImageSlots` therefore only offers a slot for blocks
+   * that already carry a non-empty value, exactly as BACKDROP_SLOT is gated on
+   * `design.layout.backdrop !== "none"`. "Every section may have one" would mean "every section is
+   * billed for one". */
+  backgroundImage: z.string().default(""),
+  /** How much of `--bg` is laid over that photograph. 1 hides it entirely; 0 shows it raw.
+   *
+   * ⚠️ The default is high on purpose. `checkContrast` compares TOKENS and so is structurally unable
+   * to see text sitting on a photograph — the same blind spot `backdropCss` works around. Holding the
+   * effective background near `--bg` is what keeps that check measuring the thing that is really
+   * behind the words. Below about 0.6 the photograph starts to win, so a section set that low must
+   * not carry body text. */
+  backgroundScrim: z.number().min(0).max(1).default(0.72),
   /** Per-block layout override, chosen from a closed list this codebase owns (see
    * src/lib/site/composition.ts). It is what lets one template produce differently-shaped pages for
    * different clinics without anything outside that list ever reaching the renderer. A value that is

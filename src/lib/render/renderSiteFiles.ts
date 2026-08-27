@@ -1,6 +1,7 @@
 import { mkdir, readFile, readdir, unlink, writeFile } from "fs/promises";
 import path from "path";
 import { renderSiteHtml } from "./renderSiteHtml";
+import { resolveStyleKit } from "./kits";
 import { pageFileName } from "@/lib/site/pages";
 import type { PageDef, SiteDocument } from "@/lib/site/document";
 
@@ -85,8 +86,28 @@ export async function renderSiteFiles(doc: SiteDocument): Promise<{ outDir: stri
   await writeFile(path.join(outDir, "css", "site.css"), await readFile(SITE_CSS_SOURCE, "utf-8"), "utf-8");
   await writeFile(path.join(outDir, "js", "main.js"), await readFile(SITE_JS_SOURCE, "utf-8"), "utf-8");
   await writeFile(path.join(outDir, "images", "placeholder.svg"), PLACEHOLDER_SVG, "utf-8");
+  await writeStyleKit(outDir, doc);
 
   return { outDir, previewUrl };
+}
+
+/** The template's own CSS/JS, or the removal of a previous one's.
+ *
+ * ⚠️ The removal half is not tidiness. This function deliberately never wipes its output directory
+ * (see the note at the top of the file), and `wrangler pages deploy` uploads whatever tree it finds —
+ * so a template that dropped its kit would keep serving the old `css/kit.css` from its published URL
+ * forever. The HTML would no longer link it, which is why this is a leak rather than a visible bug,
+ * and why it needs deleting rather than merely not writing. */
+async function writeStyleKit(outDir: string, doc: SiteDocument): Promise<void> {
+  const kit = resolveStyleKit(doc.design.layout.styleKit);
+  const cssPath = path.join(outDir, "css", "kit.css");
+  const jsPath = path.join(outDir, "js", "kit.js");
+
+  if (kit) await writeFile(cssPath, kit.css, "utf-8");
+  else await unlink(cssPath).catch(() => {});
+
+  if (kit?.js) await writeFile(jsPath, kit.js, "utf-8");
+  else await unlink(jsPath).catch(() => {});
 }
 
 /** Deletes top-level .html files that no page claims any more.

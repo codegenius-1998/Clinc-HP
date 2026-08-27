@@ -278,7 +278,11 @@ nav.site-nav a:hover { background: var(--accent-fill); color: var(--accent-inver
   .cta-buttons { flex-direction: column; align-self: stretch; width: 100%; }
   .cta-buttons .btn { width: 100%; justify-content: center; }
 }
-.btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.8rem 1.6rem; border-radius: var(--radius); font-weight: 700; font-size: 0.95rem; }
+/* --btn-scale はテンプレートの「ボタンの大きさ」。1 が従来の寸法そのもので、フォールバック値を
+ * 書いてあるので、このCSSだけを古いHTMLに当てても見た目は変わらない。
+ * ⚠ 拡大するのは padding と文字だけ。min-height を持たせないのは、幅は中身（電話番号やLINEの
+ *   ラベル）で決まるべきで、スケールで固定幅を作ると日本語ラベルが折り返すため。 */
+.btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: calc(0.8rem * var(--btn-scale, 1)) calc(1.6rem * var(--btn-scale, 1)); border-radius: var(--radius); font-weight: 700; font-size: calc(0.95rem * var(--btn-scale, 1)); }
 .btn-tel { background: var(--primary-fill); color: var(--primary-inverse); }
 .btn-line { background: #06c755; color: #fff; }
 
@@ -466,7 +470,9 @@ table.price-table td.price {
 /* お問い合わせ
 ---------------------------------------------------------------------------*/
 .contact-section .cta-buttons { justify-content: flex-start; }
-.contact-section .btn { min-width: 220px; justify-content: center; font-size: 1.05rem; padding: 1.1rem 1.8rem; }
+/* ⚠ min-width は min() で必ず親幅に丸める。--btn-scale が 1.8 のとき 220px は 396px になり、
+ * 390px の画面では min-width が width: 100%（上の @media）に勝って横スクロールが出る。 */
+.contact-section .btn { min-width: min(100%, calc(220px * var(--btn-scale, 1))); justify-content: center; font-size: calc(1.05rem * var(--btn-scale, 1)); padding: calc(1.1rem * var(--btn-scale, 1)) calc(1.8rem * var(--btn-scale, 1)); }
 
 /* フッター
 ---------------------------------------------------------------------------*/
@@ -1246,15 +1252,31 @@ html[data-parallax="1"] .hero.hero-full-bleed .hero-image { transform: translate
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background: var(--primary);
-  opacity: var(--ornament-strength, 0.35);
+  /* ⚠ 塗りをカスタムプロパティ越しにするのは、スタイルキットに譲るため。
+   * `html[data-ornament="none"] .ornament { background: none }` のような打ち消し規則にすると
+   * 詳細度 (0,2,1) がキット側の素の `.ornament` (0,1,0) に勝ってしまい、キットが自分の層を
+   * 塗れなくなる。カスタムプロパティは継承なので、詳細度の争いがそもそも起きない。 */
+  background: var(--ornament-paint, none);
+  opacity: var(--ornament-opacity, 1);
   -webkit-mask-repeat: repeat;
   mask-repeat: repeat;
+}
+/* 地紋を頼んだときだけ、既定の塗り（テーマ色を薄く）を入れる。 */
+html:not([data-ornament="none"]) {
+  --ornament-paint: var(--primary);
+  --ornament-opacity: var(--ornament-strength, 0.35);
 }
 /* 装飾レイヤーは絶対配置なので、指定しないと本文（静的配置）より前に描かれて文字を覆う。
  * 地紋を使うときだけ、セクションを位置の基準にし、本文を1段上に持ち上げる。 */
 html:not([data-ornament="none"]) .section { position: relative; }
 html:not([data-ornament="none"]) .section-inner { position: relative; z-index: 1; }
+
+/* スタイルキット（src/lib/render/kits/）にも同じ土台を用意する。
+ * ⚠️ この2行が無いと、地紋なしのキットで .ornament の基準が <body> になり、装飾が
+ *   ページ全体を覆って本文の上に乗る。キット側に書かせると全キットの落とし穴になるので、
+ *   ここで一度だけ引き受ける。 */
+html[data-kit] .section { position: relative; }
+html[data-kit] .section-inner { position: relative; z-index: 1; }
 
 /* 青海波。円を下辺の中央に置いたタイルを敷き詰めると、上半分の弧だけが並ぶ。 */
 html[data-ornament="seigaiha"] .ornament {

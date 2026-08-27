@@ -9,7 +9,14 @@ import { generateSiteImage, type ImageStyle } from "./openai/generateSiteImage";
 import { matchImagesToCategories, type ImageTarget as CategoryImageTarget } from "./openai/matchImageCategories";
 import type { HearingSheet } from "./hearing";
 import type { Block, SiteDocument } from "./site/document";
-import { BACKDROP_SLOT, LOGO_SLOT, documentImageSlots, needsGeneratedFile, slotKey } from "./site/imagePaths";
+import {
+  BACKDROP_SLOT,
+  LOGO_SLOT,
+  backgroundSlotKey,
+  documentImageSlots,
+  needsGeneratedFile,
+  slotKey,
+} from "./site/imagePaths";
 import { checkDesign } from "./site/designCheck";
 import { applyComposition, derivePalette, normalizeComposition } from "./site/composition";
 import type { ImageCategoryKey } from "./imageCategories";
@@ -154,6 +161,50 @@ function applyFactualContent(
 
 // --- content plan -> authored block content ------------------------------------------------------
 
+/** Empties the text a template supplied, for a block the content plan did not cover.
+ *
+ * ⚠️ This exists because template sample copy stopped being obviously fake. Each template now
+ * carries its own fictional clinic — a name, a greeting, a list of what it treats — so that two
+ * templates read as two different practices instead of as the same page in two palettes. That is the
+ * point of the template library, and it is also a hazard here: `applyContentPlan` skips any block
+ * the model forgot to write, and what used to survive that skip was 「ここにキャッチコピーが入りま
+ * す」 — visibly a placeholder. What would survive now is a fluent, plausible sentence about a
+ * clinic that is not this one.
+ *
+ * Blank is the better failure. `checkDesign` reports an empty hero headline as high severity and an
+ * empty section heading as medium, so the gap is announced on the site's own detail page instead of
+ * being read as content. Fact-carrying blocks are not touched: `applyFactualContent` replaces those
+ * unconditionally from the hearing sheet, so they can never inherit a template's words. */
+function clearAuthoredCopy(block: Block): void {
+  switch (block.type) {
+    case "hero":
+      block.data.headline = "";
+      block.data.subheadline = "";
+      break;
+    case "rich":
+      block.data.heading = "";
+      block.data.body = "";
+      block.data.cards = block.data.cards.map((card) => ({ ...card, heading: "", body: "" }));
+      break;
+    case "contact":
+      block.data.heading = "";
+      block.data.lead = "";
+      break;
+    case "freeText":
+      block.data.heading = "";
+      block.data.body = "";
+      break;
+    case "gallery":
+      block.data.heading = "";
+      break;
+    case "imageBanner":
+      block.data.caption = undefined;
+      break;
+    default:
+      break;
+  }
+}
+
 function applyContentPlan(doc: SiteDocument, plan: ContentPlan): void {
   const byId = new Map(plan.blocks.map((b) => [b.blockId, b]));
 
@@ -161,7 +212,10 @@ function applyContentPlan(doc: SiteDocument, plan: ContentPlan): void {
 
   for (const block of doc.blocks) {
     const content = byId.get(block.id);
-    if (!content) continue;
+    if (!content) {
+      clearAuthoredCopy(block);
+      continue;
+    }
 
     switch (block.type) {
       case "hero":
@@ -340,6 +394,9 @@ export function applyImagePaths(doc: SiteDocument, paths: Map<string, string>): 
 
   for (const block of doc.blocks) {
     const ownSlot = slotKey(block.id);
+    // Applies to all 12 types, so it sits outside the switch. Same rule as every other slot: keep
+    // what this run produced, and clear anything still pointing into the directory it wiped.
+    block.backgroundImage = resolve(backgroundSlotKey(block.id), block.backgroundImage);
     switch (block.type) {
       case "hero":
         block.data.image = resolve(ownSlot, block.data.image);

@@ -59,6 +59,49 @@ A document is `{ design tokens, meta, blocks[] }`. Blocks are a discriminated un
 `safeParse`s and falls back to `DEFAULT_DESIGN_TOKENS` *wholesale* on failure, so a newly-required
 field silently wipes every existing site's design.
 
+### Built-in templates are JSON, not code
+
+`src/lib/site/templates/*.json` — one file per template, holding its structure, palette, decoration,
+its own fictional clinic and its own sample copy. The shape is `siteDocumentSchema` minus the
+database's fields, so there is no second schema to keep in step. **Adding a template is a JSON file
+plus one line in `templates/index.ts`; no TypeScript logic is involved.**
+
+The import line is not optional and forgetting it is silent — `output: "standalone"` will not trace a
+file nothing imports, so a runtime read would work in dev and find nothing in production.
+`scripts/verify-templates.mts` compares the directory against the registry and fails on either
+mismatch. `archetypes.ts` is a thin view over this library, kept only so its five callers did not
+have to change.
+
+⚠️ **Each template's sample copy is its own.** They used to share one set of words, so two templates
+could differ only by colour, typeface and section order — every word a reader's eye landed on was
+identical. `applySampleCopy` (generic, free) still exists as the fallback for a structure borrowed by
+the URL importer; `generateSampleCopy` writes a fresh one, in a model call that is never shown the
+reference site.
+
+### A template's own CSS/JS is a NAME, never the code
+
+`src/lib/render/kits/<key>.ts` holds one template's bespoke CSS (and optionally JS); a document
+stores only `design.layout.styleKit`, the key. That is a security boundary, not a style preference:
+`SiteDocument` is the same shape for a template and a real clinic's site and `instantiateTemplate`
+clones one into the other, so a field holding raw JS would be a field the URL importer — a model
+reading an arbitrary third-party website — could fill, ending up inside a published medical
+practice's page. Untrusted input can only ever *name* something that exists in the repository; an
+unknown key resolves to nothing, exactly like an unrecognised `variant`.
+
+Kits draw on `.ornament` (already `absolute; inset: 0; pointer-events: none` inside an
+`overflow-x: clip` box). ⚠️ **A template using an ornament-drawing kit must set `layout.ornament`
+and `animation.ambient` to `"none"`** — site.css's rules for those are specificity (0,3,1) and a kit
+cannot beat them, so the two silently fight over the same layer. `scripts/verify-templates.mts`
+enforces that, along with the rest of the kit safety rules.
+
+### Making a template from a reference URL
+
+`/template-from-url <URL>` (`.claude/skills/template-from-url/SKILL.md`) is the Claude Code procedure
+for this — it measures the rendered page in a real browser and hand-writes the JSON, as opposed to
+`importFromUrl.ts`, which is the in-app feature that parses HTML/CSS as text. Both stay. The rule the
+skill turns on: **the reference site sets the impression, `frontend-design` sets the concrete
+values** — nothing of the reference's words, images, hexes or typeface names enters the template.
+
 ### Persistence: Cloudflare D1 over HTTP
 
 `src/lib/d1.ts` talks to the D1 REST API (this runs as a normal Node server, not a Worker), and
