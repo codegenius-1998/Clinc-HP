@@ -1,29 +1,5 @@
--- Content model for admin-managed templates/sites and taxonomy lookups.
+-- Admin-managed master data (taxonomy lookups) used by the application form on /mypage/apply.
 -- `users` already exists (see 0001_create_auth_tables.sql) and is intentionally not touched here.
-
-CREATE TABLE IF NOT EXISTS sections (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS sites (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  is_template INTEGER NOT NULL DEFAULT 0,
-  can_sell INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS site_sections (
-  id TEXT PRIMARY KEY,
-  sec_id TEXT NOT NULL REFERENCES sections(id) ON DELETE CASCADE,
-  site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
-  content TEXT,
-  position INTEGER NOT NULL DEFAULT 0
-);
-
-CREATE INDEX IF NOT EXISTS idx_site_sections_site_id ON site_sections(site_id);
-CREATE INDEX IF NOT EXISTS idx_site_sections_sec_id ON site_sections(sec_id);
 
 CREATE TABLE IF NOT EXISTS departments (
   id TEXT PRIMARY KEY,

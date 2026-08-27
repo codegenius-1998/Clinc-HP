@@ -7,8 +7,6 @@ const NAV_ITEMS = [
   { href: "/admin/dashboard", label: "ダッシュボード" },
   { href: "/admin/users", label: "ユーザー管理" },
   { href: "/admin/requests", label: "リクエスト管理" },
-  { href: "/admin/templates", label: "テンプレート管理" },
-  { href: "/admin/sections", label: "セクション管理" },
   { href: "/admin/departments", label: "部門管理" },
   { href: "/admin/features", label: "特徴管理" },
   { href: "/admin/targets", label: "ターゲット管理" },

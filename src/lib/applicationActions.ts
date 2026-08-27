@@ -16,11 +16,8 @@ function requiredField(formData: FormData, name: string): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-/** Submits a new site-build application from /mypage/apply — now the only way a hearing sheet
- * enters the system, since the older unauthenticated /create form was deleted. Unlike that flow, this never
- * triggers generation directly: an admin approves the request from /admin/requests (see
- * approveRequestAction in contentActions.ts), and that is what kicks off generateSite — including
- * the automatic template choice. */
+/** Submits a new site-build application from /mypage/apply — the only way an application sheet
+ * enters the system. An admin reviews it from /admin/requests (view / delete only). */
 export async function createApplicationAction(
   _prevState: ApplicationFormState,
   formData: FormData

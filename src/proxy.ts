@@ -3,17 +3,14 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 /** HTTP Basic auth in front of the whole app, for showing a locally-running instance to a client over
- * a tunnel (cloudflared, ngrok, …). It exists because several entry points here are deliberately
- * unauthenticated for local use — /sites/[slug] can trigger AI generation and a Cloudflare Pages
- * publish, and POST /api/uploads writes to Supabase Storage. All of that is fine on localhost and
- * none of it is fine on a public URL. (The two worst offenders, the /create hearing form and the
- * /sites list of every clinic, have since been deleted outright.)
+ * a tunnel (cloudflared, ngrok, …). POST /api/uploads writes to Supabase Storage, which is fine on
+ * localhost and not on a public URL.
  *
  * Off by default: with PREVIEW_BASIC_AUTH unset (normal local development) every request passes
  * straight through, so this file changes nothing until a tunnel is actually being used.
  *
  * This is a gate on the *preview*, NOT a replacement for the app's own login — requireAdmin() and
- * requireEditableDocument() still decide who may do what once past it.
+ * the owner-session checks still decide who may do what once past it.
  *
  * Format: PREVIEW_BASIC_AUTH="user:password" (the password may itself contain ":"). */
 

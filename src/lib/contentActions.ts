@@ -2,17 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin, createUser, deleteUser } from "./auth";
-import { claimGeneration, deleteHearing, friendlyGenerationError, getHearing, updateHearing } from "./hearing";
-import { generateSite } from "./siteGenerator";
+import { deleteHearing } from "./hearing";
 import {
-  createSection,
-  updateSection,
-  deleteSection,
-  createSite,
-  setSiteCanSell,
-  deleteSite,
-  addSiteSection,
-  deleteSiteSection,
   createDepartmentWithServices,
   updateDepartment,
   deleteDepartment,
@@ -63,165 +54,12 @@ export async function deleteUserAction(id: string): Promise<void> {
   revalidatePath("/admin/users");
 }
 
-// --- Requests (hearing sheets) ---
+// --- Requests (application sheets) ---
 
 export async function deleteRequestAction(slug: string): Promise<void> {
   await requireAdmin();
   await deleteHearing(slug);
   revalidatePath("/admin/requests");
-}
-
-/** Assigns a design template to a /mypage/apply submission and generates the site — the step that
- * turns a "審査待ち" application into an actual site, deliberately kept out of the clinic owner's
- * hands (see the "delete template selection" decision behind ApplyForm). Runs generateSite inline
- * (same pattern as regenerateSiteAction in actions.ts) rather than queuing it, so the admin sees the
- * result — success or failure — reflected on the requests table right after submitting. */
-/** Approves a pending application and builds the site. The admin no longer chooses a design — the
- * template is selected automatically from the hearing sheet (see selectTemplate.ts) — so this is a
- * pure go/no-go decision, and the template it settled on (plus why) is recorded on the hearing for
- * the admin to review afterwards. */
-export async function approveRequestAction(slug: string): Promise<void> {
-  await requireAdmin();
-
-  // One conditional UPDATE, not a read-then-write. A second 作成 — a double click, or two admins on
-  // the same row — would otherwise start a second four-minute, separately-billed build that deletes
-  // and rewrites the same output directory underneath the first. Whoever loses the race here simply
-  // returns; the screens already show 作成中 from the same column.
-  if (!(await claimGeneration(slug))) return;
-
-  // NOT awaited. A full build takes minutes (measured ~4 with 20 generated images) and Cloudflare
-  // cuts an origin response off at 100 seconds, so awaiting it here meant the tunnel killed the
-  // connection every time — the operator saw a failure while the server quietly finished the job.
-  // Returning immediately lets the screens render 作成中 and poll for the result instead.
-  //
-  // Safe to detach here specifically because this app runs as a long-lived Node server (see the
-  // Dockerfile note): the promise keeps running after the request ends. It would NOT be safe on a
-  // per-request serverless runtime, which can freeze the moment a response is sent.
-  void runGeneration(slug);
-
-  revalidatePath("/admin/requests");
-  revalidatePath(`/sites/${slug}`);
-}
-
-/** The build itself. Every exit path clears `generationStartedAt`, including the catch — a run that
- * threw must not leave the row stuck on 作成中 forever. */
-async function runGeneration(slug: string): Promise<void> {
-  try {
-    const hearing = await getHearing(slug);
-    if (!hearing) return;
-    const result = await generateSite(hearing);
-    await updateHearing(slug, {
-      previewUrl: result.previewUrl,
-      generationError: undefined,
-      templateId: result.templateId,
-      templateLabel: result.templateName,
-      templateReason: result.templateReason ?? undefined,
-      designCheck: result.designCheck,
-      generationStartedAt: undefined,
-    });
-  } catch (err) {
-    await updateHearing(slug, {
-      generationError: friendlyGenerationError(err instanceof Error ? err.message : "サイトの生成に失敗しました。"),
-      generationStartedAt: undefined,
-    });
-  }
-}
-
-// --- Templates (sites + their sections) ---
-
-export async function createSiteAction(_prevState: ActionState, formData: FormData): Promise<ActionState> {
-  await requireAdmin();
-  const name = field(formData, "name");
-  const canSell = field(formData, "canSell") === "on";
-  if (!name) {
-    return { error: "テンプレート名を入力してください。" };
-  }
-  try {
-    await createSite(name, true, canSell);
-  } catch (err) {
-    return { error: errorMessage(err, "テンプレートの作成に失敗しました。") };
-  }
-  revalidatePath("/admin/templates");
-  return { error: null };
-}
-
-export async function toggleSiteCanSellAction(id: string, canSell: boolean): Promise<void> {
-  await requireAdmin();
-  await setSiteCanSell(id, canSell);
-  revalidatePath("/admin/templates");
-}
-
-export async function deleteSiteAction(id: string): Promise<void> {
-  await requireAdmin();
-  await deleteSite(id);
-  revalidatePath("/admin/templates");
-}
-
-export async function createSectionAction(_prevState: ActionState, formData: FormData): Promise<ActionState> {
-  await requireAdmin();
-  const name = field(formData, "name");
-  if (!name) {
-    return { error: "セクション名を入力してください。" };
-  }
-  try {
-    await createSection(name);
-  } catch (err) {
-    return { error: errorMessage(err, "セクションの作成に失敗しました。") };
-  }
-  revalidatePath("/admin/sections");
-  return { error: null };
-}
-
-export async function updateSectionAction(_prevState: ActionState, formData: FormData): Promise<ActionState> {
-  await requireAdmin();
-  const id = field(formData, "id");
-  const name = field(formData, "name");
-  if (!id || !name) {
-    return { error: "セクション名を入力してください。" };
-  }
-  try {
-    await updateSection(id, name);
-  } catch (err) {
-    return { error: errorMessage(err, "セクションの更新に失敗しました。") };
-  }
-  revalidatePath("/admin/sections");
-  return { error: null };
-}
-
-export async function deleteSectionAction(id: string): Promise<void> {
-  await requireAdmin();
-  await deleteSection(id);
-  revalidatePath("/admin/sections");
-}
-
-export async function addSiteSectionAction(_prevState: ActionState, formData: FormData): Promise<ActionState> {
-  await requireAdmin();
-  const siteId = field(formData, "siteId");
-  const secId = field(formData, "secId");
-  const content = field(formData, "content") || "{}";
-  const position = Number(field(formData, "position") || "0");
-
-  if (!siteId || !secId) {
-    return { error: "セクションを選択してください。" };
-  }
-  try {
-    JSON.parse(content);
-  } catch {
-    return { error: "contentは有効なJSONで入力してください。" };
-  }
-  try {
-    await addSiteSection(siteId, secId, content, position);
-  } catch (err) {
-    return { error: errorMessage(err, "セクションの追加に失敗しました。") };
-  }
-  revalidatePath(`/admin/templates/${siteId}`);
-  return { error: null };
-}
-
-export async function deleteSiteSectionAction(id: string, siteId: string): Promise<void> {
-  await requireAdmin();
-  await deleteSiteSection(id);
-  revalidatePath(`/admin/templates/${siteId}`);
 }
 
 // --- Departments & services ---
