@@ -1,0 +1,219 @@
+{
+  "slug": "landing-lite",
+  "name": "1ページ・軽量",
+  "description": "6セクションだけの短い1枚。画像の枚数と生成時間を抑えたいときに。",
+  "mood": "清潔感があり親しみやすい、オーソドックスなクリニックサイト。専門的すぎず、初めての患者にも安心感を与える柔らかいトーン。幅広い診療科に合う無難な選択肢。",
+  "tags": [
+    "汎用",
+    "クリニック",
+    "清潔感"
+  ],
+  "design": {
+    "colors": {
+      "primary": "#b0522a",
+      "accent": "#667548",
+      "light": "#faf1e9",
+      "background": "#ffffff",
+      "text": "#33291f",
+      "primaryInverse": "#ffffff",
+      "accentInverse": "#ffffff"
+    },
+    "font": {
+      "headingFamily": "\"Zen Maru Gothic\", -apple-system, \"Hiragino Sans\", \"Yu Gothic\", sans-serif",
+      "bodyFamily": "\"Zen Maru Gothic\", -apple-system, \"Hiragino Sans\", \"Yu Gothic\", sans-serif",
+      "googleFonts": [
+        "Zen+Maru+Gothic:wght@500;700"
+      ],
+      "baseSize": 16,
+      "lineHeight": 1.9,
+      "headingWeight": 700,
+      "displayScale": 1.2,
+      "headingLetterSpacing": 0.03
+    },
+    "block": {
+      "radius": 20,
+      "borderWidth": 1,
+      "borderColor": "#efe3d6",
+      "shadow": "soft",
+      "cardLayout": "overlap"
+    },
+    "layout": {
+      "heroLayout": "centered",
+      "maxWidth": 1080,
+      "spacingScale": 1.2,
+      "sectionDivider": "none",
+      "background": "gradient",
+      "decoration": "accent",
+      "rule": "none",
+      "ornament": "arc",
+      "ornamentStrength": 0.16,
+      "backdrop": "none",
+      "backdropImage": ""
+    },
+    "chrome": {
+      "header": "bar",
+      "footer": "compact"
+    },
+    "animation": {
+      "reveal": "pop",
+      "duration": 800,
+      "stagger": true,
+      "parallaxHero": false,
+      "variety": true,
+      "ambient": "sheen",
+      "progressBar": false
+    }
+  },
+  "meta": {
+    "clinicName": "こもれび眼科",
+    "phone": "00-0000-0000",
+    "line": "@sample",
+    "address": "東京都〇〇区〇〇 1-2-3",
+    "logoImage": "images/placeholder.svg",
+    "seo": {
+      "title": "こもれび眼科｜テンプレートプレビュー",
+      "metaDescription": "6セクションだけの短い1ページ構成。画像の枚数を抑えたいときのテンプレートです。",
+      "ogTitle": "こもれび眼科",
+      "ogDescription": "6セクションだけの短い1ページ構成。画像の枚数を抑えたいときのテンプレートです。",
+      "ogSiteName": "こもれび眼科"
+    },
+    "snsLinks": []
+  },
+  "pages": [
+    {
+      "id": "home",
+      "path": "",
+      "navLabel": "ホーム",
+      "title": "",
+      "metaDescription": "",
+      "inNav": true
+    }
+  ],
+  "blocks": [
+    {
+      "id": "hero",
+      "type": "hero",
+      "visible": true,
+      "navLabel": "",
+      "pageId": "home",
+      "variant": "centered",
+      "data": {
+        "headline": "見えにくさを、そのままにしない",
+        "subheadline": "眼科／目の健康診断から、白内障のご相談まで。",
+        "image": "images/placeholder.svg"
+      }
+    },
+    {
+      "id": "philosophy",
+      "type": "freeText",
+      "visible": true,
+      "navLabel": "",
+      "pageId": "home",
+      "data": {
+        "heading": "",
+        "body": "「歳のせい」で片づけられてしまう見えにくさの中には、治せるものがあります。まずは一度、きちんと測るところから始めませんか。",
+        "align": "center"
+      }
+    },
+    {
+      "id": "department",
+      "type": "rich",
+      "visible": true,
+      "navLabel": "診療案内",
+      "pageId": "home",
+      "variant": "overlap",
+      "cardCount": 3,
+      "data": {
+        "heading": "診療案内",
+        "body": "",
+        "cards": [
+          {
+            "heading": "一般眼科",
+            "body": "目の疲れ・充血・かゆみ・ものもらいなど、日常の不調に対応します。",
+            "image": "images/placeholder.svg"
+          },
+          {
+            "heading": "白内障の相談",
+            "body": "手術が必要かどうかの判断と、手術を行う病院のご紹介まで。",
+            "image": "images/placeholder.svg"
+          },
+          {
+            "heading": "めがね・コンタクト",
+            "body": "度数の測定と処方箋の発行を行っています。",
+            "image": "images/placeholder.svg"
+          }
+        ]
+      }
+    },
+    {
+      "id": "hours",
+      "type": "hours",
+      "visible": true,
+      "navLabel": "診療時間",
+      "pageId": "home",
+      "data": {
+        "heading": "診療時間",
+        "rows": [
+          {
+            "label": "月〜金",
+            "value": "9:00〜12:00 / 15:00〜18:00"
+          },
+          {
+            "label": "土",
+            "value": "9:00〜13:00"
+          },
+          {
+            "label": "休診日",
+            "value": "日曜・祝日"
+          }
+        ],
+        "note": "検査に時間がかかるため、受付は終了の30分前までです。"
+      }
+    },
+    {
+      "id": "gallery",
+      "type": "gallery",
+      "visible": true,
+      "navLabel": "ギャラリー",
+      "pageId": "home",
+      "data": {
+        "heading": "院内のご案内",
+        "images": [
+          {
+            "src": "images/placeholder.svg"
+          },
+          {
+            "src": "images/placeholder.svg"
+          },
+          {
+            "src": "images/placeholder.svg"
+          }
+        ],
+        "columns": 3
+      }
+    },
+    {
+      "id": "access",
+      "type": "access",
+      "visible": true,
+      "navLabel": "アクセス",
+      "pageId": "home",
+      "data": {
+        "heading": "アクセス",
+        "address": "東京都〇〇区〇〇 1-2-3",
+        "mapQuery": ""
+      }
+    },
+    {
+      "id": "contact",
+      "type": "contact",
+      "visible": true,
+      "navLabel": "お問い合わせ",
+      "pageId": "home",
+      "data": {
+        "heading": "お問い合わせ",
+        "lead": "お電話でご相談ください。検査のご予約も承ります。"
+      }
+    }
+  ]
+}

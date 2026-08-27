@@ -1,13 +1,24 @@
 import { mkdir, rm, writeFile } from "fs/promises";
 import path from "path";
 import { renderSiteFiles, siteOutputPath } from "./render/renderSiteFiles";
-import { instantiateTemplate, saveDocument } from "./site/store";
+import { getDocumentBySlug, instantiateTemplate, saveDocument } from "./site/store";
 import { selectTemplate } from "./template/selectTemplate";
 import { generateContentPlan, type ContentPlan, type ImageAspect } from "./openai/generateContentPlan";
+import { polishStaffComments } from "./openai/polishStaffComments";
 import { generateSiteImage, type ImageStyle } from "./openai/generateSiteImage";
 import { matchImagesToCategories, type ImageTarget as CategoryImageTarget } from "./openai/matchImageCategories";
 import type { HearingSheet } from "./hearing";
 import type { Block, SiteDocument } from "./site/document";
+import {
+  BACKDROP_SLOT,
+  LOGO_SLOT,
+  backgroundSlotKey,
+  documentImageSlots,
+  needsGeneratedFile,
+  slotKey,
+} from "./site/imagePaths";
+import { checkDesign } from "./site/designCheck";
+import { applyComposition, derivePalette, normalizeComposition } from "./site/composition";
 import type { ImageCategoryKey } from "./imageCategories";
 
 /** Builds one clinic site: pick a template, clone it, write the copy, generate the images, save the
@@ -28,22 +39,51 @@ export type GeneratedSite = {
   templateName: string;
   /** One-line explanation of why the auto-selector chose that template, when an AI call decided it. */
   templateReason: string | null;
+  /** How many problems the automatic design check found in what was just built. */
+  designCheck: { high: number; medium: number; low: number; checkedAt: string };
 };
 
 // --- hearing sheet -> factual block content ------------------------------------------------------
 
-/** Splits `hearing.hours` (free-form, newline-separated) into table rows, pulling a "label：value"
- * shape apart where present. Deterministic — never routed through the AI, so it can never drift from
- * what the clinic actually typed (see HONESTY_RULES). */
-function hoursRowsFromHearing(hearing: HearingSheet): { label: string; value: string }[] {
+/** Splits `hearing.hours` (free-form, newline-separated) into table rows: a day column and a time
+ * column. Deterministic — never routed through the AI, so it can never drift from what the clinic
+ * actually typed (see HONESTY_RULES).
+ *
+ * Two shapes have to work, because clinics write both and neither is wrong:
+ *   "月〜金：9:00-13:00"   — an explicit colon
+ *   "月〜金　10時〜18時"    — a space (usually full-width) doing the same job
+ * Only the first was handled, so every space-separated line produced an EMPTY day column — which
+ * renders as a 32%-wide blank grey cell with the whole line crammed beside it.
+ *
+ * A line starting with a digit is never split. "10:00 - 18:00" has a colon, but splitting on it
+ * yields label "10" / value "00 - 18:00"; a line that opens with a number is a time, not a label. */
+function splitHoursLine(line: string): { label: string; value: string } {
+  if (/^\d/.test(line)) return { label: "", value: line };
+
+  // Whitespace is tried BEFORE the colon, not after. "月〜金 9:00-13:00" contains both, and the colon
+  // there belongs to the time — splitting on it first yields the label "月〜金 9". Where a colon is
+  // genuinely the separator ("月〜金：9:00-13:00") there is no whitespace for this rule to catch, so
+  // it falls through correctly.
+  //
+  // Full-width space, tab, or two-plus ordinary spaces always separate. A SINGLE ordinary space only
+  // separates when what follows opens like a time or a closure ("日・祝 休診"), so that a label that
+  // legitimately contains a space is not torn in half.
+  const spaced =
+    line.match(/^(.*?)(?:[\u3000\t]|\s{2,})\s*(.+)$/) ?? line.match(/^(\S+)\s+([\d０-９午休定祝].*)$/);
+  if (spaced && spaced[1].trim()) return { label: spaced[1].trim(), value: spaced[2].trim() };
+
+  const colon = line.match(/^([^：:]*?)[：:]\s*(.+)$/);
+  if (colon && colon[1].trim()) return { label: colon[1].trim(), value: colon[2].trim() };
+
+  return { label: "", value: line };
+}
+
+export function hoursRowsFromHearing(hearing: HearingSheet): { label: string; value: string }[] {
   return (hearing.hours ?? "")
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
-    .map((line) => {
-      const match = line.match(/^(.*?)[：:](.*)$/);
-      return match ? { label: match[1].trim(), value: match[2].trim() } : { label: "", value: line };
-    });
+    .map(splitHoursLine);
 }
 
 /** Hides the blocks the clinic gave us nothing to fill. An empty 料金表 is worse than no 料金表: the
@@ -68,7 +108,14 @@ function applyFactualVisibility(doc: SiteDocument, hearing: HearingSheet): void 
 /** Copies the hearing sheet's hard facts into the blocks that report them. This copy is what makes
  * the site editable later: from here on the document is the source of truth, and re-reading the
  * hearing sheet at render time (which the old generator did) would silently undo the user's edits. */
-function applyFactualContent(doc: SiteDocument, hearing: HearingSheet, plan: ContentPlan): void {
+function applyFactualContent(
+  doc: SiteDocument,
+  hearing: HearingSheet,
+  plan: ContentPlan,
+  /** Index-aligned with hearing.staffMembers. Falls back to the raw comments (see
+   * polishStaffComments), so this is never missing — it is only ever the same text, tidied. */
+  staffComments: string[]
+): void {
   const hoursRows = hoursRowsFromHearing(hearing);
 
   for (const block of doc.blocks) {
@@ -88,10 +135,11 @@ function applyFactualContent(doc: SiteDocument, hearing: HearingSheet, plan: Con
         }));
         break;
       case "staff":
-        block.data.members = (hearing.staffMembers ?? []).map((m) => ({
+        block.data.members = (hearing.staffMembers ?? []).map((m, i) => ({
           name: m.name,
           role: m.role,
-          comment: m.comment,
+          // Name and role stay exactly as submitted; only the comment is the tidied version.
+          comment: staffComments[i] ?? m.comment,
           image: undefined,
         }));
         break;
@@ -113,6 +161,50 @@ function applyFactualContent(doc: SiteDocument, hearing: HearingSheet, plan: Con
 
 // --- content plan -> authored block content ------------------------------------------------------
 
+/** Empties the text a template supplied, for a block the content plan did not cover.
+ *
+ * ⚠️ This exists because template sample copy stopped being obviously fake. Each template now
+ * carries its own fictional clinic — a name, a greeting, a list of what it treats — so that two
+ * templates read as two different practices instead of as the same page in two palettes. That is the
+ * point of the template library, and it is also a hazard here: `applyContentPlan` skips any block
+ * the model forgot to write, and what used to survive that skip was 「ここにキャッチコピーが入りま
+ * す」 — visibly a placeholder. What would survive now is a fluent, plausible sentence about a
+ * clinic that is not this one.
+ *
+ * Blank is the better failure. `checkDesign` reports an empty hero headline as high severity and an
+ * empty section heading as medium, so the gap is announced on the site's own detail page instead of
+ * being read as content. Fact-carrying blocks are not touched: `applyFactualContent` replaces those
+ * unconditionally from the hearing sheet, so they can never inherit a template's words. */
+function clearAuthoredCopy(block: Block): void {
+  switch (block.type) {
+    case "hero":
+      block.data.headline = "";
+      block.data.subheadline = "";
+      break;
+    case "rich":
+      block.data.heading = "";
+      block.data.body = "";
+      block.data.cards = block.data.cards.map((card) => ({ ...card, heading: "", body: "" }));
+      break;
+    case "contact":
+      block.data.heading = "";
+      block.data.lead = "";
+      break;
+    case "freeText":
+      block.data.heading = "";
+      block.data.body = "";
+      break;
+    case "gallery":
+      block.data.heading = "";
+      break;
+    case "imageBanner":
+      block.data.caption = undefined;
+      break;
+    default:
+      break;
+  }
+}
+
 function applyContentPlan(doc: SiteDocument, plan: ContentPlan): void {
   const byId = new Map(plan.blocks.map((b) => [b.blockId, b]));
 
@@ -120,7 +212,10 @@ function applyContentPlan(doc: SiteDocument, plan: ContentPlan): void {
 
   for (const block of doc.blocks) {
     const content = byId.get(block.id);
-    if (!content) continue;
+    if (!content) {
+      clearAuthoredCopy(block);
+      continue;
+    }
 
     switch (block.type) {
       case "hero":
@@ -160,15 +255,6 @@ const ASPECT_SIZE: Record<ImageAspect, { width: number; height: number }> = {
   "16:9": { width: 1200, height: 675 },
   "2:1": { width: 1200, height: 600 },
 };
-
-const LOGO_SLOT = "logo";
-
-/** Slot keys address one image placement: a block's own image, or the nth item inside it. They double
- * as output filenames, so they're kept to characters that are safe in a path and in a URL. */
-function slotKey(blockId: string, index?: number): string {
-  const base = index === undefined ? blockId : `${blockId}-${index}`;
-  return base.replace(/[^A-Za-z0-9_-]/g, "-");
-}
 
 type ImageJob = {
   slot: string;
@@ -257,42 +343,85 @@ function buildImageJobs(doc: SiteDocument, hearing: HearingSheet, plan: ContentP
     });
   }
 
+  // Every image path the document still carries has to resolve to a file this run produces:
+  // generateSite wipes the output directory first, and instantiateTemplate copies a template's image
+  // *paths* without copying the files behind them. So a slot the plan happened to skip pointed at
+  // nothing at all — which is how ご挨拶 and 施設案内 shipped with a blank split where the photo
+  // belongs. Walking documentImageSlots rather than re-listing the block types here is what keeps
+  // this in step with applyImagePaths and with the design check. Slots already covered above are
+  // no-ops (push dedupes by slot); slots the template left empty stay empty, so this adds cost only
+  // where an image is actually rendered.
+  for (const slot of documentImageSlots(doc)) {
+    if (!slot.rendered || !needsGeneratedFile(slot.value)) continue;
+    push({
+      slot: slot.slot,
+      path: `images/${slot.slot}.jpg`,
+      alt: slot.label,
+      role: "photo",
+      targetSize: ASPECT_SIZE[slot.aspect],
+    });
+  }
+
   return jobs;
 }
 
-/** Writes the finished image paths back into the blocks. Slots with no file (the model didn't plan
- * one, or generation was skipped) are left alone so a template's own sample image survives. */
-function applyImagePaths(doc: SiteDocument, paths: Map<string, string>): void {
+/** Writes the finished image paths back into the blocks. A slot with no file left behind a path that
+ * resolves to nothing (see the gap-filling loop in buildImageJobs), so anything still pointing inside
+ * the wiped output directory is cleared rather than kept: a section with no photo beats a broken one,
+ * and it keeps the stored document honest about what exists on disk. Paths that live outside the site
+ * directory — uploads, anything under public/ — are untouched.
+ *
+ * Exported for scripts/illustrate-template.mts, which fills a seeded template's placeholder images.
+ * That script has no hearing sheet and no content plan, but it ends up needing to write paths back
+ * into blocks in exactly this way — and a second implementation of "which field holds this slot" is
+ * precisely the duplication that produced BUG-01. */
+export function applyImagePaths(doc: SiteDocument, paths: Map<string, string>): void {
   const logo = paths.get(LOGO_SLOT);
   if (logo) doc.meta.logoImage = logo;
+  else if (needsGeneratedFile(doc.meta.logoImage)) doc.meta.logoImage = "";
+
+  // The backdrop lives on the design tokens rather than on a block, so it needs its own line here —
+  // but it follows exactly the same rule as every other slot: keep what was produced, clear anything
+  // still pointing into the output directory this run wiped.
+  const backdrop = paths.get(BACKDROP_SLOT);
+  if (backdrop) doc.design.layout.backdropImage = backdrop;
+  else if (needsGeneratedFile(doc.design.layout.backdropImage)) doc.design.layout.backdropImage = "";
+
+  /** The produced path, the current one if it needs no file of ours, or "" when neither holds. */
+  function resolve(slot: string, current: string | undefined): string {
+    return paths.get(slot) ?? (needsGeneratedFile(current) ? "" : current ?? "");
+  }
 
   for (const block of doc.blocks) {
-    const own = paths.get(slotKey(block.id));
+    const ownSlot = slotKey(block.id);
+    // Applies to all 12 types, so it sits outside the switch. Same rule as every other slot: keep
+    // what this run produced, and clear anything still pointing into the directory it wiped.
+    block.backgroundImage = resolve(backgroundSlotKey(block.id), block.backgroundImage);
     switch (block.type) {
       case "hero":
-        if (own) block.data.image = own;
+        block.data.image = resolve(ownSlot, block.data.image);
         break;
       case "rich":
-        if (own) block.data.image = own;
-        block.data.cards = block.data.cards.map((card, i) => {
-          const image = paths.get(slotKey(block.id, i));
-          return image ? { ...card, image } : card;
-        });
+        block.data.image = resolve(ownSlot, block.data.image);
+        block.data.cards = block.data.cards.map((card, i) => ({
+          ...card,
+          image: resolve(slotKey(block.id, i), card.image),
+        }));
         break;
       case "imageBanner":
-        if (own) block.data.image = own;
+        block.data.image = resolve(ownSlot, block.data.image);
         break;
       case "gallery":
-        block.data.images = block.data.images.map((image, i) => {
-          const src = paths.get(slotKey(block.id, i));
-          return src ? { ...image, src } : image;
-        });
+        block.data.images = block.data.images.map((image, i) => ({
+          ...image,
+          src: resolve(slotKey(block.id, i), image.src),
+        }));
         break;
       case "staff":
-        block.data.members = block.data.members.map((member, i) => {
-          const image = paths.get(slotKey(block.id, i));
-          return image ? { ...member, image } : member;
-        });
+        block.data.members = block.data.members.map((member, i) => ({
+          ...member,
+          image: resolve(slotKey(block.id, i), member.image),
+        }));
         break;
       default:
         break;
@@ -401,6 +530,14 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
     name: hearing.clinicName,
     ownerEmail: hearing.ownerEmail,
   });
+
+  // Rebuilding a slug that already has a document must reuse that document's id. instantiateTemplate
+  // always mints a fresh one, and saveDocument upserts on id — so a second run inserted a NEW row
+  // carrying an existing slug and hit `UNIQUE constraint failed: sites.slug` (idx_sites_slug). That
+  // failure landed at the very END of the run, after several minutes and ~20 billed image
+  // generations, which is the worst possible place to discover it.
+  const existing = await getDocumentBySlug(hearing.slug);
+  if (existing) doc.id = existing.id;
   doc.meta = {
     ...doc.meta,
     clinicName: hearing.clinicName,
@@ -409,6 +546,11 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
     address: hearing.address ?? "",
   };
 
+  // Each clinic gets its own shade of the template's palette. Seeded from the slug, so a rebuild
+  // reproduces the same colours rather than quietly redecorating a page that is already live. Done
+  // here, before anything reads the design, so the renderer and the design check see one palette.
+  doc.design = { ...doc.design, colors: derivePalette(doc.design.colors, hearing.slug) };
+
   applyFactualVisibility(doc, hearing);
 
   const newsBlock = doc.blocks.find((b): b is Extract<Block, { type: "news" }> => b.type === "news" && b.visible);
@@ -416,9 +558,17 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
   const needsNewsFallback = Boolean(newsBlock) && (hearing.news?.length ?? 0) === 0;
   const needsFaqFallback = Boolean(faqBlock) && (hearing.faqs?.length ?? 0) === 0;
 
-  const plan = await generateContentPlan(hearing, doc, needsNewsFallback, needsFaqFallback);
+  // Run alongside the content plan rather than after it: neither depends on the other, and staff
+  // comments are a second model call that would otherwise add its own latency to an already long run.
+  const [plan, staffComments] = await Promise.all([
+    generateContentPlan(hearing, doc, needsNewsFallback, needsFaqFallback),
+    polishStaffComments(hearing.staffMembers ?? []),
+  ]);
   applyContentPlan(doc, plan);
-  applyFactualContent(doc, hearing, plan);
+  // Layout choices are applied AFTER the copy, because the normalizer's "no two neighbouring sections
+  // in the same layout" rule reads the blocks in their final visible order.
+  applyComposition(doc, normalizeComposition(plan.composition, doc));
+  applyFactualContent(doc, hearing, plan, staffComments);
 
   // Full regeneration replaces every image, so the old directory is cleared here — unlike
   // renderSiteFiles, which must preserve it. This is the only place that removal is correct.
@@ -432,6 +582,12 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
   await saveDocument(doc);
   await renderSiteFiles(doc);
 
+  // Checked here, at the end, because this is the moment the files and the document are guaranteed to
+  // agree — and because a build is exactly when a defect like a missing section image is introduced.
+  // Only the counts are kept: the full list is regenerated on demand from the editor, and storing it
+  // on the request record would go stale the first time someone edits the site.
+  const issues = checkDesign(doc, { outDir }).issues;
+
   return {
     documentId: doc.id,
     slug: doc.slug,
@@ -439,5 +595,11 @@ export async function generateSite(hearing: HearingSheet): Promise<GeneratedSite
     templateId: template.id,
     templateName: template.name,
     templateReason: reason,
+    designCheck: {
+      high: issues.filter((i) => i.severity === "high").length,
+      medium: issues.filter((i) => i.severity === "medium").length,
+      low: issues.filter((i) => i.severity === "low").length,
+      checkedAt: new Date().toISOString(),
+    },
   };
 }

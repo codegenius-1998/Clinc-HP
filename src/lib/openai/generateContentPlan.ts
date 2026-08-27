@@ -5,6 +5,7 @@ import type { HearingSheet } from "@/lib/hearing";
 import type { Block, SiteDocument } from "@/lib/site/document";
 import { BLOCK_DEFINITIONS } from "@/lib/site/blocks";
 import { HONESTY_RULES, IMAGE_STYLE_RULES, LOGO_RULE, SEO_DESCRIPTION_LENGTH } from "@/lib/site/authoringRules";
+import { CARD_COUNT_RANGE, VARIANT_DESCRIPTIONS, variantsFor, type PlannedSection } from "@/lib/site/composition";
 
 /** Writes the copy for one clinic against a chosen template's actual block list.
  *
@@ -41,6 +42,9 @@ export type BlockContent = {
 
 export type ContentPlan = {
   seo: { title: string; metaDescription: string; ogTitle: string; ogDescription: string; ogSiteName: string };
+  /** Layout choices, one entry per section that has any. Validated and clamped by
+   * normalizeComposition before anything is applied — see src/lib/site/composition.ts. */
+  composition: PlannedSection[];
   blocks: BlockContent[];
   newsFallback: { date: string; title: string }[];
   faqFallback: { question: string; answer: string }[];
@@ -65,7 +69,17 @@ const blockContentSchema = z.object({
   cards: z.array(z.object({ heading: z.string(), body: z.string() })),
 });
 
+const sectionPlanSchema = z.object({
+  blockId: z.string(),
+  /** Free string rather than an enum because the allowed values differ per block TYPE, which a single
+   * structured-output schema cannot express. The prompt lists them per block and composition.ts
+   * rejects anything else, so an invalid answer costs the template's own layout, not a broken page. */
+  variant: z.string().nullable(),
+  cardCount: z.number().nullable(),
+});
+
 const planSchema = z.object({
+  composition: z.array(sectionPlanSchema),
   seo: z.object({
     title: z.string(),
     metaDescription: z.string(),
@@ -95,6 +109,30 @@ function sampleCardCount(block: Block): number | null {
   return null;
 }
 
+/** The layout menu, generated from composition.ts rather than written out here.
+ *
+ * ⚠️ This used to be seven hand-written lines. With the vocabulary now covering ten block types, a
+ * hand-written list drifts the first time a variant is added — and a variant the model was never
+ * told about is one it never picks, so `normalizeComposition` silently drops nothing and the feature
+ * simply appears not to work. Listing only the variants THIS document's blocks can actually take
+ * also keeps the prompt from describing layouts that are not on offer.
+ *
+ * The lookup falls back to the bare value: a variant added to BLOCK_VARIANTS without a description
+ * still reaches the model as a choosable name rather than vanishing. */
+function describeVariants(doc: SiteDocument): string {
+  const lines: string[] = [];
+  const seen = new Set<string>();
+  for (const block of authorableBlocks(doc)) {
+    for (const variant of variantsFor(block.type)) {
+      const key = `${block.type}:${variant}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      lines.push(`- ${variant}: ${VARIANT_DESCRIPTIONS[key] ?? variant}`);
+    }
+  }
+  return lines.join("\n");
+}
+
 function buildSystemPrompt(doc: SiteDocument): string {
   return `あなたは個人クリニックのホームページを一から作成するAIディレクター兼コピーライターです。
 渡された資料をもとに、このクリニックサイトの文章プラン（JSON）を1回で作成してください。**HTMLタグは一切出力しません**。出力はテキスト内容と画像の生成指示（プロンプト）だけです。ページの組み立て（HTML/CSS）はこの後コード側が行います。改行を入れたい場合でも \`<br>\` のようなタグは絶対に書かず、タグを含まないプレーンテキストのみを書くこと。
@@ -112,6 +150,15 @@ ${IMAGE_STYLE_RULES.map((r) => `- ${r}`).join("\n")}
 - ロゴ（role: "logo"）: ${LOGO_RULE}
 - promptは画像生成AIにそのまま渡す英語のプロンプトにすること。
 
+# レイアウトの選択（composition）
+「ブロック一覧」の各ブロックには、選べるレイアウトが示してある。医院の性格に合わせて1つ選び、composition 配列に書くこと。
+${describeVariants(doc)}
+
+**隣り合うセクションで同じレイアウトを選ばないこと。** 同じものが続くと1つの長いセクションに見えてしまう。
+写真より文章で伝わる医院（心療内科、内科など）では minimal を積極的に使ってよい。
+迷う場合は variant を null にすれば、テンプレート既定のレイアウトになる。
+cardCount には、そのセクションに並べるカードの枚数を ${CARD_COUNT_RANGE.min}〜${CARD_COUNT_RANGE.max} で指定する（null なら目安どおり）。**cards 配列の要素数は必ず cardCount と一致させること。**
+
 # 出力形式
 JSON。「ブロック一覧」に挙がっている blockId ごとに blocks 配列の要素を1つずつ作ること（blockIdは必ず一覧のものをそのまま使う。勝手に増やさない）。
 - 種類が「メインビジュアル」のブロックは、heading にキャッチコピー、body にサブコピーを書く（cards は空配列）。
@@ -124,7 +171,6 @@ JSON。「ブロック一覧」に挙がっている blockId ごとに blocks �
 function buildUserPrompt(hearing: HearingSheet, doc: SiteDocument, needsNews: boolean, needsFaq: boolean): string {
   const infoLines = [
     `クリニック名: ${hearing.clinicName}`,
-    hearing.directorName && `院長名: ${hearing.directorName}`,
     hearing.address && `住所: ${hearing.address}`,
     hearing.department && `診療科: ${hearing.department}`,
     hearing.features && `医院の特徴: ${hearing.features}`,
@@ -135,11 +181,13 @@ function buildUserPrompt(hearing: HearingSheet, doc: SiteDocument, needsNews: bo
   const blockLines = authorableBlocks(doc).map((block) => {
     const def = BLOCK_DEFINITIONS[block.type];
     const cards = sampleCardCount(block);
+    const variants = variantsFor(block.type);
     const parts = [
       `blockId: ${block.id}`,
       `種類: ${def.label}`,
       block.navLabel && `このセクションの役割: ${block.navLabel}`,
-      cards && `カード（写真）枚数の目安: ${cards}枚`,
+      cards && `カード枚数の目安: ${cards}枚`,
+      variants.length > 0 && `選べるレイアウト: ${variants.join(" / ")}`,
     ].filter(Boolean);
     return `- ${parts.join(" / ")}`;
   });
@@ -164,6 +212,7 @@ function buildUserPrompt(hearing: HearingSheet, doc: SiteDocument, needsNews: bo
     `# 忘れずに`,
     `- ヘッダー用ロゴ画像（blockId: "logo", role: "logo", cardIndex: null, aspect: "1:1"）を必ず1件 images に含めること。`,
     `- SEO（title / metaDescription / ogTitle / ogDescription / ogSiteName）を必ず作成すること。metaDescriptionは${SEO_DESCRIPTION_LENGTH}。`,
+    `- composition に、「選べるレイアウト」がある blockId すべてについて1件ずつ書くこと。`,
   ].join("\n");
 }
 

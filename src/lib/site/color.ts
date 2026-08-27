@@ -83,3 +83,79 @@ export function readableOn(color: string, background: string, fallback: string, 
   }
   return fallback;
 }
+
+/** The mirror image of `readableOn`: instead of adjusting the text, adjust the FILL it sits on.
+ *
+ * Which one is right depends on what the colour is for. A brand colour used as a heading is text, so
+ * `readableOn` darkens the text. A brand colour used as a button or a navigation bar is a surface,
+ * and darkening the white label on top of it would look like a mistake — the surface is what has to
+ * move. The stock palette is exactly this case: white on #4ba3fc is 2.6:1, and the fix a designer
+ * would make is a deeper blue, not grey lettering.
+ *
+ * Hue is preserved, so the result still reads as the brand colour. Returns `fill` untouched when the
+ * pair already clears `minRatio`, which is why a well-chosen palette is never altered. */
+export function readableFill(fill: string, label: string, minRatio = 4.5): string {
+  if (contrastRatio(fill, label) >= minRatio) return fill;
+
+  const rgb = hexToRgb(fill);
+  const labelRgb = hexToRgb(label);
+  if (!rgb || !labelRgb) return fill;
+
+  // A light label needs a darker surface, and vice versa.
+  const target = luminance(labelRgb) > 0.4 ? BLACK : WHITE;
+  for (let amount = 0.05; amount <= 1; amount += 0.05) {
+    const candidate = rgbToHex(mix(rgb, target, amount));
+    if (contrastRatio(candidate, label) >= minRatio) return candidate;
+  }
+  return rgbToHex(target);
+}
+
+/** Rotates a colour around the hue wheel, leaving saturation and lightness alone.
+ *
+ * Used to give each clinic its own shade of the template's palette (see derivePalette in
+ * composition.ts). Rotation rather than replacement is the point: a small turn keeps a blue template
+ * blue, so the template still reads as the thing the admin approved, while two clinics built from it
+ * are no longer pixel-identical. Grey stays grey — with saturation at 0 there is no hue to turn. */
+export function rotateHue(hex: string, degrees: number): string {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return hex;
+
+  const r = rgb.r / 255;
+  const g = rgb.g / 255;
+  const b = rgb.b / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const lightness = (max + min) / 2;
+  const delta = max - min;
+  if (delta === 0) return hex;
+
+  const saturation = delta / (1 - Math.abs(2 * lightness - 1));
+  let hue: number;
+  if (max === r) hue = ((g - b) / delta) % 6;
+  else if (max === g) hue = (b - r) / delta + 2;
+  else hue = (r - g) / delta + 4;
+  hue = (hue * 60 + degrees + 360) % 360;
+
+  const c = (1 - Math.abs(2 * lightness - 1)) * saturation;
+  const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
+  const m = lightness - c / 2;
+  const [r1, g1, b1] =
+    hue < 60 ? [c, x, 0]
+    : hue < 120 ? [x, c, 0]
+    : hue < 180 ? [0, c, x]
+    : hue < 240 ? [0, x, c]
+    : hue < 300 ? [x, 0, c]
+    : [c, 0, x];
+  return rgbToHex({ r: (r1 + m) * 255, g: (g1 + m) * 255, b: (b1 + m) * 255 });
+}
+
+/** A stable number in [0, 1) from a string. Deterministic on purpose: rebuilding a site must produce
+ * the colours it had before, or every regeneration would silently redecorate a live page. */
+export function hashToUnit(seed: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return ((hash >>> 0) % 100000) / 100000;
+}

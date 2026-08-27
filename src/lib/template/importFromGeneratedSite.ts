@@ -5,7 +5,7 @@ import { zodTextFormat } from "openai/helpers/zod";
 import * as cheerio from "cheerio";
 import { getOpenAIClient } from "@/lib/openai/client";
 import { DEFAULT_DESIGN_TOKENS, designTokensSchema, type Block, type DesignTokens, type SiteDocument } from "@/lib/site/document";
-import { defaultTemplateBlocks } from "@/lib/site/defaultTemplate";
+import { archetypeBlocks, isArchetypeKey, type ArchetypeKey } from "@/lib/site/archetypes";
 import { deleteDocument, newDocumentId, saveDocument } from "@/lib/site/store";
 import { renderSiteFiles, siteOutputPath } from "@/lib/render/renderSiteFiles";
 import { applySampleCopy } from "./sampleCopy";
@@ -79,6 +79,19 @@ function color(value: string | undefined, fallback: string): string {
 const CARD_LAYOUTS = new Set(["grid", "list", "minimal", "overlap"]);
 const HERO_LAYOUTS = new Set(["full-bleed", "split", "centered"]);
 
+/** The `<html>` attributes the renderer writes for the token-driven treatments. Reading them back is
+ * what keeps this importer's promise — it reproduces a page rather than guessing at one — now that
+ * those treatments exist.
+ *
+ * ⚠️ Decoration is NOT assigned here, unlike in importFromUrl.ts. There the reference site is a
+ * stranger's and says nothing about patterns, so one is chosen (site/decoration.ts). Here the source
+ * page states its own, in the markup, and assigning a different one would make the template differ
+ * from the site it was read from — the single property this importer exists to guarantee. */
+function attribute<T extends string>(html: string, name: string, allowed: readonly T[], fallback: T): T {
+  const value = html.match(new RegExp(`data-${name}="([a-z-]+)"`))?.[1];
+  return (allowed as readonly string[]).includes(value ?? "") ? (value as T) : fallback;
+}
+
 function tokensFromPage(html: string): DesignTokens {
   const $ = cheerio.load(html);
   const inline = readInlineTokens($("html").attr("style") ?? "");
@@ -89,6 +102,7 @@ function tokensFromPage(html: string): DesignTokens {
   const font = (inline["--font"] || d.font.bodyFamily).replace(/&quot;/g, '"');
   const radius = Number.parseFloat(inline["--radius"] ?? "");
   const spacing = Number.parseFloat(inline["--space-scale"] ?? "");
+  const ornamentStrength = Number.parseFloat(inline["--ornament-strength"] ?? "");
 
   return designTokensSchema.parse({
     colors: {
@@ -109,6 +123,8 @@ function tokensFromPage(html: string): DesignTokens {
       baseSize: 16,
       lineHeight: 1.8,
       headingWeight: 700,
+      displayScale: Number.parseFloat(inline["--display-scale"] ?? "") || d.font.displayScale,
+      headingLetterSpacing: Number.parseFloat(inline["--heading-tracking"] ?? "") || d.font.headingLetterSpacing,
     },
     block: {
       radius: Number.isFinite(radius) ? Math.min(48, Math.max(0, radius)) : d.block.radius,
@@ -121,10 +137,37 @@ function tokensFromPage(html: string): DesignTokens {
       heroLayout: heroLayout && HERO_LAYOUTS.has(heroLayout) ? heroLayout : d.layout.heroLayout,
       maxWidth: 1080,
       spacingScale: Number.isFinite(spacing) ? Math.min(2, Math.max(0.7, spacing)) : 1,
-      sectionDivider: "none",
+      sectionDivider: attribute(html, "divider", ["none", "wave", "diagonal"] as const, "none"),
+      background: attribute(html, "bg", ["plain", "gradient", "blobs", "dots", "grid"] as const, "plain"),
+      decoration: attribute(html, "decoration", ["none", "accent", "rich"] as const, "none"),
+      rule: attribute(html, "rule", ["none", "hairline", "accent-bar"] as const, "none"),
+      ornament: attribute(html, "ornament", ["none", "seigaiha", "asanoha", "dots-fine", "hairlines", "arc"] as const, "none"),
+      ornamentStrength: Number.isFinite(ornamentStrength) ? Math.min(1, Math.max(0, ornamentStrength)) : d.layout.ornamentStrength,
+      // ⚠️ The backdrop is deliberately not carried over. Its `backdropImage` is a path into the
+      // SOURCE site's own images/ directory, and a template does not copy another site's files —
+      // pointing at one would leave the template referencing a picture it does not own.
+      backdrop: "none",
+      backdropImage: "",
+    },
+    chrome: {
+      header: attribute(html, "header", ["bar", "stacked", "minimal"] as const, "bar"),
+      footer: attribute(html, "footer", ["dark", "light", "compact", "band"] as const, "dark"),
     },
     // What the old main.js/site.css did for every site: a 0.7s fade-and-rise, no stagger, no parallax.
-    animation: { reveal: "slide-up", duration: 700, stagger: false, parallaxHero: false },
+    animation: {
+      reveal: attribute(
+        html,
+        "reveal",
+        ["none", "fade", "slide-up", "slide-left", "slide-right", "zoom", "pop", "flip", "blur"] as const,
+        "slide-up"
+      ),
+      duration: 700,
+      stagger: html.includes('data-stagger="1"'),
+      parallaxHero: html.includes('data-parallax="1"'),
+      variety: html.includes('data-variety="1"'),
+      ambient: attribute(html, "ambient", ["none", "drift", "float", "sheen"] as const, "none"),
+      progressBar: html.includes('class="scroll-progress"'),
+    },
   });
 }
 
@@ -216,7 +259,11 @@ async function adoptImages(sourceSlug: string, target: SiteDocument, blocks: Blo
 
 export type GeneratedImportResult = { document: SiteDocument; previewUrl: string };
 
-export async function importTemplateFromGeneratedSite(slug: string, nameOverride?: string): Promise<GeneratedImportResult> {
+export async function importTemplateFromGeneratedSite(
+  slug: string,
+  nameOverride?: string,
+  archetype?: ArchetypeKey
+): Promise<GeneratedImportResult> {
   const safeSlug = path.basename(slug);
   const html = await readFile(path.join(GENERATED_ROOT, safeSlug, "index.html"), "utf-8").catch(() => {
     throw new Error(`生成済みサイトが見つかりません（${slug}）。`);
@@ -232,6 +279,7 @@ export async function importTemplateFromGeneratedSite(slug: string, nameOverride
 
   const now = new Date().toISOString();
   const id = newDocumentId();
+  const layout = archetypeBlocks(archetype && isArchetypeKey(archetype) ? archetype : "one-page-classic");
   const base: SiteDocument = {
     id,
     slug: `template-${id.slice(0, 8)}`,
@@ -254,7 +302,8 @@ export async function importTemplateFromGeneratedSite(slug: string, nameOverride
       },
       snsLinks: [],
     },
-    blocks: applySampleCopy(defaultTemplateBlocks()),
+    pages: layout.pages,
+    blocks: applySampleCopy(layout.blocks),
     mood: described?.mood,
     tags: (described?.tags ?? []).map((t) => t.trim()).filter(Boolean).slice(0, 8),
     sourceUrl: `/generated/${safeSlug}/index.html`,

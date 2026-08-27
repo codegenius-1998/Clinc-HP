@@ -75,5 +75,7 @@ export async function signupClinicOwnerAction(_prevState: AuthFormState, formDat
 
 export async function logoutAction(): Promise<void> {
   await logout();
+  // The public landing page, not the login form: someone who has just signed out is not necessarily
+  // trying to sign back in, and landing on an empty password box reads as a failure.
   redirect("/");
 }

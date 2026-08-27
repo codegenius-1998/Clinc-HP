@@ -17,7 +17,7 @@ export default async function SignupPage() {
       submitLabel="登録する"
       accent="sky"
       showConfirmPassword
-      footer={{ href: "/", label: "既にアカウントをお持ちの方はこちら" }}
+      footer={{ href: "/login", label: "既にアカウントをお持ちの方はこちら" }}
     />
   );
 }

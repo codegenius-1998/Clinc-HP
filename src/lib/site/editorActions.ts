@@ -7,10 +7,13 @@ import { revalidatePath } from "next/cache";
 import { renderSiteFiles, siteOutputPath } from "@/lib/render/renderSiteFiles";
 import { deployGeneratedSiteToCloudflare } from "@/lib/cloudflareDeploy";
 import { checkGuidelineCompliance, type GuidelineCheckResult } from "@/lib/openai/checkGuidelineCompliance";
+import { checkDesign, type DesignCheckResult } from "./designCheck";
+import { rewriteBlockText, type BlockRewrite } from "@/lib/openai/rewriteBlockText";
+import { imageExtensionFor } from "@/lib/imageFormats";
 import { AccessDeniedError, requireEditableDocument } from "./access";
 import { pruneOrphanedStyles } from "./fieldPath";
 import { saveDocument } from "./store";
-import { siteDocumentSchema, type SiteDocument } from "./document";
+import { blockSchema, siteDocumentSchema, type Block, type SiteDocument } from "./document";
 
 /** Server Actions behind the editor. Saving is deliberately AI-free: it validates, writes to D1 and
  * re-renders the static files. That is the whole reason editing text is instant and costs nothing,
@@ -74,13 +77,61 @@ export async function checkGuidelineComplianceAction(
   }
 }
 
-const EXTENSION_BY_TYPE: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp",
-  "image/gif": "gif",
-  "image/svg+xml": "svg",
-};
+/** Runs the design check against what is currently in the editor, unsaved changes included.
+ *
+ * Free and instant — no model call, unlike the guideline check next door. The output directory is
+ * passed so the check can tell a path that resolves from one that points at nothing; note that those
+ * files are one 保存 behind, so an image the user just swapped shows as missing until they save. That
+ * is the right trade: the alternative is not catching the missing-file case at all, which is the one
+ * defect this whole check exists for.
+ *
+ * The heavier half of the check — opening the page in a browser and measuring it — deliberately is
+ * NOT here. It needs Playwright, which is a devDependency the running app must never import; run
+ * `npm run check:design` for that. */
+export async function checkDesignAction(
+  id: string,
+  current: SiteDocument
+): Promise<{ result: DesignCheckResult | null; error: string | null }> {
+  try {
+    await requireEditableDocument(id);
+    const parsed = siteDocumentSchema.parse(current);
+    return { result: checkDesign(parsed, { outDir: siteOutputPath(parsed).outDir }), error: null };
+  } catch (err) {
+    return { result: null, error: errorMessage(err, "デザイン確認に失敗しました。") };
+  }
+}
+
+/** Rewrites ONE section's text to the user's instruction. The block comes from the client rather than
+ * from the stored row so that unsaved edits are what gets rewritten — the alternative would silently
+ * rewrite a stale version of the paragraph the user is looking at.
+ *
+ * That client-supplied block is still validated (`blockSchema`) before it reaches the model, and the
+ * result is only RETURNED: nothing is written to D1 and nothing is re-rendered, so the user reviews
+ * the change in the editor and presses 保存 themselves. Authorisation is on the document id, exactly
+ * as for every other editor action — a Server Action is directly POST-able, so this cannot rely on
+ * the page having gated the route.
+ *
+ * Scoped to one block on purpose: see the note at the top of rewriteBlockText.ts. */
+export async function rewriteBlockAction(
+  id: string,
+  block: Block,
+  instruction: string
+): Promise<{ result: BlockRewrite | null; error: string | null }> {
+  try {
+    await requireEditableDocument(id);
+
+    const trimmed = instruction.trim();
+    if (!trimmed) return { result: null, error: "指示を入力してください。" };
+    if (trimmed.length > 500) return { result: null, error: "指示が長すぎます（500文字まで）。" };
+
+    const parsed = blockSchema.safeParse(block);
+    if (!parsed.success) return { result: null, error: "セクションの内容を読み取れませんでした。" };
+
+    return { result: await rewriteBlockText(parsed.data, trimmed), error: null };
+  } catch (err) {
+    return { result: null, error: errorMessage(err, "AIの書き換えに失敗しました。") };
+  }
+}
 
 /** Copies an uploaded image (already in Supabase Storage, see /api/uploads) into the site's own
  * output directory and returns the SITE-RELATIVE path to store in the block.
@@ -103,7 +154,7 @@ export async function adoptImageAction(id: string, sourceUrl: string): Promise<{
     }
 
     const contentType = (response.headers.get("content-type") ?? "").split(";")[0].trim();
-    const extension = EXTENSION_BY_TYPE[contentType];
+    const extension = imageExtensionFor(contentType);
     if (!extension) {
       return { path: null, error: `対応していない画像形式です（${contentType || "不明"}）。` };
     }

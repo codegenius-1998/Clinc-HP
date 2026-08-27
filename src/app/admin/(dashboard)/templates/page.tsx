@@ -3,12 +3,32 @@ import { listTemplates } from "@/lib/site/store";
 import { deleteTemplateAction, setTemplateCanSellAction } from "@/lib/template/templateActions";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { ConfirmDeleteButton } from "@/components/admin/ConfirmDeleteButton";
+import { IllustrateTemplateButton } from "@/components/admin/IllustrateTemplateButton";
+import { readdir } from "fs/promises";
+import path from "path";
 
 /** Templates are SiteDocuments with is_template = 1 — the same shape as a generated clinic site, so
  * they render and edit through exactly the same code. `canSell` is the gate that decides whether the
  * auto-selector may hand a template to a real clinic (see selectTemplate.ts). */
+/** True when the rendered template still has nothing but the placeholder in its images/ directory.
+ *
+ * ⚠️ Read from disk, not from the document. Answering this properly means walking the blocks, and
+ * the list has only summaries — one D1 round trip per row, on every page load, to draw a badge. The
+ * directory listing answers the question that actually matters here ("why is this preview grey?")
+ * for the cost of a readdir. */
+async function hasNoPhotos(templateId: string): Promise<boolean> {
+  const dir = path.join(process.cwd(), "public", "generated", "_templates", templateId, "images");
+  const files = await readdir(dir).catch(() => [] as string[]);
+  return files.filter((file) => file !== "placeholder.svg").length === 0;
+}
+
 export default async function AdminTemplatesPage() {
   const templates = await listTemplates();
+  const photoless = new Set(
+    (await Promise.all(templates.map(async (t) => ((await hasNoPhotos(t.id)) ? t.id : null)))).filter(
+      (id): id is string => id !== null
+    )
+  );
 
   return (
     <div>
@@ -44,6 +64,11 @@ export default async function AdminTemplatesPage() {
                   >
                     {template.canSell ? "販売可（自動選択の候補）" : "非公開（候補に入らない）"}
                   </span>
+                  {photoless.has(template.id) && (
+                    <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[12px] text-amber-700 ring-1 ring-amber-200">
+                      写真が未生成（プレビューは灰色の枠になります）
+                    </span>
+                  )}
                 </div>
                 {template.mood && <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-slate-500">{template.mood}</p>}
                 {template.tags.length > 0 && (
@@ -69,6 +94,7 @@ export default async function AdminTemplatesPage() {
                 >
                   プレビュー
                 </a>
+                <IllustrateTemplateButton templateId={template.id} name={template.name} />
                 <form action={setTemplateCanSellAction.bind(null, template.id, !template.canSell)}>
                   <button
                     type="submit"

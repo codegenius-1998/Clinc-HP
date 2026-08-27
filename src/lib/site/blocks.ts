@@ -1,4 +1,4 @@
-import { newBlockId, type Block, type BlockType } from "./document";
+import { HOME_PAGE_ID, newBlockId, type Block, type BlockType } from "./document";
 
 /** The fixed block-type catalog — the "Sectionは固定" half of the design. Section TYPES live here in
  * code (not in the D1 `sections` table, which only mirrors these rows so the foreign key resolves);
@@ -374,6 +374,10 @@ export function createBlock(type: BlockType, overrides?: Partial<Omit<Block, "ty
     type,
     visible: true,
     navLabel: def.defaultNavLabel,
+    // Set explicitly rather than left to the schema's default: this object is cast to Block without
+    // being parsed, so an omitted field would be `undefined` at runtime while typed as a string —
+    // and a block with no page renders on no page. Callers that know better pass an override.
+    pageId: HOME_PAGE_ID,
     data: def.defaultData(),
     ...overrides,
   } as Block;

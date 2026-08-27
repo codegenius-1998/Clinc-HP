@@ -1,6 +1,7 @@
 "use client";
 
 import { BLOCK_DEFINITIONS, type BlockField, type LeafField } from "@/lib/site/blocks";
+import { variantsFor } from "@/lib/site/composition";
 import type { Block } from "@/lib/site/document";
 import { ImageField, SelectField, TextField } from "./fields";
 
@@ -154,6 +155,40 @@ function ListEditor({
   );
 }
 
+/** Per-section layout, for the block types that have alternatives (see src/lib/site/composition.ts).
+ *
+ * Sits outside the registry-driven loop below because a variant is not a piece of the block's content
+ * — it lives on the block itself, next to `visible`, and the choices depend on the block's type
+ * rather than on a field definition. Renders nothing for types with no alternatives, which is most
+ * of them. */
+const VARIANT_LABELS: Record<string, string> = {
+  "full-bleed": "画像を全面に敷いて文字を重ねる",
+  split: "画像と文字を左右に分ける",
+  centered: "画像の下に文字を中央寄せで置く",
+  grid: "写真つきカードを格子状に並べる",
+  list: "写真を左、文章を右に置いて縦に積む",
+  minimal: "写真を使わず、番号と文章だけで並べる",
+  overlap: "カードを少しずつずらして重ねる",
+};
+
+function VariantField({ block, onChange }: { block: Block; onChange: (next: Block) => void }) {
+  const variants = variantsFor(block.type);
+  if (variants.length === 0) return null;
+
+  return (
+    <SelectField
+      label="このセクションのレイアウト"
+      value={block.variant ?? ""}
+      options={[
+        { value: "", label: "テンプレートに合わせる" },
+        ...variants.map((v) => ({ value: v, label: VARIANT_LABELS[v] ?? v })),
+      ]}
+      hint="このセクションだけ別の見せ方にできます。同じ見せ方が続くと、1つの長いセクションに見えます。"
+      onChange={(variant) => onChange({ ...block, variant: variant || undefined })}
+    />
+  );
+}
+
 export function BlockEditor({
   block,
   documentId,
@@ -190,6 +225,8 @@ export function BlockEditor({
         hint="ページ上部のメニューとフッターのリンクに使われます。"
         onChange={(navLabel) => onChange({ ...block, navLabel })}
       />
+
+      <VariantField block={block} onChange={onChange} />
 
       {definition.fields.map((field) => {
         if (field.type === "list") {

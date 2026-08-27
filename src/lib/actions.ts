@@ -1,125 +1,18 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { generateSlug, getHearing, saveHearing, updateHearing, type HearingSheet } from "./hearing";
-import { generateSite } from "./siteGenerator";
+import { getHearing, updateHearing } from "./hearing";
 import { deployGeneratedSiteToCloudflare } from "./cloudflareDeploy";
-import { IMAGE_CATEGORIES } from "./imageCategories";
 
-export type HearingFormState = {
-  error: string | null;
-};
-
-function requiredField(formData: FormData, name: string): string {
-  const value = formData.get(name);
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function generationErrorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : "サイトの生成に失敗しました。";
-}
-
-export async function createHearingAction(
-  _prevState: HearingFormState,
-  formData: FormData
-): Promise<HearingFormState> {
-  const clinicName = requiredField(formData, "clinicName");
-  if (!clinicName) {
-    return { error: "クリニック名を入力してください。" };
-  }
-  const slug = generateSlug(clinicName);
-
-  // Photos are uploaded to Supabase Storage client-side before this action runs (Server Actions
-  // cap request bodies at 1MB, far too small for real photos) — only their URLs arrive here.
-  const uploadedImages: NonNullable<HearingSheet["uploadedImages"]> = {};
-  for (const category of IMAGE_CATEGORIES) {
-    const urls = formData.getAll(`imageUrls_${category.key}`).filter((v): v is string => typeof v === "string" && v.length > 0);
-    if (urls.length > 0) {
-      uploadedImages[category.key] = urls;
-    }
-  }
-
-  const staffNames = formData.getAll("staffName").map((v) => (typeof v === "string" ? v.trim() : ""));
-  const staffComments = formData.getAll("staffComment").map((v) => (typeof v === "string" ? v.trim() : ""));
-  const staffRoles = formData.getAll("staffRole").map((v) => (typeof v === "string" ? v.trim() : ""));
-  const staffPhotoUrls = formData.getAll("staffPhotoUrl").map((v) => (typeof v === "string" ? v.trim() : ""));
-  const staffMembers = staffNames
-    .map((name, i) => ({
-      name,
-      comment: staffComments[i] ?? "",
-      role: staffRoles[i] ?? "",
-      photoUrl: staffPhotoUrls[i] || undefined,
-    }))
-    .filter((member) => member.name.length > 0);
-
-  const faqQuestions = formData.getAll("faqQuestion").map((v) => (typeof v === "string" ? v.trim() : ""));
-  const faqAnswers = formData.getAll("faqAnswer").map((v) => (typeof v === "string" ? v.trim() : ""));
-  const faqs = faqQuestions
-    .map((question, i) => ({ question, answer: faqAnswers[i] ?? "" }))
-    .filter((faq) => faq.question.length > 0 && faq.answer.length > 0);
-
-  const newsDates = formData.getAll("newsDate").map((v) => (typeof v === "string" ? v.trim() : ""));
-  const newsTitles = formData.getAll("newsTitle").map((v) => (typeof v === "string" ? v.trim() : ""));
-  const news = newsTitles
-    .map((title, i) => ({ date: newsDates[i] ?? "", title }))
-    .filter((item) => item.title.length > 0);
-
-  const priceNames = formData.getAll("priceName").map((v) => (typeof v === "string" ? v.trim() : ""));
-  const pricePrices = formData.getAll("pricePrice").map((v) => (typeof v === "string" ? v.trim() : ""));
-  const priceNotes = formData.getAll("priceNote").map((v) => (typeof v === "string" ? v.trim() : ""));
-  const priceItems = priceNames
-    .map((name, i) => ({ name, price: pricePrices[i] ?? "", note: priceNotes[i] || undefined }))
-    .filter((item) => item.name.length > 0 && item.price.length > 0);
-
-  const hearing = await saveHearing({
-    slug,
-    clinicName,
-    directorName: requiredField(formData, "directorName"),
-    address: requiredField(formData, "address"),
-    phone: requiredField(formData, "phone"),
-    line: requiredField(formData, "line"),
-    department: requiredField(formData, "department"),
-    hours: requiredField(formData, "hours"),
-    features: requiredField(formData, "features"),
-    request: requiredField(formData, "request"),
-    uploadedImages,
-    staffMembers: staffMembers.length > 0 ? staffMembers : undefined,
-    faqs: faqs.length > 0 ? faqs : undefined,
-    news: news.length > 0 ? news : undefined,
-    priceItems: priceItems.length > 0 ? priceItems : undefined,
-  });
-
-  // Generation is a separate, explicit step from here (see the "AIで生成する" button on the page this
-  // redirects to) rather than happening inline: generateSite takes minutes (AI text + 10-20 images),
-  // and blocking the 作成 button on that left the submitter staring at a spinner with no way to see
-  // what they'd actually entered until it finished. Redirecting immediately lets them review the
-  // submitted content first and kick off generation themselves when ready.
-  redirect(`/sites/${hearing.slug}`);
-}
-
-export async function regenerateSiteAction(slug: string): Promise<void> {
-  const hearing = await getHearing(slug);
-  if (!hearing) {
-    return;
-  }
-
-  try {
-    const result = await generateSite(hearing);
-    await updateHearing(slug, {
-      previewUrl: result.previewUrl,
-      generationError: undefined,
-      templateId: result.templateId,
-      templateLabel: result.templateName,
-      templateReason: result.templateReason ?? undefined,
-    });
-  } catch (err) {
-    await updateHearing(slug, { generationError: generationErrorMessage(err) });
-  }
-
-  revalidatePath(`/sites/${slug}`);
-}
-
+/** `regenerateSiteAction` used to live here, behind the "AIで再生成する" button on /sites/[slug]. The
+ * button was removed at the client's request, and the action went with it rather than being left as
+ * an unreferenced export: a Server Action stays directly POST-able whether or not any page renders a
+ * form for it, and this one had no authentication while costing real money (a full AI run: text plus
+ * 10-20 generated images) and overwriting the clinic's edited copy. Generation now happens only
+ * through the admin-gated 「作成」 button (approveRequestAction), on /admin/requests and on the site's own detail page.
+ *
+ * Re-rendering after an edit does NOT need this: saveDocumentAction re-renders from the stored
+ * SiteDocument without calling any model. */
 export async function deployToCloudflareAction(slug: string): Promise<void> {
   const hearing = await getHearing(slug);
   if (!hearing?.previewUrl) {

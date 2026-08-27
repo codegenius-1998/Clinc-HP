@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ArchetypeSelect } from "./ArchetypeSelect";
 import { useActionState, useState } from "react";
 import { importFromGeneratedSiteAction, type ImportState } from "@/lib/template/templateActions";
 import type { GeneratedSiteCandidate } from "@/lib/template/importFromGeneratedSite";
@@ -74,6 +75,8 @@ export function GeneratedSiteImportForm({ sites }: { sites: GeneratedSiteCandida
           </label>
           <input id="gen-name" name="name" className={inputClass} placeholder="空欄の場合はAIが名前を付けます" />
         </div>
+
+        <ArchetypeSelect />
 
         <button
           type="submit"

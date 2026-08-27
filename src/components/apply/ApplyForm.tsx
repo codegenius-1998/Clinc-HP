@@ -18,7 +18,7 @@ const cardClassName = "rounded-2xl border border-slate-200 bg-white p-6 shadow-s
 
 const initialState: ApplicationFormState = { error: null };
 
-const STEP_TITLES = ["基本情報", "写真", "診療科", "特徴", "ターゲット", "診療時間", "スタッフ紹介", "料金表", "申請"];
+const STEP_TITLES = ["基本情報", "写真", "診療科", "特徴", "ターゲット", "診療時間", "スタッフ紹介", "料金表", "ご要望", "申請"];
 
 const STAFF_ROLE_OPTIONS = ["院長", "副院長", "医師", "看護師", "薬剤師", "受付・事務", "スタッフ"];
 
@@ -53,6 +53,7 @@ export function ApplyForm({
   const [selectedFeatureIds, setSelectedFeatureIds] = useState<Set<string>>(new Set());
   const [selectedTargetIds, setSelectedTargetIds] = useState<Set<string>>(new Set());
   const [hours, setHours] = useState("");
+  const [request, setRequest] = useState("");
   const [staffMembers, setStaffMembers] = useState<StaffMemberInput[]>([]);
   const [priceItems, setPriceItems] = useState<PriceItemInput[]>([]);
 
@@ -717,7 +718,27 @@ export function ApplyForm({
       </div>
 
       {/* Step 8: 確認・申請 */}
+      {/* Step 8: ご要望 */}
       <div style={stepStyle(8)} className="space-y-6">
+        <div className={cardClassName}>
+          <p className="text-[13px] font-medium text-slate-700">ご要望（任意）</p>
+          <p className="mt-1 text-[12px] leading-relaxed text-slate-400">
+            ホームページの雰囲気や、載せたいこと・載せたくないことがあれば教えてください。
+            デザインの自動選択と文章づくりの参考にします。
+          </p>
+          <textarea
+            name="request"
+            placeholder={"例:\n・お子さん連れでも入りやすい、明るい雰囲気にしたい\n・院内の写真を大きく見せたい\n・専門用語は少なめでお願いします"}
+            value={request}
+            onChange={(e) => setRequest(e.target.value)}
+            rows={6}
+            className={inputClassName}
+          />
+        </div>
+      </div>
+
+      {/* Step 9: 申請 */}
+      <div style={stepStyle(9)} className="space-y-6">
         <div className={cardClassName}>
           <p className="text-[13px] font-medium text-slate-700">この内容で申請します</p>
           <dl className="mt-4 space-y-3 text-[13px]">
@@ -772,6 +793,10 @@ export function ApplyForm({
                   ? `${priceItems.filter((p) => p.name.trim()).length}件`
                   : "（なし）"}
               </dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="shrink-0 text-slate-400">ご要望</dt>
+              <dd className="whitespace-pre-line text-right text-slate-800">{request || "（なし）"}</dd>
             </div>
           </dl>
           <p className="mt-4 text-[12px] leading-relaxed text-slate-400">

@@ -11,7 +11,17 @@ import type { Block, BlockType } from "@/lib/site/document";
  * Types marked `singleton` in the registry are the ones a page can only sensibly have one of (a
  * second hero, a second お問い合わせ). They're shown greyed out rather than hidden so it's clear the
  * block exists and is already in use. */
-export function AddBlockPalette({ blocks, onAdd }: { blocks: Block[]; onAdd: (block: Block) => void }) {
+export function AddBlockPalette({
+  blocks,
+  pageId,
+  onAdd,
+}: {
+  /** ⚠️ The blocks on the CURRENT PAGE, not the whole document. `singleton` means "once per page" —
+   * a hero on the top page and another on 診療案内 is correct, and is the point of having pages. */
+  blocks: Block[];
+  pageId: string;
+  onAdd: (block: Block) => void;
+}) {
   const [open, setOpen] = useState(false);
   const used = new Set<BlockType>(blocks.map((b) => b.type));
 
@@ -44,7 +54,7 @@ export function AddBlockPalette({ blocks, onAdd }: { blocks: Block[]; onAdd: (bl
                 type="button"
                 disabled={blocked}
                 onClick={() => {
-                  onAdd(createBlock(definition.type));
+                  onAdd(createBlock(definition.type, { pageId }));
                   setOpen(false);
                 }}
                 className="w-full rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-40"

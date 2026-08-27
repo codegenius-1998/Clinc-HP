@@ -1,9 +1,12 @@
-import { mkdir, readFile, writeFile } from "fs/promises";
+import { mkdir, readFile, readdir, unlink, writeFile } from "fs/promises";
 import path from "path";
 import { renderSiteHtml } from "./renderSiteHtml";
-import type { SiteDocument } from "@/lib/site/document";
+import { resolveStyleKit } from "./kits";
+import { pageFileName } from "@/lib/site/pages";
+import type { PageDef, SiteDocument } from "@/lib/site/document";
 
-/** Writes a SiteDocument out as a standalone static site: index.html + css/site.css + js/main.js.
+/** Writes a SiteDocument out as a standalone static site: one HTML file per page, plus
+ * css/site.css + js/main.js + images/.
  *
  * This deliberately calls no AI and touches no image file. It is the whole of what "保存" does in the
  * editor, which is why editing text costs nothing and takes a moment rather than a minute — image
@@ -46,6 +49,16 @@ export function siteOutputPath(doc: Pick<SiteDocument, "id" | "slug" | "isTempla
   };
 }
 
+/** The preview URL for one page of a document.
+ *
+ * ⚠️ `siteOutputPath().previewUrl` deliberately keeps pointing at `index.html` and is NOT changed:
+ * it is persisted as `hearings.preview_url` in D1 and read back by screens that never load the
+ * document. This is the additional accessor those screens don't need. */
+export function pagePreviewUrl(doc: Pick<SiteDocument, "id" | "slug" | "isTemplate">, page: PageDef): string {
+  const dir = siteOutputPath(doc).previewUrl.replace(/index\.html$/, "");
+  return `${dir}${pageFileName(page)}`;
+}
+
 export async function generatedSiteExists(doc: Pick<SiteDocument, "id" | "slug" | "isTemplate">): Promise<boolean> {
   try {
     await readFile(path.join(siteOutputPath(doc).outDir, "index.html"));
@@ -62,13 +75,61 @@ export async function renderSiteFiles(doc: SiteDocument): Promise<{ outDir: stri
   await mkdir(path.join(outDir, "css"), { recursive: true });
   await mkdir(path.join(outDir, "js"), { recursive: true });
 
-  const html = await renderSiteHtml(doc);
-  await writeFile(path.join(outDir, "index.html"), html, "utf-8");
+  const written = new Set<string>();
+  for (const page of doc.pages) {
+    const file = pageFileName(page);
+    await writeFile(path.join(outDir, file), await renderSiteHtml(doc, page.id), "utf-8");
+    written.add(file);
+  }
+  await sweepStaleHtml(outDir, written);
+
   await writeFile(path.join(outDir, "css", "site.css"), await readFile(SITE_CSS_SOURCE, "utf-8"), "utf-8");
   await writeFile(path.join(outDir, "js", "main.js"), await readFile(SITE_JS_SOURCE, "utf-8"), "utf-8");
   await writeFile(path.join(outDir, "images", "placeholder.svg"), PLACEHOLDER_SVG, "utf-8");
+  await writeStyleKit(outDir, doc);
 
   return { outDir, previewUrl };
+}
+
+/** The template's own CSS/JS, or the removal of a previous one's.
+ *
+ * ⚠️ The removal half is not tidiness. This function deliberately never wipes its output directory
+ * (see the note at the top of the file), and `wrangler pages deploy` uploads whatever tree it finds —
+ * so a template that dropped its kit would keep serving the old `css/kit.css` from its published URL
+ * forever. The HTML would no longer link it, which is why this is a leak rather than a visible bug,
+ * and why it needs deleting rather than merely not writing. */
+async function writeStyleKit(outDir: string, doc: SiteDocument): Promise<void> {
+  const kit = resolveStyleKit(doc.design.layout.styleKit);
+  const cssPath = path.join(outDir, "css", "kit.css");
+  const jsPath = path.join(outDir, "js", "kit.js");
+
+  if (kit) await writeFile(cssPath, kit.css, "utf-8");
+  else await unlink(cssPath).catch(() => {});
+
+  if (kit?.js) await writeFile(jsPath, kit.js, "utf-8");
+  else await unlink(jsPath).catch(() => {});
+}
+
+/** Deletes top-level .html files that no page claims any more.
+ *
+ * ⚠️ Not optional. This function deliberately never removes its output directory (see the note at the
+ * top of the file), so renaming a page's path or deleting a page would otherwise leave the old file
+ * on disk forever — and `wrangler pages deploy` uploads whatever tree it finds, which means a page
+ * the clinic deleted stays live at its old URL.
+ *
+ * Safe precisely because it is scoped to top-level `*.html`, which this function is the sole author
+ * of. `images/`, `css/` and `js/` are never touched. */
+async function sweepStaleHtml(outDir: string, written: Set<string>): Promise<void> {
+  let entries: string[] = [];
+  try {
+    entries = await readdir(outDir);
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (!entry.endsWith(".html") || written.has(entry)) continue;
+    await unlink(path.join(outDir, entry)).catch(() => {});
+  }
 }
 
 /** Existence check for screens that only hold a hearing sheet's slug and never load the document. */

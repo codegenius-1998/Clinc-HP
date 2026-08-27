@@ -1,4 +1,5 @@
 import { isStorageConfigured, StorageError, uploadObject } from "@/lib/supabaseStorage";
+import { imageExtensionFor, unsupportedImageMessage } from "@/lib/imageFormats";
 
 const PREFIX = "clinc-hp";
 const MAX_FILES = 10;
@@ -6,13 +7,6 @@ const MAX_FILE_BYTES = 8 * 1024 * 1024;
 // Not limited to the marketing IMAGE_CATEGORIES — this is just a storage path segment, and other
 // upload flows (e.g. a staff member's own photo) use their own category names ("staff").
 const CATEGORY_PATTERN = /^[a-z0-9_-]{1,32}$/i;
-
-/** Extension for the stored object key. Taken from the browser-supplied filename, so it is clamped to
- * plain alphanumerics — an unsanitised value would land straight in the Storage path. */
-function safeExtension(filename: string): string {
-  const raw = filename.includes(".") ? filename.split(".").pop() ?? "" : "";
-  return /^[a-z0-9]{1,5}$/i.test(raw) ? raw.toLowerCase() : "jpg";
-}
 
 export async function POST(request: Request) {
   if (!isStorageConfigured()) {
@@ -44,11 +38,19 @@ export async function POST(request: Request) {
     if (!file.type.startsWith("image/")) {
       return Response.json({ error: `${file.name} は画像ファイルではありません。` }, { status: 400 });
     }
+    // Checked HERE, not only when the editor later adopts the file: an upload that "succeeds" and
+    // then fails downstream is the confusing case this replaces (see imageFormats.ts).
+    const extension = imageExtensionFor(file.type);
+    if (!extension) {
+      return Response.json({ error: unsupportedImageMessage(file.name, file.type) }, { status: 400 });
+    }
     if (file.size > MAX_FILE_BYTES) {
       return Response.json({ error: `${file.name} のサイズが大きすぎます（8MBまで）。` }, { status: 400 });
     }
 
-    const key = `${PREFIX}/${category}/${crypto.randomUUID()}.${safeExtension(file.name)}`;
+    // From the MIME type, not the filename: the two disagree often enough (a .jpg that is really a
+    // PNG, a photo saved with no extension) and the stored object's type is what the adopt step reads.
+    const key = `${PREFIX}/${category}/${crypto.randomUUID()}.${extension}`;
 
     try {
       urls.push(await uploadObject(key, await file.arrayBuffer(), file.type));

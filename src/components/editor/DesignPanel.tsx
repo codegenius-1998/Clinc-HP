@@ -129,6 +129,26 @@ export function DesignPanel({
           step={100}
           onChange={(headingWeight) => set("font", { headingWeight })}
         />
+        <NumberField
+          label="見出しの大きさ"
+          value={design.font.displayScale}
+          min={1}
+          max={2.2}
+          step={0.05}
+          unit="倍"
+          hint="本文はそのままで、見出しだけを大きくします。写真が少ないデザインでは、ここを上げると印象が決まります。"
+          onChange={(displayScale) => set("font", { displayScale })}
+        />
+        <NumberField
+          label="見出しの字間"
+          value={design.font.headingLetterSpacing}
+          min={-0.02}
+          max={0.3}
+          step={0.01}
+          unit="em"
+          hint="広げるほど落ち着いた印象になります。明朝体と組み合わせると効果的です。"
+          onChange={(headingLetterSpacing) => set("font", { headingLetterSpacing })}
+        />
       </Group>
 
       <Group title="ブロックの形">
@@ -220,6 +240,79 @@ export function DesignPanel({
             set("layout", { sectionDivider: sectionDivider as DesignTokens["layout"]["sectionDivider"] })
           }
         />
+        <SelectField
+          label="ページの背景"
+          value={design.layout.background}
+          options={[
+            { value: "plain", label: "無地（白と淡色の交互）" },
+            { value: "gradient", label: "グラデーション" },
+            { value: "blobs", label: "ぼかした色の塊" },
+            { value: "dots", label: "ドット柄" },
+            { value: "grid", label: "方眼柄" },
+          ]}
+          hint="無地のままだと、白い箱が縦に積み上がった単調な見た目になりがちです。"
+          onChange={(background) =>
+            set("layout", { background: background as DesignTokens["layout"]["background"] })
+          }
+        />
+        <SelectField
+          label="見出しの区切り方"
+          value={design.layout.rule}
+          options={[
+            { value: "none", label: "太い下線（標準）" },
+            { value: "hairline", label: "細い罫線（セクションの境目に引く）" },
+            { value: "accent-bar", label: "左に色の帯" },
+          ]}
+          hint="写真を減らしたデザインでは、太い下線が画面でいちばん強い要素になり、事務的に見えます。"
+          onChange={(rule) => set("layout", { rule: rule as DesignTokens["layout"]["rule"] })}
+        />
+        <SelectField
+          label="セクションの地紋（模様）"
+          value={design.layout.ornament}
+          options={[
+            { value: "none", label: "なし" },
+            { value: "seigaiha", label: "青海波（波の弧）" },
+            { value: "asanoha", label: "麻の葉（三角格子）" },
+            { value: "dots-fine", label: "細かいドット" },
+            { value: "hairlines", label: "斜めの細い線" },
+            { value: "arc", label: "大きな弧（右上から）" },
+          ]}
+          hint="画像ファイルは使いません。CSSで描くので読み込みが増えず、色はテーマカラーに追従します。"
+          onChange={(ornament) => set("layout", { ornament: ornament as DesignTokens["layout"]["ornament"] })}
+        />
+        <NumberField
+          label="地紋の濃さ"
+          value={design.layout.ornamentStrength}
+          min={0}
+          max={1}
+          step={0.02}
+          unit=""
+          hint="0で見えなくなります。0.1〜0.2 が自然です。0.3を超えると柄が本文より目立ちます。"
+          onChange={(ornamentStrength) => set("layout", { ornamentStrength })}
+        />
+        <SelectField
+          label="背景写真"
+          value={design.layout.backdrop}
+          options={[
+            { value: "none", label: "なし" },
+            { value: "page", label: "ページ全体の背景に敷く" },
+            { value: "sections", label: "淡色セクションの背景に敷く" },
+          ]}
+          hint="写真はサイト生成時にAIが作ります。文字が読めるよう、必ず背景色の膜を重ねます。まだ写真が無い間は何も表示されません。"
+          onChange={(backdrop) => set("layout", { backdrop: backdrop as DesignTokens["layout"]["backdrop"] })}
+        />
+        <SelectField
+          label="装飾の量"
+          value={design.layout.decoration}
+          options={[
+            { value: "none", label: "なし" },
+            { value: "accent", label: "控えめ（見出しの下線を強調）" },
+            { value: "rich", label: "多め（セクション番号・角の飾り）" },
+          ]}
+          onChange={(decoration) =>
+            set("layout", { decoration: decoration as DesignTokens["layout"]["decoration"] })
+          }
+        />
       </Group>
 
       <Group title="動き">
@@ -230,7 +323,12 @@ export function DesignPanel({
             { value: "none", label: "なし" },
             { value: "fade", label: "ふわっと表示" },
             { value: "slide-up", label: "下から上へ" },
+            { value: "slide-left", label: "左から流れ込む" },
+            { value: "slide-right", label: "右から流れ込む" },
             { value: "zoom", label: "少し拡大しながら" },
+            { value: "pop", label: "ぽんと弾んで出る" },
+            { value: "flip", label: "奥から起き上がる" },
+            { value: "blur", label: "ぼけから像を結ぶ" },
           ]}
           onChange={(reveal) => set("animation", { reveal: reveal as DesignTokens["animation"]["reveal"] })}
         />
@@ -247,6 +345,30 @@ export function DesignPanel({
           label="カードを1枚ずつ順番に表示する"
           value={design.animation.stagger}
           onChange={(stagger) => set("animation", { stagger })}
+        />
+        <ToggleField
+          label="セクションごとに演出を変える"
+          value={design.animation.variety}
+          hint="登場の向きとカードの並びが4セクション周期で入れ替わり、同じ動きの繰り返しになりません。"
+          onChange={(variety) => set("animation", { variety })}
+        />
+        <SelectField
+          label="地紋を動かし続ける"
+          value={design.animation.ambient}
+          options={[
+            { value: "none", label: "動かさない" },
+            { value: "drift", label: "ゆっくり流れる" },
+            { value: "float", label: "ふわふわ上下する" },
+            { value: "sheen", label: "光が横切る" },
+          ]}
+          hint="地紋（模様）だけが動きます。文字や写真は動かないので、読みやすさは変わりません。地紋が「なし」のときは何も起きません。"
+          onChange={(ambient) => set("animation", { ambient: ambient as DesignTokens["animation"]["ambient"] })}
+        />
+        <ToggleField
+          label="読み進み具合のバーを出す"
+          value={design.animation.progressBar}
+          hint="画面のいちばん上に細い線が出て、ページのどのあたりを読んでいるかを示します。"
+          onChange={(progressBar) => set("animation", { progressBar })}
         />
         <ToggleField
           label="メインビジュアルをゆっくり動かす（パララックス）"
