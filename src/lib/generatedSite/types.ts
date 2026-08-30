@@ -48,6 +48,40 @@ export type Theme = {
 
 export type LayoutItem = { id: string; kind: string };
 
+// --- free-form blocks added in the editor ---------------------------------
+
+/** A plain prose block: optional heading + paragraphs. */
+export type TextBlock = {
+  id: string;
+  kind: "text";
+  heading: Heading;
+  align: "left" | "center";
+  body: string[];
+};
+
+/** One or more photos in a responsive row, with an optional lead caption. */
+export type ImageBlock = {
+  id: string;
+  kind: "image";
+  heading: Heading;
+  caption: string;
+  images: ImageSlot[];
+};
+
+/** A card grid: heading + N cards of title / body / optional image. */
+export type GridBlock = {
+  id: string;
+  kind: "grid";
+  heading: Heading;
+  columns: 2 | 3 | 4;
+  items: { title: string; body: string; image: ImageSlot }[];
+};
+
+export type CustomBlock = TextBlock | ImageBlock | GridBlock;
+
+export const CUSTOM_BLOCK_KINDS = ["text", "image", "grid"] as const;
+export type CustomBlockKind = (typeof CUSTOM_BLOCK_KINDS)[number];
+
 export type MedicalItem = { icon: string; ja: string; en: string; lead: string };
 export type GalleryItem = { image: ImageSlot; caption: string };
 export type ScheduleRow = { label: string; marks: (string | null)[] };
@@ -121,6 +155,8 @@ export type SiteTemplate = {
   layout: LayoutItem[];
   nav: NavItem[];
   sections: Sections;
+  /** Free-form blocks added in the editor. Referenced from `layout` by their `id`. */
+  customBlocks: CustomBlock[];
 };
 
 /** Section ids the renderer knows how to draw. `layout` entries with any other id are skipped. */

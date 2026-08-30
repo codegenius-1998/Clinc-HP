@@ -12,9 +12,11 @@ export default async function AdminDashboardLayout({ children }: { children: Rea
   return (
     <div className="flex flex-1 flex-col">
       <AdminTopBar email={session.email} />
-      <div className="flex flex-1">
+      <div className="flex flex-1 flex-col md:flex-row">
         <AdminSidebar />
-        <main className="flex-1 overflow-y-auto bg-slate-50 px-10 py-10">{children}</main>
+        <main className="min-w-0 flex-1 overflow-y-auto bg-slate-50 px-4 py-6 md:px-10 md:py-10">
+          {children}
+        </main>
       </div>
     </div>
   );

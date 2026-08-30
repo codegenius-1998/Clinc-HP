@@ -5,7 +5,7 @@
  * The CSS and JS are identical for every site (see `staticAssets.ts`); all per-clinic variation is
  * in the section HTML and in the `--nj-*` custom properties set inline on the `.nj-site` element. */
 
-import type { SiteTemplate } from "./types";
+import type { SiteTemplate, CustomBlock } from "./types";
 import { CSS, CSS_ORDER, SITE_JS, BOTANICAL_DEFS, ASSET_SVGS } from "./staticAssets";
 
 // --- escaping --------------------------------------------------------------
@@ -468,9 +468,60 @@ ${links}
   </footer>`;
 }
 
+// --- free-form blocks (editor-inserted) -----------------------------------
+
+/** heading block, but only when a Japanese heading is set. */
+function optionalHeading(h: { ja: string; en: string }): string {
+  return h.ja ? `${headingBlock(h.ja, h.en)}\n` : "";
+}
+
+function customBlockHtml(block: CustomBlock, id: string, bg: string): string {
+  const mod = bg.includes("tint") ? "cblock--tint" : "cblock--paper";
+  const open = `  <section id="${esc(id)}" class="cblock ${mod} nj-reveal">\n    <div class="container">\n`;
+  const close = `    </div>\n  </section>`;
+
+  if (block.kind === "text") {
+    const paras = block.body
+      .filter((p) => p.trim())
+      .map((p) => `        <p>${esc(p)}</p>`)
+      .join("\n");
+    return `${open}${optionalHeading(block.heading)}      <div class="cblock__text${
+      block.align === "center" ? " is-center" : ""
+    }">\n${paras}\n      </div>\n${close}`;
+  }
+
+  if (block.kind === "image") {
+    const roomFallback = ["assets/room-1.svg", "assets/room-2.svg", "assets/room-3.svg"];
+    const figs = block.images
+      .map((im, i) => {
+        const src = im.src || roomFallback[i % 3];
+        return `        <figure><img src="${esc(src)}" alt="${esc(im.alt)}">${
+          im.alt ? `<figcaption>${esc(im.alt)}</figcaption>` : ""
+        }</figure>`;
+      })
+      .join("\n");
+    const caption = block.caption ? `      <p class="cblock__caption">${esc(block.caption)}</p>\n` : "";
+    return `${open}${optionalHeading(block.heading)}${caption}      <div class="cblock__images">\n${figs}\n      </div>\n${close}`;
+  }
+
+  // grid
+  const cards = block.items
+    .map((it) => {
+      const img = it.image.src
+        ? `          <img src="${esc(it.image.src)}" alt="${esc(it.image.alt)}">\n`
+        : "";
+      return `        <div class="cblock__card" data-nj-anim>\n${img}          <h3>${esc(
+        it.title
+      )}</h3>\n          <p>${esc(it.body)}</p>\n        </div>`;
+    })
+    .join("\n");
+  return `${open}${optionalHeading(block.heading)}      <div class="cblock__grid" data-cols="${block.columns}">\n${cards}\n      </div>\n${close}`;
+}
+
 // --- assembly --------------------------------------------------------------
 
-/** Section id → its markup. `bg` alternates paper/tint; philosophy ignores it (gradient band). */
+/** Section id → its markup. `bg` alternates paper/tint; philosophy ignores it (gradient band).
+ * Ids not matched below are looked up in `customBlocks`. */
 function sectionHtml(id: string, t: SiteTemplate, bg: string): string {
   switch (id) {
     case "hero":
@@ -497,8 +548,10 @@ function sectionHtml(id: string, t: SiteTemplate, bg: string): string {
       return accessHtml(t, bg);
     case "contact":
       return contactHtml(t, bg);
-    default:
-      return "";
+    default: {
+      const block = t.customBlocks.find((b) => b.id === id);
+      return block ? customBlockHtml(block, id, bg) : "";
+    }
   }
 }
 

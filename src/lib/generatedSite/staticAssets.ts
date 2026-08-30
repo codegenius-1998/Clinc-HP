@@ -1171,10 +1171,87 @@ body {
   border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 `,
+  // Hand-added (not from the hidamari bundle): styles for the free-form Text / Image / Grid blocks
+  // the site editor can insert. Token-driven like the rest, scoped under .nj-site.
+  "custom.css": `/* free-form blocks — text / image / grid, added via the site editor */
+.nj-site .cblock {
+  position: relative;
+  padding-block: var(--nj-section-pad);
+  overflow: clip;
+}
+.nj-site .cblock--paper { background: var(--nj-paper); }
+.nj-site .cblock--tint { background: var(--nj-tint); }
+
+.nj-site .cblock__text { max-width: 46em; margin-inline: auto; }
+.nj-site .cblock__text.is-center { text-align: center; }
+.nj-site .cblock__text p { font-size: 0.98rem; line-height: 2.05; color: var(--nj-ink); }
+.nj-site .cblock__text p + p { margin-top: var(--nj-s4); }
+
+.nj-site .cblock__caption {
+  max-width: 40em;
+  margin: 0 auto var(--nj-s5);
+  text-align: center;
+  font-size: 0.93rem;
+  line-height: 2;
+  color: var(--nj-ink-soft);
+}
+
+.nj-site .cblock__images {
+  display: grid;
+  gap: var(--nj-s4);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+}
+.nj-site .cblock__images figure { margin: 0; }
+.nj-site .cblock__images img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: var(--nj-radius-md);
+  border: 1px solid var(--nj-line);
+  background: color-mix(in srgb, var(--nj-tint) 55%, #fff);
+}
+.nj-site .cblock__images figcaption {
+  margin-top: var(--nj-s2);
+  text-align: center;
+  font-family: var(--nj-font-head);
+  font-size: 0.82rem;
+  color: var(--nj-ink-soft);
+}
+
+.nj-site .cblock__grid { display: grid; gap: var(--nj-s4); }
+.nj-site .cblock__grid[data-cols="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.nj-site .cblock__grid[data-cols="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.nj-site .cblock__grid[data-cols="4"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.nj-site .cblock__card {
+  padding: var(--nj-s5);
+  background: var(--nj-paper);
+  border: 1px solid var(--nj-line);
+  border-radius: var(--nj-radius-md);
+}
+.nj-site .cblock--tint .cblock__card { background: #fff; }
+.nj-site .cblock__card img {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  border-radius: var(--nj-radius-sm);
+  border: 1px solid var(--nj-line);
+  margin-bottom: var(--nj-s3);
+}
+.nj-site .cblock__card h3 { font-size: 1rem; color: var(--nj-ink); margin-bottom: var(--nj-s2); }
+.nj-site .cblock__card p { font-size: 0.88rem; line-height: 1.95; color: var(--nj-ink-soft); }
+
+@media (max-width: 720px) {
+  .nj-site .cblock__grid[data-cols="3"],
+  .nj-site .cblock__grid[data-cols="4"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 460px) {
+  .nj-site .cblock__grid { grid-template-columns: minmax(0, 1fr); }
+}
+`,
 };
 
 /** Order the <link> tags are emitted in (source order = cascade order). */
-export const CSS_ORDER = ["base.css","header.css","hero.css","greeting.css","medical.css","philosophy.css","gallery.css","schedule.css","fees.css","flow.css","faq.css","news.css","access.css","contact.css","footer.css"];
+export const CSS_ORDER = ["base.css","header.css","hero.css","greeting.css","medical.css","philosophy.css","gallery.css","schedule.css","fees.css","flow.css","faq.css","news.css","access.css","contact.css","custom.css","footer.css"];
 
 export const SITE_JS = `/*
  * nj-motion.js — /preview/<slug> 用の控えめな進歩的拡張。依存なし・1ファイル。

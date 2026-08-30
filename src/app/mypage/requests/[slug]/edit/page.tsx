@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import { getHearing } from "@/lib/hearing";
-import { readStoredTemplate } from "@/lib/buildSiteFromHearing";
-import { SiteEditor } from "@/components/siteEditor/SiteEditor";
+import { loadEditableSite } from "@/lib/generatedSiteEditor";
+import { SiteEditorOverview } from "@/components/siteEditor/SiteEditorOverview";
 
-/** /mypage/requests/<slug>/edit — the clinic owner's own copy of the site editor. Same component
- * and actions as the admin page; access is limited to the clinic_owner who submitted this sheet. */
+/** /mypage/requests/<slug>/edit — editor overview for the owning clinic_owner. Section content is
+ * edited on `/mypage/requests/<slug>/edit/<section>`. */
 export default async function OwnerEditSitePage({
   params,
 }: {
@@ -16,16 +15,14 @@ export default async function OwnerEditSitePage({
   if (session?.role !== "clinic_owner") redirect("/login");
 
   const { slug } = await params;
-  const hearing = await getHearing(slug);
-  if (!hearing || hearing.ownerEmail !== session.email) notFound();
+  const loaded = await loadEditableSite(slug);
+  if (!loaded || loaded.hearing.ownerEmail !== session.email) notFound();
 
-  const template = hearing.generatedSite?.template ?? (await readStoredTemplate(slug));
-
-  if (!template) {
+  if (!loaded.template) {
     return (
       <div className="border border-line bg-paper p-8 text-center">
         <p className="text-[14px] leading-[1.9] text-ink-soft">
-          「{hearing.clinicName}」のホームページはまだ作成されていません。作成後に編集できます。
+          「{loaded.hearing.clinicName}」のホームページはまだ作成されていません。作成後に編集できます。
         </p>
         <Link
           href="/mypage/requests"
@@ -38,13 +35,14 @@ export default async function OwnerEditSitePage({
   }
 
   return (
-    <SiteEditor
+    <SiteEditorOverview
       slug={slug}
-      clinicName={hearing.clinicName}
-      initialTemplate={template}
+      clinicName={loaded.hearing.clinicName}
+      initialTemplate={loaded.template}
       initialUrl={`/api/generated/${slug}/`}
       backHref="/mypage/requests"
       backLabel="申請一覧"
+      editBase={`/mypage/requests/${slug}/edit`}
     />
   );
 }

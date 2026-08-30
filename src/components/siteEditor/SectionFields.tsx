@@ -1,6 +1,6 @@
 "use client";
 
-import type { SiteTemplate } from "@/lib/generatedSite/types";
+import type { SiteTemplate, CustomBlock } from "@/lib/generatedSite/types";
 import {
   TextField,
   TextArea,
@@ -22,6 +22,11 @@ type Props = {
 const MEDICAL_ICONS = ["skin", "child", "sparkle", "care", "tooth", "eye", "bone", "heart", "allergy", "general"];
 
 export function SectionFields({ id, template, onChange, slug }: Props) {
+  const custom = template.customBlocks.find((b) => b.id === id);
+  if (custom) {
+    return <CustomBlockFields block={custom} template={template} onChange={onChange} slug={slug} />;
+  }
+
   const S = template.sections;
 
   /** Replace one section object with a merged copy. */
@@ -93,8 +98,8 @@ export function SectionFields({ id, template, onChange, slug }: Props) {
             <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">診療カード</span>
             {S.medical.items.map((it, i) => (
               <div key={i} className="flex flex-col gap-2 rounded-md border border-slate-200 p-2.5">
-                <div className="flex gap-2">
-                  <div className="w-28">
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <div className="w-full sm:w-28">
                     <SelectField
                       label="アイコン"
                       value={it.icon}
@@ -291,8 +296,8 @@ export function SectionFields({ id, template, onChange, slug }: Props) {
                 }
               />
               {g.items.map((it, ii) => (
-                <div key={ii} className="flex gap-1.5">
-                  <div className="flex-1">
+                <div key={ii} className="flex flex-wrap items-start gap-1.5 sm:flex-nowrap">
+                  <div className="min-w-[8rem] flex-1">
                     <TextField
                       label="項目"
                       value={it.name}
@@ -307,7 +312,7 @@ export function SectionFields({ id, template, onChange, slug }: Props) {
                       }
                     />
                   </div>
-                  <div className="w-28">
+                  <div className="w-full sm:w-28">
                     <TextField
                       label="金額"
                       value={it.price}
@@ -325,7 +330,7 @@ export function SectionFields({ id, template, onChange, slug }: Props) {
                   <button
                     type="button"
                     aria-label="削除"
-                    className="mt-5 shrink-0 px-1 text-[12px] text-slate-400 hover:text-red-600"
+                    className="shrink-0 p-2 text-[13px] text-slate-400 hover:text-red-600 sm:mt-4"
                     onClick={() =>
                       set("fees", {
                         groups: S.fees.groups.map((x, j) =>
@@ -466,8 +471,8 @@ export function SectionFields({ id, template, onChange, slug }: Props) {
         <>
           <HeadingField id="news" template={template} onChange={onChange} />
           {S.news.items.map((it, i) => (
-            <div key={i} className="flex gap-1.5">
-              <div className="w-28">
+            <div key={i} className="flex flex-wrap items-start gap-1.5 sm:flex-nowrap">
+              <div className="w-full sm:w-28">
                 <TextField
                   label="日付"
                   value={it.date}
@@ -602,11 +607,11 @@ function HeadingField({
       },
     });
   return (
-    <div className="flex gap-2">
+    <div className="flex flex-col gap-2 sm:flex-row">
       <div className="flex-1">
         <TextField label="見出し（和）" value={sec.heading.ja} onChange={(ja) => setHeading({ ja })} />
       </div>
-      <div className="w-28">
+      <div className="w-full sm:w-28">
         <TextField label="英字" value={sec.heading.en} onChange={(en) => setHeading({ en })} />
       </div>
     </div>
@@ -651,5 +656,184 @@ function ParagraphList({
         ＋ 段落を追加
       </button>
     </div>
+  );
+}
+
+// --- custom (free-form) blocks: text / image / grid ----------------------
+
+const cardBox = "flex flex-col gap-2 rounded-md border border-slate-200 p-2.5";
+const delLink = "self-end text-[12px] text-slate-400 hover:text-red-600";
+const addDashed =
+  "self-start rounded-md border border-dashed border-slate-300 px-2 py-1 text-[12px] text-slate-500 hover:border-slate-400 hover:text-slate-700";
+
+function CustomBlockFields({
+  block,
+  template,
+  onChange,
+  slug,
+}: {
+  block: CustomBlock;
+  template: SiteTemplate;
+  onChange: (t: SiteTemplate) => void;
+  slug: string;
+}) {
+  const replace = (next: CustomBlock) =>
+    onChange({
+      ...template,
+      customBlocks: template.customBlocks.map((b) => (b.id === next.id ? next : b)),
+    });
+
+  const headingFields = (
+    <div className="flex flex-col gap-2 sm:flex-row">
+      <div className="flex-1">
+        <TextField
+          label="見出し（和・空欄で非表示）"
+          value={block.heading.ja}
+          onChange={(ja) => replace({ ...block, heading: { ...block.heading, ja } })}
+        />
+      </div>
+      <div className="w-full sm:w-28">
+        <TextField
+          label="英字"
+          value={block.heading.en}
+          onChange={(en) => replace({ ...block, heading: { ...block.heading, en } })}
+        />
+      </div>
+    </div>
+  );
+
+  if (block.kind === "text") {
+    return (
+      <>
+        {headingFields}
+        <SelectField
+          label="文章の配置"
+          value={block.align}
+          options={[
+            { value: "left", label: "左寄せ" },
+            { value: "center", label: "中央寄せ" },
+          ]}
+          onChange={(v) => replace({ ...block, align: v === "center" ? "center" : "left" })}
+        />
+        <ParagraphList
+          label="本文（段落）"
+          items={block.body}
+          onChange={(body) => replace({ ...block, body })}
+        />
+      </>
+    );
+  }
+
+  if (block.kind === "image") {
+    return (
+      <>
+        {headingFields}
+        <TextArea
+          label="説明文（任意・写真の上に表示）"
+          rows={2}
+          value={block.caption}
+          onChange={(caption) => replace({ ...block, caption })}
+        />
+        {block.images.map((im, i) => (
+          <div key={i} className={cardBox}>
+            <ImageField
+              label={`写真 ${i + 1}`}
+              src={im.src}
+              slug={slug}
+              aiKind="interior"
+              aiHint={`${template.brand.name} ${block.heading.ja}`}
+              onChange={(src) =>
+                replace({ ...block, images: block.images.map((x, j) => (j === i ? { ...x, src } : x)) })
+              }
+            />
+            <TextField
+              label="キャプション（任意）"
+              value={im.alt}
+              onChange={(alt) =>
+                replace({ ...block, images: block.images.map((x, j) => (j === i ? { ...x, alt } : x)) })
+              }
+            />
+            <button
+              type="button"
+              className={delLink}
+              onClick={() => replace({ ...block, images: block.images.filter((_, j) => j !== i) })}
+            >
+              この写真を削除
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          className={addDashed}
+          onClick={() => replace({ ...block, images: [...block.images, { src: null, alt: "" }] })}
+        >
+          ＋ 写真を追加
+        </button>
+      </>
+    );
+  }
+
+  // grid
+  return (
+    <>
+      {headingFields}
+      <SelectField
+        label="列数"
+        value={String(block.columns)}
+        options={[2, 3, 4].map((n) => ({ value: String(n), label: `${n}列` }))}
+        onChange={(v) => replace({ ...block, columns: (Number(v) === 2 ? 2 : Number(v) === 4 ? 4 : 3) })}
+      />
+      {block.items.map((it, i) => (
+        <div key={i} className={cardBox}>
+          <TextField
+            label="タイトル"
+            value={it.title}
+            onChange={(title) =>
+              replace({ ...block, items: block.items.map((x, j) => (j === i ? { ...x, title } : x)) })
+            }
+          />
+          <TextArea
+            label="説明"
+            rows={2}
+            value={it.body}
+            onChange={(body) =>
+              replace({ ...block, items: block.items.map((x, j) => (j === i ? { ...x, body } : x)) })
+            }
+          />
+          <ImageField
+            label="画像（任意）"
+            src={it.image.src}
+            slug={slug}
+            aiKind="interior"
+            aiHint={`${template.brand.name} ${it.title}`}
+            onChange={(src) =>
+              replace({
+                ...block,
+                items: block.items.map((x, j) => (j === i ? { ...x, image: { ...x.image, src } } : x)),
+              })
+            }
+          />
+          <button
+            type="button"
+            className={delLink}
+            onClick={() => replace({ ...block, items: block.items.filter((_, j) => j !== i) })}
+          >
+            このカードを削除
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        className={addDashed}
+        onClick={() =>
+          replace({
+            ...block,
+            items: [...block.items, { title: "項目名", body: "説明文", image: { src: null, alt: "" } }],
+          })
+        }
+      >
+        ＋ カードを追加
+      </button>
+    </>
   );
 }

@@ -1,13 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
-import { getHearing } from "@/lib/hearing";
-import { readStoredTemplate } from "@/lib/buildSiteFromHearing";
-import { SiteEditor } from "@/components/siteEditor/SiteEditor";
+import { loadEditableSite } from "@/lib/generatedSiteEditor";
+import { SiteEditorOverview } from "@/components/siteEditor/SiteEditorOverview";
 
-/** /admin/requests/<slug>/edit — hand-edit the generated clinic site: text, images, colours, fonts,
- * section order. Loads the template stored on the hearing row (falling back to the bundle's
- * template.json) and re-renders the static bundle on save. */
+/** /admin/requests/<slug>/edit — editor overview: theme + section list. Section content is edited
+ * on `/admin/requests/<slug>/edit/<section>`. */
 export default async function EditGeneratedSitePage({
   params,
 }: {
@@ -15,17 +13,13 @@ export default async function EditGeneratedSitePage({
 }) {
   await requireAdmin();
   const { slug } = await params;
-  const hearing = await getHearing(slug);
-  if (!hearing) notFound();
+  const loaded = await loadEditableSite(slug);
+  if (!loaded) notFound();
 
-  const template = hearing.generatedSite?.template ?? (await readStoredTemplate(slug));
-
-  if (!template) {
+  if (!loaded.template) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center">
-        <p className="text-slate-600">
-          「{hearing.clinicName}」のサイトはまだ生成されていません。
-        </p>
+        <p className="text-slate-600">「{loaded.hearing.clinicName}」のサイトはまだ生成されていません。</p>
         <Link
           href="/admin/requests"
           className="mt-4 inline-block text-[13px] text-blue-600 underline underline-offset-4"
@@ -37,11 +31,14 @@ export default async function EditGeneratedSitePage({
   }
 
   return (
-    <SiteEditor
+    <SiteEditorOverview
       slug={slug}
-      clinicName={hearing.clinicName}
-      initialTemplate={template}
+      clinicName={loaded.hearing.clinicName}
+      initialTemplate={loaded.template}
       initialUrl={`/api/generated/${slug}/`}
+      backHref="/admin/requests"
+      backLabel="リクエスト一覧"
+      editBase={`/admin/requests/${slug}/edit`}
     />
   );
 }

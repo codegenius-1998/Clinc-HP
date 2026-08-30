@@ -25,8 +25,8 @@ export default async function AdminRequestsPage() {
         description="クリニックオーナーから送信されたホームページ作成申請の一覧です。"
       />
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-        <table className="w-full text-left text-[15px]">
+      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+        <table className="w-full min-w-[36rem] text-left text-[15px]">
           <thead className="border-b border-slate-100 bg-slate-50 text-slate-500">
             <tr>
               <th className="px-4 py-3 font-medium">クリニック名</th>

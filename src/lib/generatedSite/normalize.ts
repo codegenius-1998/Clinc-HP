@@ -14,8 +14,9 @@ import type {
   NavItem,
   ThemeColors,
   ThemeWashes,
+  CustomBlock,
 } from "./types";
-import { KNOWN_SECTION_IDS } from "./types";
+import { KNOWN_SECTION_IDS, CUSTOM_BLOCK_KINDS } from "./types";
 import { resolveFontTheme } from "./fonts";
 import { ensureReadable, parseHex, relativeLuminance } from "./color";
 
@@ -95,17 +96,6 @@ function imageSlot(v: unknown, alt: string): ImageSlot {
   return { src, alt: str(r.alt, alt) };
 }
 
-function navItems(v: unknown, fallback: NavItem[]): NavItem[] {
-  if (!Array.isArray(v)) return fallback;
-  const out: NavItem[] = [];
-  for (const x of v) {
-    if (!isRecord(x)) continue;
-    const href = str(x.href);
-    const label = str(x.label);
-    if (href.startsWith("#") && label) out.push({ href, label });
-  }
-  return out.length ? out : fallback;
-}
 
 function objArray<T>(v: unknown, map: (r: Record<string, unknown>) => T | null): T[] {
   if (!Array.isArray(v)) return [];
@@ -176,6 +166,62 @@ const FAQ_DEFAULT = [
   { q: "初診で必要なものはありますか？", a: "健康保険証をお持ちください。他の医療機関のお薬があれば、お薬手帳もご持参ください。" },
   { q: "駐車場はありますか？", a: "詳しくはアクセスをご確認ください。近隣のコインパーキングもご利用いただけます。" },
 ];
+
+// --- custom blocks -----------------------------------------------------
+
+function normalizeCustomBlocks(v: unknown): CustomBlock[] {
+  if (!Array.isArray(v)) return [];
+  const out: CustomBlock[] = [];
+  const seen = new Set<string>();
+  for (const raw of v) {
+    if (!isRecord(raw)) continue;
+    const kind = str(raw.kind);
+    if (!(CUSTOM_BLOCK_KINDS as readonly string[]).includes(kind)) continue;
+    let id = str(raw.id);
+    if (!/^[a-z]+-\d+$/.test(id) || seen.has(id)) id = `${kind}-${out.length + 1}`;
+    while (seen.has(id)) id = `${kind}-${out.length + 1 + Math.floor(Math.random() * 1000)}`;
+    seen.add(id);
+    const h = heading(raw.heading, "", "Section");
+
+    if (kind === "text") {
+      const body = strArray(raw.body);
+      out.push({
+        id,
+        kind: "text",
+        heading: h,
+        align: raw.align === "center" ? "center" : "left",
+        body: body.length ? body : ["ここに本文を入力します。"],
+      });
+    } else if (kind === "image") {
+      const images = Array.isArray(raw.images)
+        ? raw.images.map((im) => imageSlot(im, "")).slice(0, 12)
+        : [];
+      out.push({
+        id,
+        kind: "image",
+        heading: h,
+        caption: str(raw.caption),
+        images: images.length ? images : [{ src: null, alt: "" }],
+      });
+    } else {
+      const cols = raw.columns === 2 || raw.columns === 4 ? raw.columns : 3;
+      const items = objArray<{ title: string; body: string; image: ImageSlot }>(raw.items, (it) => {
+        const title = str(it.title);
+        const body = str(it.body);
+        if (!title && !body) return null;
+        return { title, body, image: imageSlot(it.image, "") };
+      });
+      out.push({
+        id,
+        kind: "grid",
+        heading: h,
+        columns: cols,
+        items: items.length ? items : [{ title: "項目", body: "説明文", image: { src: null, alt: "" } }],
+      });
+    }
+  }
+  return out;
+}
 
 // --- main ----------------------------------------------------------------
 
@@ -311,6 +357,12 @@ export function normalizeTemplate(raw: unknown, ctx: NormalizeContext | string):
     philosophyBody = PHILOSOPHY_DEFAULT.body;
   }
 
+  // --- custom (editor-inserted) blocks ---
+  const customBlocks = normalizeCustomBlocks(r.customBlocks);
+  const customIds = new Set(customBlocks.map((b) => b.id));
+  const customLabel = (id: string) =>
+    customBlocks.find((b) => b.id === id)?.heading.ja || "セクション";
+
   // --- layout ---
   const hasOptionalContent: Record<string, boolean> = {
     gallery: galleryItems.length > 0,
@@ -320,7 +372,10 @@ export function normalizeTemplate(raw: unknown, ctx: NormalizeContext | string):
 
   const rawLayout = (Array.isArray(r.layout) ? r.layout : [])
     .map((x) => (isRecord(x) ? { id: str(x.id), kind: str(x.kind, str(x.id)) } : null))
-    .filter((x): x is { id: string; kind: string } => !!x && (KNOWN_SECTION_IDS as readonly string[]).includes(x.id));
+    .filter(
+      (x): x is { id: string; kind: string } =>
+        !!x && ((KNOWN_SECTION_IDS as readonly string[]).includes(x.id) || customIds.has(x.id))
+    );
   const rawIds = new Set(rawLayout.map((x) => x.id));
 
   let layout: { id: string; kind: string }[];
@@ -331,22 +386,26 @@ export function normalizeTemplate(raw: unknown, ctx: NormalizeContext | string):
     layout = SECTION_ORDER.filter(
       (id) => BASELINE.has(id) || rawIds.has(id) || hasOptionalContent[id]
     ).map((id) => ({ id, kind: id }));
+    // custom blocks only enter via an explicit layout — append any the caller listed
+    for (const item of rawLayout) if (customIds.has(item.id)) layout.push(item);
   }
   const inLayout = (id: string) => layout.some((l) => l.id === id);
+  const label = (id: string) => NAV_LABELS[id] ?? customLabel(id);
+  // custom blocks only get a nav link once they have a heading to name it
+  const navigable = (id: string) =>
+    !customIds.has(id) || Boolean(customBlocks.find((b) => b.id === id)?.heading.ja);
 
-  const defaultNav: NavItem[] = layout
-    .filter((l) => l.id !== "contact")
-    .map((l) => ({ href: `#${l.id}`, label: NAV_LABELS[l.id] ?? l.id }));
-  const nav = navItems(r.nav, defaultNav).filter((n) => inLayout(n.href.slice(1)));
-  const finalNav = nav.length ? nav : defaultNav;
+  // Nav and footer nav are always derived from the final layout — the model's / editor's own nav
+  // arrays are ignored so they can never drift out of sync with the sections that exist.
+  const finalNav: NavItem[] = layout
+    .filter((l) => l.id !== "contact" && navigable(l.id))
+    .map((l) => ({ href: `#${l.id}`, label: label(l.id) }));
+  const finalFooterNav: NavItem[] = layout
+    .filter((l) => l.id !== "hero" && navigable(l.id))
+    .map((l) => ({ href: `#${l.id}`, label: label(l.id) }));
 
-  const footerNav = navItems(footerRaw.nav, layout
-    .filter((l) => l.id !== "hero")
-    .map((l) => ({ href: `#${l.id}`, label: NAV_LABELS[l.id] ?? l.id })))
-    .filter((n) => inLayout(n.href.slice(1)));
-  const finalFooterNav = footerNav.length
-    ? footerNav
-    : layout.filter((l) => l.id !== "hero").map((l) => ({ href: `#${l.id}`, label: NAV_LABELS[l.id] ?? l.id }));
+  // drop orphan blocks (present in customBlocks but not in layout — e.g. removed then re-added)
+  const usedCustomBlocks = customBlocks.filter((b) => inLayout(b.id));
 
   return {
     meta: {
@@ -370,6 +429,7 @@ export function normalizeTemplate(raw: unknown, ctx: NormalizeContext | string):
     },
     layout,
     nav: finalNav,
+    customBlocks: usedCustomBlocks,
     sections: {
       hero: {
         image: imageSlot(heroRaw.image, ""),

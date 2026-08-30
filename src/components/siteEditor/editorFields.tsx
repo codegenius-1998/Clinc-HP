@@ -110,15 +110,15 @@ export function ColorField({
         type="color"
         value={safe}
         onChange={(e) => onChange(e.target.value)}
-        className="h-8 w-8 shrink-0 cursor-pointer rounded border border-slate-300 bg-white p-0.5"
+        className="h-9 w-9 shrink-0 cursor-pointer rounded border border-slate-300 bg-white p-0.5"
         aria-label={label}
       />
-      <span className="w-28 shrink-0 text-[12px] text-slate-600">{label}</span>
+      <span className="w-20 shrink-0 text-[12px] text-slate-600 sm:w-28">{label}</span>
       <input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className={`${inputBase} font-mono`}
+        className={`${inputBase} min-w-0 font-mono`}
       />
     </label>
   );
@@ -192,7 +192,7 @@ export function StringListField({
           <button
             type="button"
             onClick={() => remove(i)}
-            className="shrink-0 rounded px-1.5 py-1 text-[12px] text-slate-400 hover:bg-slate-100 hover:text-red-600"
+            className="shrink-0 rounded p-2 text-[13px] text-slate-400 hover:bg-slate-100 hover:text-red-600"
             aria-label="削除"
           >
             ✕
@@ -318,10 +318,9 @@ export function ImageField({
 
 export function Group({ title, children, open }: { title: string; children: React.ReactNode; open?: boolean }) {
   return (
-    <details open={open} className="group rounded-lg border border-slate-200 bg-white [&_summary]:list-none">
-      <summary className="flex cursor-pointer items-center justify-between px-3 py-2.5 text-[13px] font-semibold text-slate-800">
+    <details open={open} className="rounded-lg border border-slate-200 bg-white">
+      <summary className="cursor-pointer select-none rounded-lg px-3 py-2.5 text-[13px] font-semibold text-slate-800 marker:text-slate-400 hover:bg-slate-50">
         {title}
-        <span className="text-[11px] font-normal text-slate-400">開閉</span>
       </summary>
       <div className="flex flex-col gap-3 border-t border-slate-100 px-3 py-3">{children}</div>
     </details>
