@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { listHearings } from "@/lib/hearing";
 import { deleteRequestAction } from "@/lib/contentActions";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
@@ -42,10 +43,20 @@ export default async function AdminRequestsPage() {
                 <td className="px-4 py-3 text-slate-500">{hearing.ownerEmail ?? "—"}</td>
                 <td className="px-4 py-3 text-slate-400">{formatDate(hearing.createdAt)}</td>
                 <td className="px-4 py-3">
-                  <GenerateSiteButton
-                    slug={hearing.slug}
-                    previewUrl={hearing.generatedSite ? `/api/generated/${hearing.slug}/` : undefined}
-                  />
+                  <div className="flex flex-col items-end gap-1.5">
+                    <GenerateSiteButton
+                      slug={hearing.slug}
+                      previewUrl={hearing.generatedSite ? `/api/generated/${hearing.slug}/` : undefined}
+                    />
+                    {hearing.generatedSite && (
+                      <Link
+                        href={`/admin/requests/${hearing.slug}/edit`}
+                        className="text-[13px] text-slate-600 underline underline-offset-4 hover:text-slate-900"
+                      >
+                        編集
+                      </Link>
+                    )}
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-right">
                   <ConfirmDeleteButton

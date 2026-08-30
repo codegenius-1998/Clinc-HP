@@ -7,7 +7,7 @@
  * This is an admin-triggered, synchronous operation — see `generateSiteAction` in
  * src/lib/contentActions.ts. It takes tens of seconds (mostly image generation). */
 
-import { mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdir, writeFile, rm, readFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 
@@ -24,10 +24,37 @@ export type BuildResult = {
   slug: string;
   /** App path the bundle is served under (see src/app/api/generated/[slug]/[[...path]]/route.ts). */
   url: string;
+  /** The normalised template the bundle was rendered from — persisted on the hearing row so the
+   * site editor has a source of truth that survives the bundle dir being wiped. */
+  template: SiteTemplate;
   imagesGenerated: number;
   imagesFromUploads: number;
   warnings: string[];
 };
+
+/** Reads the template.json a previous build left in the bundle dir. The hearing row's stored copy
+ * is preferred by callers; this is the fallback when that is absent. */
+export async function readStoredTemplate(slug: string): Promise<SiteTemplate | null> {
+  try {
+    const raw = await readFile(path.join(GENERATED_ROOT, slug, "template.json"), "utf8");
+    return JSON.parse(raw) as SiteTemplate;
+  } catch {
+    return null;
+  }
+}
+
+/** Renders `template` and writes the full bundle to public/_generated/<slug>/, replacing any
+ * previous contents. Used by the generator and by the editor's save action (no OpenAI involved). */
+export async function writeBundle(slug: string, template: SiteTemplate): Promise<void> {
+  const files = renderBundle(template);
+  const dir = path.join(GENERATED_ROOT, slug);
+  await rm(dir, { recursive: true, force: true });
+  for (const [rel, content] of Object.entries(files)) {
+    const full = path.join(dir, rel);
+    await mkdir(path.dirname(full), { recursive: true });
+    await writeFile(full, content, "utf8");
+  }
+}
 
 // --- prompt ----------------------------------------------------------------
 
@@ -149,7 +176,11 @@ export async function buildSiteFromHearing(hearing: HearingSheet): Promise<Build
     temperature: 0.7,
     maxTokens: 4000,
   });
-  const template: SiteTemplate = normalizeTemplate(raw, hearing.clinicName);
+  const template: SiteTemplate = normalizeTemplate(raw, {
+    brandName: hearing.clinicName,
+    department: hearing.department,
+    hours: hearing.hours,
+  });
 
   // Contact facts always come from the sheet when present (never let the model override them).
   if (hearing.phone) template.contact.phone = hearing.phone;
@@ -217,18 +248,12 @@ export async function buildSiteFromHearing(hearing: HearingSheet): Promise<Build
   }
 
   // 3. render + write
-  const files = renderBundle(template);
-  const dir = path.join(GENERATED_ROOT, hearing.slug);
-  await rm(dir, { recursive: true, force: true });
-  for (const [rel, content] of Object.entries(files)) {
-    const full = path.join(dir, rel);
-    await mkdir(path.dirname(full), { recursive: true });
-    await writeFile(full, content, "utf8");
-  }
+  await writeBundle(hearing.slug, template);
 
   return {
     slug: hearing.slug,
     url: `/api/generated/${hearing.slug}/`,
+    template,
     imagesGenerated,
     imagesFromUploads,
     warnings,
@@ -237,4 +262,75 @@ export async function buildSiteFromHearing(hearing: HearingSheet): Promise<Build
 
 function msg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
+}
+
+// --- editor helpers (no bundle write; caller decides when to save) ----------
+
+const SECTION_SYSTEM = `あなたは日本の個人クリニックのホームページのコピーライターです。
+指定された1つのセクションの内容だけを、より自然で具体的な日本語に書き直し、そのセクションの
+JSONオブジェクトだけを返してください（前後の説明・マークダウンは書かない）。キー構成は入力と
+同じに保つこと。事実の創作はしない（装置名・資格・症例数・存在しない予約手段など）。`;
+
+/** Rewrites one section's copy via OpenAI and returns a new, fully-normalised template. The layout
+ * and every other section are preserved. Nothing is written to disk. */
+export async function regenerateSectionText(
+  hearing: HearingSheet,
+  template: SiteTemplate,
+  sectionId: string
+): Promise<SiteTemplate> {
+  if (!isOpenAiConfigured()) {
+    throw new Error("OpenAIが設定されていません（OPENAI_API_KEY）。");
+  }
+  const current = (template.sections as Record<string, unknown>)[sectionId];
+  if (current === undefined) throw new Error(`不明なセクションです: ${sectionId}`);
+
+  const context = {
+    clinicName: hearing.clinicName,
+    department: hearing.department || null,
+    features: hearing.features || null,
+    targetNames: hearing.targetNames ?? [],
+    freeTextRequest: hearing.request || null,
+  };
+  const revised = await openaiJSON<Record<string, unknown>>({
+    system: SECTION_SYSTEM,
+    user: `クリニック情報:\n${JSON.stringify(context, null, 2)}\n\n書き直すセクション「${sectionId}」の現在の内容:\n${JSON.stringify(
+      current,
+      null,
+      2
+    )}`,
+    temperature: 0.8,
+    maxTokens: 1500,
+  });
+
+  const merged: SiteTemplate = {
+    ...template,
+    sections: {
+      ...template.sections,
+      [sectionId]: { ...(current as object), ...revised },
+    } as SiteTemplate["sections"],
+  };
+  return normalizeTemplate(merged, {
+    brandName: hearing.clinicName,
+    department: hearing.department,
+    hours: hearing.hours,
+    trustLayout: true,
+  });
+}
+
+/** Generates one photo via OpenAI, uploads it to Supabase Storage, and returns its public URL. */
+export async function generateOneImage(
+  slug: string,
+  kind: "portrait" | "interior" | "exterior",
+  hint: string
+): Promise<string> {
+  if (!isOpenAiConfigured()) throw new Error("OpenAIが設定されていません（OPENAI_API_KEY）。");
+  if (!isStorageConfigured()) {
+    throw new Error("Supabase Storage が未設定のため画像を保存できません（SUPABASE_URL / SUPABASE_ANON_KEY）。");
+  }
+  const prompt =
+    kind === "portrait"
+      ? doctorPrompt(hint || "医師", hint)
+      : `${IMAGE_BASE} ${hint}`;
+  const size: ImageSize = kind === "portrait" ? "1024x1536" : "1536x1024";
+  return generateAndUpload(slug, kind, prompt, size);
 }

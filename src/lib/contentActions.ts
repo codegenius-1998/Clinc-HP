@@ -1,9 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireAdmin, createUser, deleteUser } from "./auth";
-import { deleteHearing, getHearing, saveHearing } from "./hearing";
-import { buildSiteFromHearing } from "./buildSiteFromHearing";
+import { requireAdmin, getSession, createUser, deleteUser } from "./auth";
+import { deleteHearing, getHearing, saveHearing, type HearingSheet } from "./hearing";
+import {
+  buildSiteFromHearing,
+  writeBundle,
+  regenerateSectionText,
+  generateOneImage,
+} from "./buildSiteFromHearing";
+import { normalizeTemplate } from "./generatedSite/normalize";
+import type { SiteTemplate } from "./generatedSite/types";
 import {
   createDepartmentWithServices,
   updateDepartment,
@@ -85,6 +92,7 @@ export async function generateSiteAction(slug: string): Promise<GenerateSiteResu
         at: new Date().toISOString(),
         imagesGenerated: result.imagesGenerated,
         imagesFromUploads: result.imagesFromUploads,
+        template: result.template,
       },
     });
     revalidatePath("/admin/requests");
@@ -97,6 +105,93 @@ export async function generateSiteAction(slug: string): Promise<GenerateSiteResu
     };
   } catch (err) {
     return { ok: false, error: errorMessage(err, "サイト生成に失敗しました。") };
+  }
+}
+
+// --- Generated-site editor (admin OR the owning clinic_owner) ---
+
+/** The admin and the clinic_owner who submitted the sheet may both edit its generated site.
+ * Server Actions are directly POST-able, so this guard runs at the top of every editor action —
+ * a page-level check is not enough (see src/lib/auth.ts). */
+async function requireSiteEditAccess(slug: string): Promise<HearingSheet> {
+  const session = await getSession();
+  if (!session) throw new Error("ログインが必要です。");
+  const hearing = await getHearing(slug);
+  if (!hearing) throw new Error("リクエストが見つかりません。");
+  if (session.role === "admin") return hearing;
+  if (session.role === "clinic_owner" && hearing.ownerEmail === session.email) return hearing;
+  throw new Error("権限がありません。");
+}
+
+export type SaveTemplateResult = { ok: true; url: string } | { ok: false; error: string };
+
+/** Re-renders the static bundle from an edited template and persists it. No OpenAI. */
+export async function saveGeneratedTemplateAction(
+  slug: string,
+  template: SiteTemplate
+): Promise<SaveTemplateResult> {
+  try {
+    const hearing = await requireSiteEditAccess(slug);
+    const normalized = normalizeTemplate(template, {
+      brandName: hearing.clinicName,
+      department: hearing.department,
+      hours: hearing.hours,
+      trustLayout: true,
+    });
+    await writeBundle(slug, normalized);
+    await saveHearing({
+      ...hearing,
+      generatedSite: {
+        at: hearing.generatedSite?.at ?? new Date().toISOString(),
+        editedAt: new Date().toISOString(),
+        imagesGenerated: hearing.generatedSite?.imagesGenerated,
+        imagesFromUploads: hearing.generatedSite?.imagesFromUploads,
+        template: normalized,
+      },
+    });
+    revalidatePath("/admin/requests");
+    revalidatePath("/mypage/requests");
+    return { ok: true, url: `/api/generated/${slug}/` };
+  } catch (err) {
+    return { ok: false, error: errorMessage(err, "保存に失敗しました。") };
+  }
+}
+
+export type RegenerateSectionResult =
+  | { ok: true; template: SiteTemplate }
+  | { ok: false; error: string };
+
+/** Rewrites one section's copy via OpenAI. Returns the updated template; the editor decides when to
+ * save. Admin or owning clinic_owner. */
+export async function regenerateSectionAction(
+  slug: string,
+  sectionId: string,
+  template: SiteTemplate
+): Promise<RegenerateSectionResult> {
+  try {
+    const hearing = await requireSiteEditAccess(slug);
+    const next = await regenerateSectionText(hearing, template, sectionId);
+    return { ok: true, template: next };
+  } catch (err) {
+    return { ok: false, error: errorMessage(err, "再生成に失敗しました。") };
+  }
+}
+
+export type GenerateImageResult = { ok: true; url: string } | { ok: false; error: string };
+
+/** Generates one photo via OpenAI and returns its stored URL. The editor patches the template and
+ * saves separately. Admin or owning clinic_owner. */
+export async function generateImageAction(
+  slug: string,
+  kind: "portrait" | "interior" | "exterior",
+  hint: string
+): Promise<GenerateImageResult> {
+  try {
+    await requireSiteEditAccess(slug);
+    const url = await generateOneImage(slug, kind, hint || "院内の様子");
+    return { ok: true, url };
+  } catch (err) {
+    return { ok: false, error: errorMessage(err, "画像生成に失敗しました。") };
   }
 }
 

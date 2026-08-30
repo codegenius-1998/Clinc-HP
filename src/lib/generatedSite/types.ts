@@ -41,6 +41,9 @@ export type Theme = {
   washes: ThemeWashes;
   botanicalStroke: string;
   fonts: ThemeFonts;
+  /** Global type-size multiplier applied to the page root (`html { font-size }`). 1 = default.
+   * The editor exposes this as a 0.9–1.15 slider; the renderer only emits an override when ≠ 1. */
+  fontScale: number;
 };
 
 export type LayoutItem = { id: string; kind: string };

@@ -1,0 +1,604 @@
+<meta charset="utf-8">
+<title>クリニックサイト運営費</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+  :root {
+    --ground: #fbfcfc;
+    --surface: #ffffff;
+    --surface-sunk: #f4f7f6;
+    --ink: #1b2a2d;
+    --ink-soft: #56696d;
+    --ink-faint: #859098;
+    --hair: #dde5e4;
+    --hair-strong: #c7d3d1;
+    --accent: #1f8a7a;
+    --accent-deep: #16665a;
+    --accent-wash: #e6f1ee;
+    --note: #b0741a;
+    --note-wash: #f7efe2;
+    --shadow: 0 1px 2px rgba(20, 40, 42, .04), 0 8px 24px rgba(20, 40, 42, .05);
+
+    --step: clamp(1.6rem, 1.1rem + 1.4vw, 2.1rem);
+    --measure: 44rem;
+
+    --f-display: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", "Yu Gothic", system-ui, sans-serif;
+    --f-body: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", "Yu Gothic", system-ui, sans-serif;
+    --f-latin: "IBM Plex Sans", "Zen Kaku Gothic New", system-ui, sans-serif;
+    --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0e1417;
+      --surface: #151d20;
+      --surface-sunk: #10171a;
+      --ink: #e7edec;
+      --ink-soft: #a3b2b2;
+      --ink-faint: #78888a;
+      --hair: #263236;
+      --hair-strong: #33444a;
+      --accent: #4bb3a0;
+      --accent-deep: #7fd0c1;
+      --accent-wash: #16302c;
+      --note: #d69a4e;
+      --note-wash: #2c2418;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 30px rgba(0, 0, 0, .35);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #0e1417;
+    --surface: #151d20;
+    --surface-sunk: #10171a;
+    --ink: #e7edec;
+    --ink-soft: #a3b2b2;
+    --ink-faint: #78888a;
+    --hair: #263236;
+    --hair-strong: #33444a;
+    --accent: #4bb3a0;
+    --accent-deep: #7fd0c1;
+    --accent-wash: #16302c;
+    --note: #d69a4e;
+    --note-wash: #2c2418;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 30px rgba(0, 0, 0, .35);
+  }
+
+  * { box-sizing: border-box; }
+
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 15px;
+    line-height: 1.85;
+    font-feature-settings: "palt" 1;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: var(--measure);
+    margin: 0 auto;
+    padding: clamp(2.5rem, 1.5rem + 5vw, 5rem) clamp(1.15rem, 0.6rem + 3vw, 2.5rem) 5rem;
+  }
+
+  /* ---- masthead ---- */
+  .masthead { margin-bottom: calc(var(--step) * 1.6); }
+
+  .eyebrow {
+    font-family: var(--f-latin);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: var(--accent-deep);
+    margin: 0 0 1.1rem;
+  }
+
+  h1 {
+    font-family: var(--f-display);
+    font-weight: 700;
+    font-size: clamp(1.6rem, 1.2rem + 2.2vw, 2.3rem);
+    line-height: 1.4;
+    letter-spacing: .01em;
+    text-wrap: balance;
+    margin: 0 0 1rem;
+  }
+
+  .lede {
+    color: var(--ink-soft);
+    margin: 0;
+    max-width: 38rem;
+  }
+
+  .scope {
+    margin-top: 1.6rem;
+    padding: 1rem 1.15rem;
+    background: var(--surface-sunk);
+    border: 1px solid var(--hair);
+    border-left: 3px solid var(--accent);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--ink-soft);
+  }
+  .scope b { color: var(--ink); font-weight: 700; }
+
+  /* ---- sections ---- */
+  section { margin-top: calc(var(--step) * 1.7); }
+
+  .sec-head {
+    display: flex;
+    align-items: baseline;
+    gap: .85rem;
+    padding-bottom: .7rem;
+    border-bottom: 2px solid var(--accent);
+    margin-bottom: 1.4rem;
+  }
+
+  .sec-num {
+    font-family: var(--f-latin);
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: .04em;
+    color: var(--surface);
+    background: var(--accent);
+    border-radius: 3px;
+    padding: .1rem .5rem;
+    flex: none;
+    line-height: 1.6;
+  }
+
+  h2 {
+    font-family: var(--f-display);
+    font-weight: 700;
+    font-size: clamp(1.1rem, 0.95rem + 0.7vw, 1.35rem);
+    line-height: 1.4;
+    margin: 0;
+    flex: 1;
+  }
+
+  .sec-tag {
+    font-family: var(--f-latin);
+    font-size: 11px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    flex: none;
+  }
+
+  p { margin: 0 0 1rem; }
+  p.tight { margin-bottom: .4rem; }
+  .muted { color: var(--ink-soft); }
+  .small { font-size: 13px; line-height: 1.8; }
+
+  /* ---- tables ---- */
+  .t-scroll { overflow-x: auto; margin: 1rem 0 1.1rem; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    min-width: 30rem;
+  }
+  caption {
+    text-align: left;
+    font-size: 12px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    font-family: var(--f-latin);
+    color: var(--ink-faint);
+    padding-bottom: .5rem;
+  }
+  th, td {
+    text-align: left;
+    padding: .62rem .7rem;
+    border-bottom: 1px solid var(--hair);
+    vertical-align: top;
+  }
+  thead th {
+    font-family: var(--f-latin);
+    font-weight: 600;
+    font-size: 11.5px;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    border-bottom: 1px solid var(--hair-strong);
+    white-space: nowrap;
+  }
+  tbody th { font-weight: 500; color: var(--ink); }
+  td.num, th.num {
+    text-align: right;
+    font-family: var(--f-latin);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .yen { color: var(--ink); }
+  .usd { color: var(--ink-faint); font-size: 12.5px; }
+  tr.sub th, tr.sub td {
+    border-bottom: none;
+    border-top: 2px solid var(--hair-strong);
+    padding-top: .7rem;
+    font-weight: 700;
+  }
+  tr.sub td.num .yen { color: var(--accent-deep); font-weight: 700; }
+  code {
+    font-family: var(--f-mono);
+    font-size: .86em;
+    background: var(--surface-sunk);
+    border: 1px solid var(--hair);
+    border-radius: 3px;
+    padding: .05em .35em;
+    white-space: nowrap;
+  }
+  .note-inline { color: var(--note); font-size: 12.5px; }
+
+  /* ---- callout / scenarios ---- */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--hair);
+    border-radius: 6px;
+    padding: 1.3rem 1.4rem;
+    box-shadow: var(--shadow);
+  }
+  .panel table { min-width: 26rem; }
+  .panel tbody th { font-weight: 500; }
+
+  .big-figure {
+    display: flex;
+    align-items: baseline;
+    gap: .6rem;
+    flex-wrap: wrap;
+    margin: .2rem 0 1rem;
+  }
+  .big-figure .n {
+    font-family: var(--f-latin);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    font-size: clamp(1.8rem, 1.4rem + 2vw, 2.5rem);
+    color: var(--accent-deep);
+    line-height: 1;
+  }
+  .big-figure .u { color: var(--ink-soft); font-size: 14px; }
+
+  ul.levers {
+    margin: 1rem 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: .7rem;
+  }
+  ul.levers li {
+    padding-left: 1.6rem;
+    position: relative;
+    font-size: 14px;
+    color: var(--ink-soft);
+  }
+  ul.levers li::before {
+    content: "";
+    position: absolute;
+    left: .1rem;
+    top: .62em;
+    width: .55rem;
+    height: .55rem;
+    border: 2px solid var(--accent);
+    border-radius: 2px;
+  }
+  ul.levers b { color: var(--ink); font-weight: 700; }
+
+  .divider {
+    height: 1px;
+    background: var(--hair);
+    border: 0;
+    margin: calc(var(--step) * 1.6) 0 0;
+  }
+
+  footer {
+    margin-top: calc(var(--step) * 1.4);
+    font-size: 12.5px;
+    line-height: 1.9;
+    color: var(--ink-faint);
+  }
+  footer p { margin: 0 0 .5rem; }
+  footer b { color: var(--ink-soft); font-weight: 600; }
+
+  a { color: var(--accent-deep); text-underline-offset: 2px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+  @media (max-width: 33rem) {
+    .sec-head { flex-wrap: wrap; gap: .5rem .7rem; }
+    .sec-tag { width: 100%; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Running Cost Estimate</p>
+    <h1>クリニックサイト自動生成・配信の運営費</h1>
+    <p class="lede">
+      ヒアリングシートからホームページを自動生成し、Cloudflare のサブドメインへ配信する仕組みを
+      運用するために必要な、外部サービスの費用内訳です。
+    </p>
+    <div class="scope">
+      この見積に<b>制作者（当方）の運営費・作業費は含みません</b>。記載は第三者サービス
+      （OpenAI／Cloudflare／Anthropic／Supabase）へ実際に支払う金額のみです。
+      為替は <b>1 USD ＝ 150 円</b>で換算しています。
+    </div>
+  </header>
+
+  <!-- 1 -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">1</span>
+      <h2>Claude Code（テンプレート作成）</h2>
+      <span class="sec-tag">Anthropic</span>
+    </div>
+    <p class="muted">
+      デザインのひな型（<code>/template-create</code>）と生成プログラムを作る・増やすときにだけ使う
+      開発時のツール費用です。<b>ひな型ができた後のサイト量産では使いません</b>（＝クリニック1件あたり 0 円）。
+    </p>
+    <div class="t-scroll">
+      <table>
+        <caption>Item 1</caption>
+        <thead>
+          <tr><th>項目</th><th>区分</th><th class="num">費用</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>Claude Pro サブスクリプション</th>
+            <td class="muted">ひな型を制作・拡張する月のみ</td>
+            <td class="num"><span class="yen">¥3,000 / 月</span><br><span class="usd">$20 / 月</span></td>
+          </tr>
+          <tr>
+            <th>― または Anthropic API 従量</th>
+            <td class="muted">ひな型 1 種類の作成につき</td>
+            <td class="num"><span class="yen">¥800〜3,000</span><br><span class="usd">$5〜20</span></td>
+          </tr>
+          <tr class="sub">
+            <th>小計</th>
+            <td class="muted">頻度：新デザイン追加時のみ</td>
+            <td class="num"><span class="yen">¥0〜3,000 / 月</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="small muted">
+      目安：ひな型を <b>1 種類/月</b>のペースで増やす間は月 ¥3,000。運用が安定すれば ¥0。
+      クレジット制（API）の場合、最低 $5 の前払いが必要です。
+    </p>
+  </section>
+
+  <!-- 2 -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">2</span>
+      <h2>OpenAI（テキスト・画像生成）</h2>
+      <span class="sec-tag">Per site</span>
+    </div>
+    <p class="muted">
+      サイト 1 件を生成するたびに発生する従量課金です。月額の固定費はありません。
+    </p>
+    <div class="t-scroll">
+      <table>
+        <caption>Item 2 — サイト 1 件あたり</caption>
+        <thead>
+          <tr><th>項目</th><th>内容</th><th class="num">費用 / 件</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>本文・構成の生成</th>
+            <td class="muted"><code>gpt-4o</code> ・ 呼び出し 1 回（約 7〜8k トークン）</td>
+            <td class="num"><span class="yen">約 ¥8</span><br><span class="usd">$0.05</span></td>
+          </tr>
+          <tr>
+            <th>写真の生成</th>
+            <td class="muted"><code>gpt-image-1</code> ・ 最大 4 枚（院長 1・院内 3、中画質）</td>
+            <td class="num"><span class="yen">約 ¥36</span><br><span class="usd">$0.24</span></td>
+          </tr>
+          <tr>
+            <th>確認中の再生成</th>
+            <td class="muted">仕上げまでに 2 回やり直す想定の予備</td>
+            <td class="num"><span class="yen">約 ¥45</span><br><span class="usd">$0.30</span></td>
+          </tr>
+          <tr class="sub">
+            <th>小計</th>
+            <td class="muted">画質・やり直し回数で変動</td>
+            <td class="num"><span class="yen">約 ¥90 / 件</span><br><span class="usd">$0.6（幅 $0.1〜1.1）</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="small muted">
+      画像を <code>quality: low</code> にすると 4 枚で約 ¥9、本文を <code>gpt-4o-mini</code> にすると約 ¥1 まで下げられます。
+      サブスクリプション不要・使った分だけ（最低 $5 の前払いクレジット）。
+    </p>
+  </section>
+
+  <!-- 3 -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">3</span>
+      <h2>Cloudflare（サーバー・最低限）</h2>
+      <span class="sec-tag">Fixed / month</span>
+    </div>
+    <p class="muted">
+      生成されるサイトは 1 件あたり約 250 KB の静的ファイルです。配信は Cloudflare Pages の
+      無料枠（サイト数・通信量・リクエスト無制限）で収まります。
+    </p>
+    <div class="t-scroll">
+      <table>
+        <caption>Item 3</caption>
+        <thead>
+          <tr><th>項目</th><th>プラン / 備考</th><th class="num">費用 / 月</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>Pages 配信（全クリニックのサブドメイン）</th>
+            <td class="muted">無料プラン ― 通信量・リクエスト無制限</td>
+            <td class="num"><span class="yen">¥0</span></td>
+          </tr>
+          <tr>
+            <th>DNS ・ SSL ・ サブドメイン</th>
+            <td class="muted">Universal SSL 込み</td>
+            <td class="num"><span class="yen">¥0</span></td>
+          </tr>
+          <tr>
+            <th>Workers Paid（申請アプリ本体の実行）</th>
+            <td class="muted">OpenNext 構成 ・ 月 1,000 万リクエスト込み</td>
+            <td class="num"><span class="yen">¥750</span><br><span class="usd">$5</span></td>
+          </tr>
+          <tr>
+            <th>D1 ・ KV ・ R2</th>
+            <td class="muted">この規模では各無料枠内</td>
+            <td class="num"><span class="yen">¥0</span></td>
+          </tr>
+          <tr>
+            <th>親ドメイン（<code>.com</code> ／ Cloudflare Registrar 原価）</th>
+            <td class="muted">年 約 $10.5 を月割り ・ 更新も同額</td>
+            <td class="num"><span class="yen">約 ¥130</span><br><span class="usd">$0.87</span></td>
+          </tr>
+          <tr class="sub">
+            <th>小計</th>
+            <td class="muted">アプリを無料枠で回すなら ¥130 まで下げ可</td>
+            <td class="num"><span class="yen">約 ¥900 / 月</span><br><span class="usd">$5.9</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="small muted">
+      <span class="note-inline">注</span>　各クリニックが<b>独自ドメイン</b>を希望する場合は、ドメイン代 約 ¥1,600/年/件 と、
+      Cloudflare for SaaS のカスタムホスト名（101 件目以降 $0.10/件/月）が別途かかります。
+      サブドメイン運用なら親ドメイン 1 つで全件まかなえます。<code>.jp</code> は Cloudflare では買えないため
+      他社で登録（約 ¥1,500〜4,000/年）し、ネームサーバーのみ Cloudflare に向けます。
+    </p>
+  </section>
+
+  <!-- 4 -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">4</span>
+      <h2>その他に発生する費用</h2>
+      <span class="sec-tag">Other</span>
+    </div>
+    <div class="t-scroll">
+      <table>
+        <caption>Item 4</caption>
+        <thead>
+          <tr><th>項目</th><th>内容</th><th class="num">費用</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>画像ストレージ（Supabase）</th>
+            <td class="muted">無料枠 1 GB（＝生成画像で約 150 件分）。超過後 Pro。</td>
+            <td class="num"><span class="yen">¥0</span> <span class="usd">→ 超過時 $25/月</span></td>
+          </tr>
+          <tr>
+            <th>― 代替：Cloudflare R2 に移す</th>
+            <td class="muted">10 GB 無料・転送量無料。Supabase Pro を回避。</td>
+            <td class="num"><span class="yen">約 ¥0</span></td>
+          </tr>
+          <tr>
+            <th>予約・問い合わせ</th>
+            <td class="muted">サイトは LINE と電話へのリンクのみ。バックエンド不要。</td>
+            <td class="num"><span class="yen">¥0</span></td>
+          </tr>
+          <tr>
+            <th>アクセス解析</th>
+            <td class="muted">Cloudflare Web Analytics（無料）</td>
+            <td class="num"><span class="yen">¥0</span></td>
+          </tr>
+          <tr>
+            <th>前払いクレジット（初回のみ）</th>
+            <td class="muted">OpenAI $5 ＋ Anthropic $5</td>
+            <td class="num"><span class="yen">約 ¥1,500</span><br><span class="usd">一度きり</span></td>
+          </tr>
+          <tr class="sub">
+            <th>小計（月額）</th>
+            <td class="muted">R2 採用時。Supabase を Pro にする場合 +¥3,750/月</td>
+            <td class="num"><span class="yen">約 ¥0 / 月</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="small muted">
+      LINE 公式アカウントの費用（無料枠 月 200 通、有料 月 ¥5,000〜）は<b>各クリニック側の契約</b>で、
+      この運営費には含めません。
+    </p>
+  </section>
+
+  <hr class="divider">
+
+  <!-- summary -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">＝</span>
+      <h2>月額の目安</h2>
+      <span class="sec-tag">Total</span>
+    </div>
+
+    <div class="big-figure">
+      <span class="n">¥1,900</span>
+      <span class="u">／ 月　（新規 10 サイト作成・ひな型は安定運用・約 $13）</span>
+    </div>
+
+    <div class="panel">
+      <div class="t-scroll">
+        <table>
+          <thead>
+            <tr><th>状況</th><th class="num">固定費</th><th class="num">生成費</th><th class="num">合計 / 月</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th>新規 10 サイト／月・ひな型は変更なし</th>
+              <td class="num"><span class="yen">¥900</span></td>
+              <td class="num"><span class="yen">¥900</span><br><span class="usd">10 × ¥90</span></td>
+              <td class="num"><span class="yen">約 ¥1,900</span><br><span class="usd">$13</span></td>
+            </tr>
+            <tr>
+              <th>＋ その月に新ひな型を制作（Claude Pro）</th>
+              <td class="num"><span class="yen">¥900</span></td>
+              <td class="num"><span class="yen">¥900 ＋ ¥3,000</span></td>
+              <td class="num"><span class="yen">約 ¥4,900</span><br><span class="usd">$33</span></td>
+            </tr>
+            <tr>
+              <th>100 サイト運用・新規 20／月・画像は R2</th>
+              <td class="num"><span class="yen">¥900</span></td>
+              <td class="num"><span class="yen">¥1,800</span><br><span class="usd">20 × ¥90</span></td>
+              <td class="num"><span class="yen">約 ¥2,700</span><br><span class="usd">$18</span></td>
+            </tr>
+            <tr class="sub">
+              <th>初期費用（一度きり）</th>
+              <td class="num" colspan="2"><span class="muted">親ドメイン初年度 ¥1,600 ＋ 前払い ¥1,500 ＋ 試験生成 ¥2,000</span></td>
+              <td class="num"><span class="yen">約 ¥5,000</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <ul class="levers">
+      <li><b>画像は Cloudflare R2 に保存</b>する（Supabase Pro $25/月 を回避）。</li>
+      <li><b>画像は中〜低画質</b>で固定する（1 サイトの画像代を ¥36 以下に固定）。</li>
+      <li>本文生成を <b><code>gpt-4o-mini</code></b> にする（本文代 ¥8 → 約 ¥1）。</li>
+      <li>各クリニックは<b>独自ドメインではなくサブドメイン</b>にする（ドメイン 1 つで全件）。</li>
+      <li>アプリを当面 <b>Workers 無料枠</b>で回す（固定費 ¥900 → ¥130）。</li>
+    </ul>
+  </section>
+
+  <footer>
+    <p><b>前提</b>　サイト 1 件 ＝ 本文生成 1 回 ＋ 画像 4 枚（中画質）＋ 再生成 2 回分の予備。
+      1 件あたり約 ¥90（$0.6）で計算。件数は例示です。</p>
+    <p><b>単価の出典</b>　OpenAI・Cloudflare・Anthropic・Supabase の 2026 年 8 月時点の公開価格（米ドル建て）。
+      価格改定・為替変動で変わります。実運用前に最新の料金表をご確認ください。</p>
+    <p><b>含まないもの</b>　制作者の作業費・運営費（ご指定により除外）。各クリニックが直接契約する費用
+      （LINE 公式アカウント、希望する場合の独自ドメイン等）。</p>
+  </footer>
+
+</div>

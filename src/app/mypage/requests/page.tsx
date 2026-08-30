@@ -50,11 +50,31 @@ export default async function MypageRequestsPage() {
               <tr key={hearing.slug} className="border-b border-line/60 last:border-0">
                 <td className="px-4 py-3 text-ink">{hearing.clinicName}</td>
                 <td className="px-4 py-3 text-ink-soft/75">{formatDate(hearing.createdAt)}</td>
-                <td className="px-4 py-3 text-right">
-                  <ConfirmDeleteButton
-                    action={deleteOwnApplicationAction.bind(null, hearing.slug)}
-                    confirmText={`「${hearing.clinicName}」の申請を削除しますか？`}
-                  />
+                <td className="px-4 py-3">
+                  <div className="flex flex-wrap items-center justify-end gap-4">
+                    {hearing.generatedSite && (
+                      <>
+                        <a
+                          href={`/api/generated/${hearing.slug}/`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[13px] text-brand underline underline-offset-4 hover:text-brand-deep"
+                        >
+                          プレビュー
+                        </a>
+                        <Link
+                          href={`/mypage/requests/${hearing.slug}/edit`}
+                          className="text-[13px] text-brand underline underline-offset-4 hover:text-brand-deep"
+                        >
+                          サイトを編集
+                        </Link>
+                      </>
+                    )}
+                    <ConfirmDeleteButton
+                      action={deleteOwnApplicationAction.bind(null, hearing.slug)}
+                      confirmText={`「${hearing.clinicName}」の申請を削除しますか？`}
+                    />
+                  </div>
                 </td>
               </tr>
             ))}

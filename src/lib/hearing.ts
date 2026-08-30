@@ -1,5 +1,6 @@
 import { d1Query } from "./d1";
 import type { ImageCategoryKey } from "./imageCategories";
+import type { SiteTemplate } from "./generatedSite/types";
 
 /** A site-build application (ヒアリングシート) as submitted from /mypage/apply.
  *
@@ -34,8 +35,16 @@ export type HearingSheet = {
   uploadedImages?: Partial<Record<ImageCategoryKey, string[]>>;
   /** Set once an admin has generated a static site from this sheet (see
    * src/lib/buildSiteFromHearing.ts). The bundle lives at public/_generated/<slug>/ and is served
-   * under /api/generated/<slug>/. Regenerating overwrites both the bundle and this field. */
-  generatedSite?: { at: string; imagesGenerated?: number; imagesFromUploads?: number };
+   * under /api/generated/<slug>/. Regenerating overwrites the bundle and this field; the site editor
+   * updates `template` + `editedAt` and re-renders the bundle without touching OpenAI. */
+  generatedSite?: {
+    at: string;
+    editedAt?: string;
+    imagesGenerated?: number;
+    imagesFromUploads?: number;
+    /** The normalised template the bundle was last rendered from — the editor's source of truth. */
+    template?: SiteTemplate;
+  };
 };
 
 /** ASCII-only slug: Japanese clinic names (the common case) fall back to the `clinic-<suffix>` form. */

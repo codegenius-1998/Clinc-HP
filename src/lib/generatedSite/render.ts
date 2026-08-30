@@ -548,6 +548,11 @@ function themeStyleAttr(t: SiteTemplate): string {
 
 function indexHtml(t: SiteTemplate): string {
   const cssLinks = CSS_ORDER.map((f) => `  <link rel="stylesheet" href="css/${f}">`).join("\n");
+  const scale = t.theme.fontScale;
+  const scaleStyle =
+    typeof scale === "number" && scale !== 1
+      ? `  <style>html{font-size:${(16 * scale).toFixed(2)}px}</style>\n`
+      : "";
   const sections = laidOutSections(t)
     .map(({ id, bg }) => {
       const marker = `  <!-- ===== ${id} ===== -->`;
@@ -566,7 +571,7 @@ function indexHtml(t: SiteTemplate): string {
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="${esc(t.theme.fonts.googleHref)}">
 ${cssLinks}
-  <script src="js/site.js" defer></script>
+${scaleStyle}  <script src="js/site.js" defer></script>
 </head>
 <body>
 <div class="nj-site" style="${esc(themeStyleAttr(t))}">

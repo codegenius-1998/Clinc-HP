@@ -59,6 +59,24 @@ export async function GET(
   }
 
   const ext = path.extname(filePath).toLowerCase();
+
+  // The bundle uses relative asset URLs (css/…, assets/…) so it stays portable for hand-off. When
+  // served here the document URL may or may not carry a trailing slash (Next normalises it), which
+  // would otherwise make `css/base.css` resolve against the wrong directory. A <base> pinned to the
+  // bundle root makes every relative URL resolve correctly regardless.
+  if (ext === ".html") {
+    const html = body
+      .toString("utf8")
+      .replace(/<head(\s[^>]*)?>/i, (m) => `${m}\n<base href="/api/generated/${slug}/">`);
+    return new Response(html, {
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+        "X-Robots-Tag": "noindex, nofollow",
+      },
+    });
+  }
+
   return new Response(new Uint8Array(body), {
     headers: {
       "Content-Type": CONTENT_TYPES[ext] ?? "application/octet-stream",
