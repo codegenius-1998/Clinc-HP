@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin, createUser, deleteUser } from "./auth";
-import { deleteHearing } from "./hearing";
+import { deleteHearing, getHearing, saveHearing } from "./hearing";
+import { buildSiteFromHearing } from "./buildSiteFromHearing";
 import {
   createDepartmentWithServices,
   updateDepartment,
@@ -63,6 +64,40 @@ export async function deleteRequestAction(slug: string): Promise<void> {
   await requireAdmin();
   await deleteHearing(slug);
   revalidatePath("/admin/requests");
+}
+
+export type GenerateSiteResult =
+  | { ok: true; url: string; imagesGenerated: number; imagesFromUploads: number; warnings: string[] }
+  | { ok: false; error: string };
+
+/** Builds a static clinic site from a submitted hearing sheet using OpenAI (copy + photos) and
+ * writes it to public/_generated/<slug>/. Synchronous and slow (tens of seconds). Admin only. */
+export async function generateSiteAction(slug: string): Promise<GenerateSiteResult> {
+  await requireAdmin();
+  const hearing = await getHearing(slug);
+  if (!hearing) return { ok: false, error: "リクエストが見つかりません。" };
+
+  try {
+    const result = await buildSiteFromHearing(hearing);
+    await saveHearing({
+      ...hearing,
+      generatedSite: {
+        at: new Date().toISOString(),
+        imagesGenerated: result.imagesGenerated,
+        imagesFromUploads: result.imagesFromUploads,
+      },
+    });
+    revalidatePath("/admin/requests");
+    return {
+      ok: true,
+      url: result.url,
+      imagesGenerated: result.imagesGenerated,
+      imagesFromUploads: result.imagesFromUploads,
+      warnings: result.warnings,
+    };
+  } catch (err) {
+    return { ok: false, error: errorMessage(err, "サイト生成に失敗しました。") };
+  }
 }
 
 // --- Departments & services ---

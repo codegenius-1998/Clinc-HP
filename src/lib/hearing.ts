@@ -32,6 +32,10 @@ export type HearingSheet = {
   createdAt: string;
   /** category -> public Supabase Storage URLs of user-uploaded photos. */
   uploadedImages?: Partial<Record<ImageCategoryKey, string[]>>;
+  /** Set once an admin has generated a static site from this sheet (see
+   * src/lib/buildSiteFromHearing.ts). The bundle lives at public/_generated/<slug>/ and is served
+   * under /api/generated/<slug>/. Regenerating overwrites both the bundle and this field. */
+  generatedSite?: { at: string; imagesGenerated?: number; imagesFromUploads?: number };
 };
 
 /** ASCII-only slug: Japanese clinic names (the common case) fall back to the `clinic-<suffix>` form. */

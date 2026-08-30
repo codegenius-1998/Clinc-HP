@@ -2,6 +2,7 @@ import { listHearings } from "@/lib/hearing";
 import { deleteRequestAction } from "@/lib/contentActions";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { ConfirmDeleteButton } from "@/components/admin/ConfirmDeleteButton";
+import { GenerateSiteButton } from "@/components/admin/GenerateSiteButton";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString("ja-JP", {
@@ -30,6 +31,7 @@ export default async function AdminRequestsPage() {
               <th className="px-4 py-3 font-medium">クリニック名</th>
               <th className="px-4 py-3 font-medium">申請者</th>
               <th className="px-4 py-3 font-medium">送信日時</th>
+              <th className="px-4 py-3 font-medium">サイト</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
@@ -39,6 +41,12 @@ export default async function AdminRequestsPage() {
                 <td className="px-4 py-3 text-slate-900">{hearing.clinicName}</td>
                 <td className="px-4 py-3 text-slate-500">{hearing.ownerEmail ?? "—"}</td>
                 <td className="px-4 py-3 text-slate-400">{formatDate(hearing.createdAt)}</td>
+                <td className="px-4 py-3">
+                  <GenerateSiteButton
+                    slug={hearing.slug}
+                    previewUrl={hearing.generatedSite ? `/api/generated/${hearing.slug}/` : undefined}
+                  />
+                </td>
                 <td className="px-4 py-3 text-right">
                   <ConfirmDeleteButton
                     action={deleteRequestAction.bind(null, hearing.slug)}
@@ -49,7 +57,7 @@ export default async function AdminRequestsPage() {
             ))}
             {hearings.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-slate-400">
+                <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
                   リクエストはまだありません。
                 </td>
               </tr>

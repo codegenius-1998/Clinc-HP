@@ -12,14 +12,20 @@ An **application-intake app for individual/private clinic (個人クリニック
   `/mypage/apply`) — name, address, hours, staff, prices, uploaded photos, free-text wishes. The
   submission is stored and shown back on `/mypage/requests`.
 - An admin logs in and, from `/admin`, manages users, reviews submitted applications (**view / delete
-  only**), and maintains the master data the application form is built from (診療科・サービス・特徴・
-  ターゲット).
+  / generate a site from**), and maintains the master data the application form is built from
+  (診療科・サービス・特徴・ターゲット).
+- From `/admin/requests` an admin can turn one submitted sheet into a **static clinic-site bundle**
+  (`public/_generated/<slug>/`) with one click — OpenAI writes the Japanese copy + section structure
+  and generates the interior/portrait photos; the bundle is the same shape `/template-create`
+  produces by hand and is served (behind the app login) under `/api/generated/<slug>/`. See
+  `src/lib/buildSiteFromHearing.ts`, `src/lib/openai.ts`, `src/lib/generatedSite/*`.
 - `/` is a public marketing landing page.
 
-> The AI site-generation half of this project (template selection, content/image generation, the
-> standalone-site renderer, the visual editor, Cloudflare Pages publishing) was **removed**. There is
-> no `SiteDocument`, no `src/lib/site`, no `src/lib/render`, no `src/lib/openai`, no `/sites/*` routes.
-> Do not reintroduce them.
+> The **earlier, larger** AI site-generation system (per-block `SiteDocument` model, template
+> selection, the visual editor, the standalone-site renderer, Cloudflare Pages publishing) was
+> **removed**. There is no `SiteDocument`, no `src/lib/site`, no `src/lib/render`, no `/sites/*`
+> routes. Do not reintroduce *those*. The hearing-sheet → static-bundle generator above is the only
+> supported generation path and is deliberately narrow: no D1 document model, no editor, no publish.
 
 All user-facing strings (UI labels, validation messages, thrown `Error` messages) are **Japanese** —
 errors surface directly in the UI. Code comments are English.
@@ -49,7 +55,12 @@ against real D1 rows.
 
 `.env.local` supplies: `CLOUDFLARE_ACCOUNT_ID` / `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_D1_DATABASE_ID`
 (D1); `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` (falls back to `SUPABASE_ANON_KEY`) + optional
-`SUPABASE_STORAGE_BUCKET` (photo uploads); optional `PREVIEW_BASIC_AUTH`.
+`SUPABASE_STORAGE_BUCKET` (photo uploads — also where generated site images are stored);
+`OPENAI_API_KEY` (site generation from a hearing sheet; optional `OPENAI_TEXT_MODEL` /
+`OPENAI_IMAGE_MODEL` / `OPENAI_BASE_URL` overrides — defaults `gpt-4o` / `gpt-image-1`); optional
+`PREVIEW_BASIC_AUTH`. With `OPENAI_API_KEY` unset the "サイト生成" button on `/admin/requests` returns
+a Japanese error and nothing else breaks. With Supabase unset the site still generates but keeps the
+placeholder SVGs instead of generated photos.
 
 ## Architecture
 
