@@ -1,0 +1,295 @@
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--nj-paper);
+  border-bottom: 1px solid var(--nj-line);
+}
+
+.inner {
+  display: flex;
+  align-items: center;
+  gap: var(--nj-s5);
+  max-width: 1360px;
+  margin-inline: auto;
+  padding: var(--nj-s3) var(--nj-gutter);
+}
+
+/* --- brand --- */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--nj-s3);
+  margin-right: auto;
+  flex-shrink: 0;
+}
+
+.mark {
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.name {
+  display: flex;
+  flex-direction: column;
+}
+
+.nameJa {
+  font-family: var(--nj-font-head);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  color: var(--nj-primary);
+}
+
+.nameEn {
+  font-size: 0.58rem;
+  letter-spacing: 0.18em;
+  white-space: nowrap;
+  color: var(--nj-ink-soft);
+  text-transform: uppercase;
+}
+
+/* --- tel --- (order:1 → 常にヘッダーの一番右) */
+.tel {
+  order: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+
+.telLabel {
+  font-size: 0.64rem;
+  color: var(--nj-ink-soft);
+}
+
+.telNo {
+  font-family: var(--nj-font-head);
+  font-size: 1.2rem;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--nj-primary);
+}
+
+/* --- nav (desktop) --- */
+.nav {
+  display: flex;
+  align-items: stretch;
+  gap: var(--nj-s3);
+  flex-shrink: 0;
+}
+
+.nav ul {
+  display: flex;
+  align-items: stretch;
+  gap: var(--nj-s3);
+}
+
+.nav ul a {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding-block: var(--nj-s2);
+  white-space: nowrap;
+}
+
+.navJa {
+  font-size: 0.82rem;
+}
+
+.navEn {
+  font-size: 0.54rem;
+  letter-spacing: 0.14em;
+  color: var(--nj-ink-soft);
+  text-transform: uppercase;
+}
+
+.nav ul a:hover .navJa {
+  color: var(--nj-primary);
+}
+
+.nav .reserve {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--nj-s5);
+  min-height: 46px;
+  background: #fff;
+  color: var(--nj-primary-deep);
+  border: 1.5px solid var(--nj-primary-deep);
+  font-family: var(--nj-font-head);
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.nav .reserve:hover {
+  background: var(--nj-tint);
+}
+
+/* 項目が9つあるので、中間幅では詰める。 */
+@media (max-width: 1280px) {
+  .navJa {
+    font-size: 0.78rem;
+  }
+  .nav ul {
+    gap: 10px;
+  }
+  .nav .reserve {
+    padding: 0 var(--nj-s4);
+    font-size: 0.8rem;
+  }
+}
+
+/* Hide the English sub-labels and the tel caption once the row gets tight. */
+@media (max-width: 1180px) {
+  .nameEn,
+  .navEn,
+  .telLabel {
+    display: none;
+  }
+}
+
+/* --- mobile menu machinery (CSS only) --- */
+.toggle {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.burger {
+  display: none;
+  flex-shrink: 0;
+  width: 30px;
+  height: 22px;
+  position: relative;
+  z-index: 70;
+  cursor: pointer;
+}
+
+.burger span,
+.burger span::before,
+.burger span::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--nj-primary);
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.burger span {
+  top: 10px;
+}
+.burger span::before {
+  top: -8px;
+}
+.burger span::after {
+  top: 8px;
+}
+
+.actionBar {
+  display: none;
+}
+
+@media (max-width: 1024px) {
+  .inner {
+    gap: var(--nj-s3);
+  }
+
+  .tel {
+    display: none;
+  }
+
+  .burger {
+    display: block;
+  }
+
+  .nav {
+    position: fixed;
+    inset: 0 0 auto 0;
+    z-index: 60;
+    display: block;
+    padding: 0 var(--nj-gutter);
+    background: var(--nj-paper);
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
+  }
+
+  .nav ul {
+    flex-direction: column;
+    gap: 0;
+    padding-top: 72px;
+  }
+
+  .nav ul a {
+    flex-direction: row;
+    justify-content: space-between;
+    padding: var(--nj-s4) 0;
+    border-bottom: 1px solid var(--nj-line);
+  }
+
+  .navEn {
+    display: inline;
+  }
+
+  .nav .reserve {
+    margin: var(--nj-s5) 0 var(--nj-s6);
+    padding: var(--nj-s4);
+    width: 100%;
+    justify-content: center;
+  }
+
+  .toggle:checked ~ .nav {
+    max-height: 100vh;
+    overflow-y: auto;
+  }
+
+  .toggle:checked ~ .burger span {
+    background: transparent;
+  }
+  .toggle:checked ~ .burger span::before {
+    top: 0;
+    transform: rotate(45deg);
+  }
+  .toggle:checked ~ .burger span::after {
+    top: 0;
+    transform: rotate(-45deg);
+  }
+
+  .actionBar {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 60;
+    border-top: 1px solid var(--nj-line);
+  }
+
+  .actionBar a {
+    padding: var(--nj-s4) var(--nj-s2);
+    text-align: center;
+    font-family: var(--nj-font-head);
+    font-size: 0.82rem;
+    background: var(--nj-tint);
+    color: var(--nj-primary);
+  }
+
+  .actionBar a + a {
+    border-left: 1px solid var(--nj-line);
+  }
+
+  .actionReserve {
+    background: #fff !important;
+    color: var(--nj-primary-deep) !important;
+    font-weight: 700;
+    box-shadow: inset 0 2px 0 var(--nj-primary-deep);
+  }
+}

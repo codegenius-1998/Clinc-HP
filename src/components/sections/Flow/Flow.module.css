@@ -1,0 +1,78 @@
+.section {
+  padding-block: var(--nj-section-pad);
+  background: var(--nj-paper);
+}
+
+.list {
+  display: grid;
+  gap: var(--nj-s6);
+  max-width: 760px;
+  margin-inline: auto;
+}
+
+.step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: var(--nj-s5);
+  align-items: start;
+}
+
+/* 円と円をつなぐ縦線 */
+.step:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 31px;
+  top: 64px;
+  bottom: calc(var(--nj-s6) * -1);
+  width: 2px;
+  background: var(--nj-line);
+}
+
+.no {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--nj-tint);
+  border: 2px solid var(--nj-primary);
+  font-family: var(--nj-font-head);
+  font-weight: 700;
+  font-size: 1.15rem;
+  line-height: 1;
+  color: var(--nj-primary);
+}
+
+.title {
+  padding-top: var(--nj-s3);
+  font-size: 1.05rem;
+  color: var(--nj-primary);
+  margin-bottom: var(--nj-s2);
+}
+
+.text {
+  font-size: 0.92rem;
+  color: var(--nj-ink);
+}
+
+@media (max-width: 560px) {
+  .step {
+    grid-template-columns: 48px 1fr;
+    gap: var(--nj-s4);
+  }
+  .step:not(:last-child)::before {
+    left: 23px;
+    top: 48px;
+  }
+  .no {
+    width: 48px;
+    height: 48px;
+    font-size: 0.95rem;
+  }
+  .title {
+    padding-top: var(--nj-s1);
+  }
+}

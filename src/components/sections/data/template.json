@@ -1,0 +1,275 @@
+{
+  "$schema": "./template.schema.json",
+
+  "meta": {
+    "title": "みどり皮ふ科クリニック｜○○駅前の皮膚科・アレルギー科・美容皮膚科",
+    "description": "○○駅前の皮膚科・アレルギー科・美容皮膚科。予約不要、受付時間内にご来院ください。大人もお子さまも、肌のことならご相談ください。"
+  },
+
+  "theme": {
+    "colors": {
+      "primary": "#6f8f3f",
+      "primaryDeep": "#3f5324",
+      "accent": "#93b84a",
+      "tint": "#f5f1e2",
+      "paper": "#ffffff",
+      "ink": "#4b4a3f",
+      "inkSoft": "#8a8877",
+      "line": "#e7e3d3"
+    },
+    "fonts": {
+      "useGoogleFonts": true,
+      "heading": {
+        "family": "Zen Maru Gothic",
+        "weights": [400, 500, 700],
+        "fallback": "\"Hiragino Maru Gothic ProN\", \"Hiragino Maru Gothic Pro\", \"Yu Gothic\", sans-serif"
+      },
+      "body": {
+        "family": "Noto Sans JP",
+        "weights": [400, 500, 700],
+        "fallback": "\"Hiragino Sans\", \"Yu Gothic\", \"Yu Gothic Medium\", sans-serif"
+      },
+      "headingTracking": "0.08em"
+    }
+  },
+
+  "brand": {
+    "name": "みどり皮ふ科クリニック",
+    "nameEn": "Midori Dermatology Clinic",
+    "logo": { "src": null, "alt": "みどり皮ふ科クリニック" }
+  },
+
+  "contact": {
+    "phone": "00-0000-0000",
+    "phoneCaption": "お電話でのお問い合わせ",
+    "reserveUrl": "https://lin.ee/0000000",
+    "reserveLabel": "LINEで相談",
+    "address": "〒000-0000　○○県○○市○○ 1-2-3　○○駅前メディカルビル 3F"
+  },
+
+  "layout": [
+    { "type": "header", "variant": "bar" },
+    { "type": "hero", "variant": "full-bleed" },
+    { "type": "reasons", "variant": "numbered" },
+    { "type": "greeting", "variant": "portrait" },
+    { "type": "philosophy", "variant": "centered" },
+    { "type": "medical", "variant": "grid" },
+    { "type": "fees", "variant": "table" },
+    { "type": "flow", "variant": "steps" },
+    { "type": "faq", "variant": "accordion" },
+    { "type": "news", "variant": "list" },
+    { "type": "schedule", "variant": "table" },
+    { "type": "access", "variant": "map-side" },
+    { "type": "contact", "variant": "cta" },
+    { "type": "footer", "variant": "band" }
+  ],
+
+  "nav": [
+    { "href": "#top", "ja": "ホーム", "en": "Home" },
+    { "href": "#reasons", "ja": "当院の特長", "en": "Points" },
+    { "href": "#greeting", "ja": "ご挨拶", "en": "Greeting" },
+    { "href": "#medical", "ja": "診療案内", "en": "Medical" },
+    { "href": "#fees", "ja": "料金", "en": "Fees" },
+    { "href": "#faq", "ja": "よくある質問", "en": "FAQ" },
+    { "href": "#news", "ja": "お知らせ", "en": "News" },
+    { "href": "#schedule", "ja": "診療時間", "en": "Hours" },
+    { "href": "#access", "ja": "アクセス", "en": "Access" }
+  ],
+
+  "header": {
+    "actionBar": [
+      { "href": "#access", "label": "アクセス" },
+      { "href": "tel", "label": "電話する" },
+      { "href": "reserve", "label": "LINEで相談" }
+    ]
+  },
+
+  "sections": {
+    "hero": {
+      "image": { "src": null, "alt": "" },
+      "headlineLines": ["気になる肌の症状を、", "*早めに*、*気軽に*"],
+      "sub": "みどり皮ふ科クリニックは、○○駅前の皮膚科・アレルギー科・美容皮膚科です。大人もお子さまも、肌のことなら何でもご相談ください。",
+      "reserveLabel": "LINEで相談"
+    },
+
+    "reasons": {
+      "heading": { "ja": "当院の特長", "en": "Our points" },
+      "items": [
+        {
+          "no": "01",
+          "icon": "certified",
+          "title": "皮膚とアレルギーに専念します",
+          "body": "肌とアレルギーの症状にしぼって診ています。見た目だけでなく、原因や生活の背景まで含めて一緒に整理します。"
+        },
+        {
+          "no": "02",
+          "icon": "pin",
+          "title": "駅前で通いやすい",
+          "body": "○○駅から歩いてすぐ、メディカルビルの3階です。仕事や学校の帰り、買い物のついでにも寄っていただけます。"
+        },
+        {
+          "no": "03",
+          "icon": "kids",
+          "title": "お子さまの肌も診ます",
+          "body": "あせも・とびひ・おむつかぶれなど、小児皮膚科にも対応します。塗り方や生活のコツもあわせてお伝えします。"
+        },
+        {
+          "no": "04",
+          "icon": "clock",
+          "title": "予約なしで受診できます",
+          "body": "受付時間内にご来院ください。混雑状況により順番でご案内し、待ち時間の目安は受付でお伝えします。"
+        }
+      ]
+    },
+
+    "medical": {
+      "heading": { "ja": "診療案内", "en": "Medical" },
+      "items": [
+        { "key": "general", "icon": "skin", "ja": "一般皮膚科", "en": "Dermatology", "lead": "湿疹・かぶれ・じんましん・にきび・水虫など、日常的な肌のトラブル全般に対応します。" },
+        { "key": "allergy", "icon": "allergy", "ja": "アレルギー科", "en": "Allergy", "lead": "アトピー性皮膚炎やくり返すじんましんなど、長く付き合う症状の整え方を一緒に考えます。" },
+        { "key": "beauty", "icon": "cosmetic", "ja": "美容皮膚科", "en": "Aesthetic", "lead": "しみ・毛穴・ハリなど、見た目の気になるところをご相談ください。まずはカウンセリングから。" },
+        { "key": "pediatric", "icon": "kids", "ja": "小児皮膚科", "en": "Pediatric", "lead": "あせも・とびひ・おむつかぶれなど。お子さまが嫌がりにくい進め方を心がけています。" },
+        { "key": "surgery", "icon": "derm-surgery", "ja": "皮膚外科（日帰り）", "en": "Minor Surgery", "lead": "ほくろ・粉瘤・いぼなど、日帰りでできる小さな処置に対応します。まず診察でご相談ください。" },
+        { "key": "skincare", "icon": "uv", "ja": "スキンケア・紫外線対策", "en": "Skin Care", "lead": "保湿や日焼け止めの選び方・塗り方を、肌の状態に合わせてお伝えします。" },
+        { "key": "piercing", "icon": "piercing", "ja": "医療用ピアス", "en": "Ear Piercing", "lead": "衛生的な環境でのピアッシング。アフターケアのご相談もお受けします。" },
+        { "key": "spot", "icon": "mole", "ja": "ほくろ・しみの相談", "en": "Mole & Spot", "lead": "気になるほくろやしみを診察し、経過を見るか処置するかを一緒に決めます。" }
+      ]
+    },
+
+    "greeting": {
+      "heading": { "ja": "ごあいさつ", "en": "Greeting" },
+      "image": { "src": null, "alt": "院長 高橋 由香" },
+      "doctorName": "高橋 由香",
+      "doctorRole": "院長",
+      "message": [
+        "肌の症状は、見た目のことだけでなく、かゆみや痛み、生活のしづらさにつながります。だからこそ、早めに相談していただける場所でありたいと思っています。",
+        "むずかしい言葉はできるだけ使わず、いまの状態と、家でできるケアを具体的にお伝えします。気になることは遠慮なくお尋ねください。"
+      ]
+    },
+
+    "philosophy": {
+      "heading": { "ja": "当院の理念", "en": "Our philosophy" },
+      "lead": "肌のことを、相談しやすく。",
+      "body": [
+        "症状の重さも、通える時間も、肌質も人それぞれです。その人に合ったやり方で、いまできることから始めます。",
+        "塗って終わりにせず、良くなった状態をどう保つかまで一緒に考えます。"
+      ]
+    },
+
+    "schedule": {
+      "heading": { "ja": "診療時間", "en": "Consultation hours" },
+      "cornerLabel": "受付時間",
+      "emptyMark": "／",
+      "days": ["月", "火", "水", "木", "金", "土", "日/祝"],
+      "rows": [
+        { "label": "9:30 - 12:30", "marks": ["●", "●", "●", "●", "●", "●", null] },
+        { "label": "15:00 - 18:00", "marks": ["●", "●", "●", "●", "●", "▲", null] }
+      ],
+      "notes": [
+        "休診日 … 日曜・祝日",
+        "▲ … 土曜午後は 14:00〜16:30",
+        "受付は診療開始の15分前から、終了の15分前までです。",
+        "予約は不要です。混雑時は順番でご案内します。"
+      ]
+    },
+
+    "fees": {
+      "heading": { "ja": "自費診療のめやす", "en": "Fees" },
+      "disclaimer": "表示は税込のめやすです。保険が使える症状は保険診療で行います。自費のメニューは、診察・カウンセリングのうえでご案内します。",
+      "groups": [
+        {
+          "group": "ピーリング",
+          "items": [
+            { "name": "マッサージピール(顔・1回)", "price": "¥8,000〜" },
+            { "name": "ピーリング(顔・首・手 組合せ)", "price": "¥12,000〜" }
+          ]
+        },
+        {
+          "group": "しみ・美肌",
+          "items": [
+            { "name": "内服・外用の処方(1か月)", "price": "¥2,000〜" },
+            { "name": "イオン導入(1回)", "price": "¥4,000〜" }
+          ]
+        },
+        {
+          "group": "処置・その他",
+          "items": [
+            { "name": "ほくろ・いぼの処置(1か所)", "price": "¥5,000〜", "note": "大きさ・部位で変動します" },
+            { "name": "医療用ピアス(両耳)", "price": "¥5,000〜" }
+          ]
+        }
+      ]
+    },
+
+    "flow": {
+      "heading": { "ja": "受診の流れ", "en": "Flow" },
+      "steps": [
+        { "no": "01", "title": "ご来院・受付", "body": "予約は不要です。受付時間内に保険証をお持ちのうえご来院ください。初診の方は問診票にご記入いただきます。" },
+        { "no": "02", "title": "問診・診察", "body": "症状の出た時期や経過、生活の様子をうかがい、患部を診ます。必要に応じて検査を行います。" },
+        { "no": "03", "title": "説明", "body": "いまの状態と、考えられる原因、治療の選択肢を、できるだけ分かりやすくご説明します。" },
+        { "no": "04", "title": "治療・処置", "body": "内服・外用の処方や、その場でできる処置を行います。塗り方や使う量も具体的にお伝えします。" },
+        { "no": "05", "title": "再診・経過観察", "body": "効き方を見ながら調整します。良くなったあとも、再発を防ぐケアを続けていきます。" }
+      ]
+    },
+
+    "faq": {
+      "heading": { "ja": "よくある質問", "en": "FAQ" },
+      "items": [
+        { "q": "予約は必要ですか？", "a": "保険診療は予約不要です。受付時間内にご来院ください。美容のカウンセリングをご希望の場合は、受付か LINE でご相談ください。" },
+        { "q": "子どもだけで受診できますか？", "a": "中学生以下のお子さまは、保護者の方とご一緒にお越しください。処置を伴う場合は同意書が必要になることがあります。" },
+        { "q": "何科を受診すればよいか分かりません。", "a": "肌の症状であれば、まずご相談ください。じんましんやアトピーなどアレルギーが関わるものも当院で診ています。" },
+        { "q": "美容の相談は保険が使えますか？", "a": "見た目の改善を目的とした施術は自費です。症状として治療が必要な場合は保険診療になります。診察で切り分けてご案内します。" },
+        { "q": "駐車場はありますか？", "a": "近隣のコインパーキングをご利用ください。ビル1階の系列店舗で提携している場合があります。詳しくは受付でお尋ねください。" }
+      ]
+    },
+
+    "news": {
+      "heading": { "ja": "お知らせ", "en": "News" },
+      "items": [
+        { "date": "2026.06.10", "title": "夏の肌ケア相談を受け付けています" },
+        { "date": "2026.05.20", "title": "水曜午後の診療を始めました" },
+        { "date": "2026.04.15", "title": "大型連休中の休診日について" },
+        { "date": "2026.03.01", "title": "医療用ピアスの予約枠を拡大しました" }
+      ]
+    },
+
+    "access": {
+      "heading": { "ja": "アクセス", "en": "Access" },
+      "image": { "src": null, "alt": "地図" },
+      "points": [
+        "○○線「○○駅」西口から徒歩1分",
+        "○○駅前メディカルビル 3階(エレベーターあり)",
+        "近隣にコインパーキングあり"
+      ],
+      "info": [
+        { "term": "診療時間", "lines": ["平日 9:30–12:30 / 15:00–18:00", "土曜 9:30–12:30 / 14:00–16:30"] },
+        { "term": "休診日", "lines": ["日曜・祝日"] }
+      ]
+    },
+
+    "contact": {
+      "heading": { "ja": "ご相談・ご予約", "en": "Contact" },
+      "lead": "はじめての方も、ほかの医療機関に通院中の方も、まずはお気軽にご相談ください。どの科か迷うときも、お問い合わせいただければご案内します。",
+      "reserveLabel": "LINEで相談する",
+      "phoneCaption": "お電話",
+      "note": "受付時間 … 平日 9:15–12:15 / 14:45–17:45 ／ 土 9:15–12:15（日曜・祝日は休診）"
+    },
+
+    "footer": {
+      "nav": [
+        { "href": "#reasons", "label": "当院の特長" },
+        { "href": "#medical", "label": "診療案内" },
+        { "href": "#greeting", "label": "ご挨拶" },
+        { "href": "#philosophy", "label": "当院の理念" },
+        { "href": "#schedule", "label": "診療時間" },
+        { "href": "#fees", "label": "自費診療のめやす" },
+        { "href": "#flow", "label": "受診の流れ" },
+        { "href": "#faq", "label": "よくある質問" },
+        { "href": "#news", "label": "お知らせ" },
+        { "href": "#access", "label": "アクセス" },
+        { "href": "#contact", "label": "ご相談・ご予約" }
+      ],
+      "copyright": "© みどり皮ふ科クリニック"
+    }
+  }
+}

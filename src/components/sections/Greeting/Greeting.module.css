@@ -1,0 +1,57 @@
+.section {
+  padding-block: var(--nj-section-pad);
+  background: var(--nj-tint);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 38%) minmax(0, 1fr);
+  gap: var(--nj-s9);
+  align-items: center;
+}
+
+.figure {
+  border-radius: var(--nj-radius-md);
+  overflow: hidden;
+  aspect-ratio: 4 / 5;
+}
+
+.figure svg,
+.figure img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.para {
+  font-size: 0.98rem;
+  line-height: 2.1;
+}
+
+.para + .para {
+  margin-top: var(--nj-s4);
+}
+
+.sign {
+  margin-top: var(--nj-s6);
+  font-family: var(--nj-font-head);
+  font-size: 0.9rem;
+  color: var(--nj-ink-soft);
+}
+
+.sign strong {
+  margin-left: var(--nj-s3);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--nj-primary);
+}
+
+@media (max-width: 860px) {
+  .grid {
+    grid-template-columns: 1fr;
+    gap: var(--nj-s6);
+  }
+  .figure {
+    max-width: 280px;
+  }
+}

@@ -1,24 +1,6 @@
 {
   "version": "0.0.1",
   "configurations": [
-    {
-      "name": "clinc-hp-dev",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "run",
-        "dev"
-      ],
-      "port": 3000,
-      "autoPort": true
-    },
-    {
-      "name": "clinc-hp-nogate",
-      "runtimeExecutable": "sh",
-      "runtimeArgs": [
-        "-c",
-        "PREVIEW_BASIC_AUTH= npm run dev -- -p 3100"
-      ],
-      "port": 3100
-    }
+    { "name": "clinc-hp", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev"], "port": 3000 }
   ]
 }

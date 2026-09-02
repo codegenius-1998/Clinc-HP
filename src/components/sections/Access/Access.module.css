@@ -1,0 +1,84 @@
+.section {
+  padding-block: var(--nj-section-pad);
+  background: var(--nj-paper);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--nj-s9);
+  align-items: start;
+}
+
+.address {
+  font-family: var(--nj-font-head);
+  font-size: 1.05rem;
+  color: var(--nj-primary);
+}
+
+.points {
+  margin-top: var(--nj-s4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nj-s2);
+  font-size: 0.9rem;
+  color: var(--nj-ink);
+}
+
+.points li::before {
+  content: "・";
+  color: var(--nj-accent);
+}
+
+.hours {
+  margin-top: var(--nj-s6);
+  padding-top: var(--nj-s5);
+  border-top: 1px solid var(--nj-line);
+  font-size: 0.9rem;
+}
+
+.hoursRow + .hoursRow {
+  margin-top: var(--nj-s3);
+}
+
+.hours dt {
+  font-family: var(--nj-font-head);
+  color: var(--nj-ink-soft);
+}
+
+.hours dd {
+  margin: 0;
+}
+
+.map img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.info .tel {
+  display: inline-block;
+  margin-top: var(--nj-s6);
+  font-family: var(--nj-font-head);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--nj-primary);
+}
+
+.map {
+  border-radius: var(--nj-radius-md);
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+}
+
+.map svg {
+  width: 100%;
+  height: 100%;
+}
+
+@media (max-width: 860px) {
+  .grid {
+    grid-template-columns: 1fr;
+    gap: var(--nj-s6);
+  }
+}

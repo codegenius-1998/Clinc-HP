@@ -1,0 +1,86 @@
+.wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nj-s2);
+  margin-bottom: var(--nj-s7);
+}
+
+.center {
+  align-items: center;
+  text-align: center;
+}
+
+.ja {
+  font-size: clamp(1.5rem, 1.1rem + 1.6vw, 1.9rem);
+  color: var(--nj-primary);
+}
+
+.en {
+  font-family: var(--nj-font-head);
+  font-size: 0.8rem;
+  letter-spacing: 0.22em;
+  color: var(--nj-accent);
+  text-transform: uppercase;
+}
+
+.onDark .ja {
+  color: #fff;
+}
+
+.onDark .en {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* --- きらきら(見出しの上に3つ) --- */
+.sparkles {
+  position: absolute;
+  top: -14px;
+  left: 0;
+  width: 132px;
+  height: 20px;
+  pointer-events: none;
+}
+
+.center .sparkles {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.sparkles i {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  background: var(--nj-accent);
+  clip-path: polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%);
+  opacity: 0;
+}
+
+.onDark .sparkles i {
+  background: #fff;
+}
+
+.sparkles i:nth-child(1) {
+  left: 4px;
+  top: 4px;
+}
+.sparkles i:nth-child(2) {
+  left: 62px;
+  top: -4px;
+  width: 8px;
+  height: 8px;
+  animation-delay: 0.7s;
+}
+.sparkles i:nth-child(3) {
+  left: 110px;
+  top: 8px;
+  width: 13px;
+  height: 13px;
+  animation-delay: 1.4s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sparkles i {
+    opacity: 0.5;
+  }
+}

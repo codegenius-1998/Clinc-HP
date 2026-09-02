@@ -1,19 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import { listHearingsByOwner, hearingStatus } from "@/lib/hearing";
+import { listHearingsByOwner } from "@/lib/hearing";
 import { MypagePageHeader, MypagePrimaryLink } from "@/components/mypage/MypageShell";
 
-/** The clinic owner's first screen after signing in.
- *
- * It used to be three identical link cards with no information on them, which asked the reader to
- * remember what they had already done. Now it leads with where their applications actually stand —
- * that is the only question someone opens this page to answer — and keeps the navigation underneath. */
+/** The clinic owner's first screen after signing in. Leads with how many applications they have
+ * submitted, then the navigation. */
 
 const LINKS = [
   { href: "/mypage/apply", label: "新規申請", description: "ホームページ作成の申請を行います。" },
-  { href: "/mypage/requests", label: "申請一覧", description: "送信した申請の状態を確認します。" },
-  { href: "/mypage/sites", label: "サイト一覧", description: "生成が完了したホームページを確認します。" },
+  { href: "/mypage/requests", label: "申請一覧", description: "送信した申請の内容を確認します。" },
 ];
 
 export default async function Home() {
@@ -23,23 +19,12 @@ export default async function Home() {
   }
 
   const hearings = await listHearingsByOwner(session.email);
-  const counts = hearings.reduce<Record<string, number>>((acc, hearing) => {
-    const { key } = hearingStatus(hearing);
-    acc[key] = (acc[key] ?? 0) + 1;
-    return acc;
-  }, {});
-
-  const summary = [
-    { key: "pending", label: "承認待ち" },
-    { key: "generating", label: "作成中" },
-    { key: "generated", label: "生成済み" },
-  ] as const;
 
   return (
     <div>
       <MypagePageHeader
-        title={`ようこそ`}
-        description="医院の情報を入力するだけで、文章も写真もそろったホームページができあがります。"
+        title="ようこそ"
+        description="医院の情報を入力して、ホームページ作成の申請を送信できます。"
       />
 
       {hearings.length === 0 ? (
@@ -54,13 +39,9 @@ export default async function Home() {
         </div>
       ) : (
         <div className="flex flex-col gap-6">
-          <div className="grid gap-px border border-line bg-line sm:grid-cols-3">
-            {summary.map((item) => (
-              <div key={item.key} className="bg-paper px-6 py-7">
-                <p className="text-[12px] tracking-[0.2em] text-ink-soft">{item.label}</p>
-                <p className="mt-3 font-display text-[30px] leading-none text-ink">{counts[item.key] ?? 0}</p>
-              </div>
-            ))}
+          <div className="border border-line bg-paper px-6 py-7">
+            <p className="text-[12px] tracking-[0.2em] text-ink-soft">送信済みの申請</p>
+            <p className="mt-3 font-display text-[30px] leading-none text-ink">{hearings.length}</p>
           </div>
           <div className="flex flex-wrap items-center gap-4">
             <MypagePrimaryLink href="/mypage/apply">新しく申請する</MypagePrimaryLink>
@@ -68,13 +49,13 @@ export default async function Home() {
               href="/mypage/requests"
               className="text-[13px] text-ink-soft underline underline-offset-8 transition-colors hover:text-ink"
             >
-              申請の状態を確認する
+              申請の内容を確認する
             </Link>
           </div>
         </div>
       )}
 
-      <div className="mt-14 grid gap-px border-t border-line sm:grid-cols-3">
+      <div className="mt-14 grid gap-px border-t border-line sm:grid-cols-2">
         {LINKS.map((link) => (
           <Link
             key={link.href}

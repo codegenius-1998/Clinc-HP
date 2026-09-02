@@ -1,0 +1,65 @@
+.footer {
+  background: var(--nj-primary-deep);
+  color: rgba(255, 255, 255, 0.9);
+  padding-top: var(--nj-section-pad);
+}
+
+.grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--nj-s7);
+}
+
+.name {
+  font-family: var(--nj-font-head);
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.nameEn {
+  font-size: 0.62rem;
+  letter-spacing: 0.24em;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+}
+
+.grid .address {
+  margin-top: var(--nj-s4);
+  font-size: 0.85rem;
+  line-height: 1.9;
+}
+
+.grid .tel {
+  display: inline-block;
+  margin-top: var(--nj-s3);
+  font-family: var(--nj-font-head);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.nav {
+  display: grid;
+  gap: var(--nj-s2);
+  align-content: start;
+}
+
+.nav a {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.nav a:hover {
+  color: #fff;
+}
+
+.copy {
+  margin-top: var(--nj-s8);
+  padding: var(--nj-s4);
+  text-align: center;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.55);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}

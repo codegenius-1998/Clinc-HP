@@ -4,10 +4,6 @@ import { useEffect, useRef, useState, type ElementType, type ReactNode } from "r
 
 /** Fades a section in as it scrolls into view, for the app's own marketing and owner pages.
  *
- * Not shared with the generated clinic sites. Those get their reveal from src/lib/render/site.css and
- * js/main.js, which are written into each site as plain static files — this is React, runs in the
- * app, and the two must not learn about each other.
- *
  * Two things keep it from being able to hide content permanently, which is the only real risk of a
  * pattern like this. The `js` class is added by this component on mount, and the CSS only hides
  * anything when that class is present, so a browser that never runs the script shows everything.

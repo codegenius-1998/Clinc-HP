@@ -1,27 +1,21 @@
 import { listUsers } from "@/lib/auth";
 import { listHearings } from "@/lib/hearing";
-import { listSites, listDepartments } from "@/lib/content";
+import { listDepartments } from "@/lib/content";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 
 export default async function AdminDashboardPage() {
-  const [users, hearings, templates, departments] = await Promise.all([
-    listUsers(),
-    listHearings(),
-    listSites({ isTemplate: true }),
-    listDepartments(),
-  ]);
+  const [users, hearings, departments] = await Promise.all([listUsers(), listHearings(), listDepartments()]);
 
   const cards = [
     { label: "ユーザー", value: users.length, href: "/admin/users" },
     { label: "リクエスト", value: hearings.length, href: "/admin/requests" },
-    { label: "テンプレート", value: templates.length, href: "/admin/templates" },
     { label: "部門", value: departments.length, href: "/admin/departments" },
   ];
 
   return (
     <div>
       <AdminPageHeader title="管理者ダッシュボード" />
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
         {cards.map((card) => (
           <a
             key={card.label}

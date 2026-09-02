@@ -11,12 +11,12 @@ export default async function AdminSectionsPage() {
 
   return (
     <div>
-      <AdminPageHeader title="セクション管理" description="テンプレートに追加できるセクション種類を管理します。" />
+      <AdminPageHeader title="セクション管理" description="ホームページのセクション名（例: メインビジュアル、診療案内）を管理します。" />
 
       <div className="rounded-2xl border border-slate-200 bg-white p-6">
         <h2 className="text-[16px] font-medium text-slate-900">新規セクション作成</h2>
         <AdminForm action={createSectionAction} submitLabel="作成" className="mt-4 flex items-end gap-3">
-          <input name="name" required className={`${inputClass} flex-1`} placeholder="例: 診療科案内" />
+          <input name="name" required className={`${inputClass} flex-1`} placeholder="例: 診療案内" />
         </AdminForm>
       </div>
 

@@ -1,1596 +1,559 @@
-# Clinc-HP システム仕様書
+# Clinc-HP 仕様書
 
-**関連文書**：[SCREENS.md](./SCREENS.md)（画面設計書）／[TESTCASES.md](./TESTCASES.md)（テストケース仕様書）
+個人クリニック（個人／私設クリニック、個人クリニック）向け **ホームページ作成申請アプリ** の
+実装仕様。ソースコードから起こした現状仕様であり、`CLAUDE.md` / `AGENTS.md` を補完する。
+用語・仕様に齟齬がある場合はコードが正。
 
-**版数** 2.0（確定版）／ **作成日** 2026-08-19 ／ **対象** `main` 作業ツリー（未コミット変更を含む）
-
-> **v1.0 からの変更**：v1.0 はプロジェクトへのアクセス不能下でセッション記録から再構成したため、一部が推定でした。本版は**全モジュールを実ソースで照合済み**です。推定マーク（🔶）は撤廃しました。主な訂正は 13章にまとめてあります。
-
----
-
-## 1. プロダクト概要
-
-### 1.1 一言でいうと
-
-> クリニックがヒアリングシートを提出すると、AI がデザインテンプレートを自動選択し、文章と写真を生成して静的サイトを組み立て、そのままブラウザ上で編集・公開できる CMS。
-
-### 1.2 設計の中心思想
-
-**「テンプレート」と「生成されたサイト」は同一のデータ構造（`SiteDocument`）である。** 両者の違いは `sites.is_template` フラグ 1 つだけ。
-
-ソース（`src/lib/site/document.ts`）のコメントが意図を明記しています。
-
-> その同一性は意図的かつ構造を支えるものである。1 つのレンダラーが両方を出力し（テンプレートのプレビューは、そこから生まれるサイトとピクセル単位で一致する）、1 つの編集画面が両方を編集し、「テンプレートからサイトを作る」が別のコードパスではなく単なる複製＋内容差し替えになる。
-
-もう 1 つの柱が **AI 呼び出しの分離**です。`renderSiteFiles()` は AI を一切呼ばず、画像ファイルにも触れません。したがって**編集の保存は即座に完了し、API 料金がゼロ**です。
+- 最終更新: 2026-09-02
+- 対象リビジョン: `develop` ブランチ（`1ccc4a5` 時点）
+- 関連ドキュメント: [`CLAUDE.md`](../CLAUDE.md), [`AGENTS.md`](../AGENTS.md),
+  [`docs/Clinc-HP_事業説明資料.docx`](Clinc-HP_事業説明資料.docx)
 
 ---
 
-## 2. 用語定義
+## 1. 概要
 
-| 用語 | 定義 |
-|---|---|
-| ヒアリングシート | クリニックが入力する基本情報。生成の「最初の材料」 |
-| SiteDocument | サイト／テンプレートの設計図。**生成後はこれが唯一の正** |
-| DesignTokens | 見た目のすべてを数値で保持。そのまま CSS カスタムプロパティになる |
-| ブロック（Block） | ページの構成単位。**種類は固定 12 種**、個数と順番は自由 |
-| テンプレート | `isTemplate = true` の SiteDocument |
-| 販売可（canSell） | テンプレートを自動選択の候補に含めるフラグ |
-| 申請 | クリニックオーナーが提出したヒアリングシート。管理者の承認で生成が走る |
+### 1.1 プロダクトの目的
 
----
+クリニックのオーナーがヒアリングシート（申請フォーム）を送信すると、管理者がワンクリックで
+その内容から **1ページの静的なクリニックサイト** を生成できる、申請受付＋サイト生成アプリ。
 
-## 3. ロールと権限
+### 1.2 登場人物（ロール）
 
-| ロール | ログイン | できること |
+| ロール | 説明 | 主な画面 |
 |---|---|---|
-| クリニックオーナー `clinic_owner` | `/` | 申請の作成・削除、自分のサイトの閲覧・編集・公開 |
-| 管理者 `admin` | `/admin` | 申請の承認・生成、全サイトの編集、テンプレートの作成・編集・販売可設定、マスタデータ管理、ユーザー管理 |
+| 未ログイン訪問者 | マーケティング用ランディングページの閲覧・新規登録 | `/`, `/login`, `/signup`, `/admin` |
+| クリニックオーナー (`clinic_owner`) | サインアップし、ヒアリングシートを申請。自分の申請の閲覧・削除・生成サイトの編集 | `/home`, `/mypage/*` |
+| 管理者 (`admin`) | ユーザー管理、申請の閲覧／削除／サイト生成、申請フォームのマスタデータ管理 | `/admin/*` |
 
-ログイン画面もセッションも完全に別系統です。ログイン時はメール・パスワードに加え**ロールも照合**します（`WHERE email = ? AND role = ?`）。
+### 1.3 スコープ外
 
-### 3.1 権限モデル（`src/lib/site/access.ts`）
+サイト生成は「ヒアリングシート → 正規化された `SiteTemplate` → 静的バンドル（その場で編集）」の
+1 パスのみ（§8.6〜8.9）。公開ステップ・ブロック単位のドキュメントモデルはない。
+`SiteDocument` / `src/lib/site` / `src/lib/render` / `/sites/*` は存在しないので再導入しないこと。
 
-```
-管理者            → すべて編集可
-clinic_owner      → 自分が owner_email のサイトのみ編集可
-                    テンプレートは編集不可（「テンプレートを編集できるのは管理者のみです。」）
-未ログイン        → 拒否（「ログインしてください。」）
-```
+### 1.4 言語方針
 
-テンプレートが管理者専用である理由もソースに明記されています。テンプレートは共有インフラであり、1 つのクリニックがそれを編集すると、以後そこから生成されるすべてのサイトが黙って変わってしまうためです。
-
-### 3.2 実装上の絶対規則
-
-> **Server Action は直接 POST 可能なエンドポイントである。したがってページ側のガードは何も守らない。**
-
-このため、
-
-- 管理系 Server Action は先頭で `requireAdmin()` を呼ぶ（`contentActions.ts` / `templateActions.ts` の全関数で実施を確認）
-- 編集系 Server Action は先頭で `requireEditableDocument(id)` / `requireEditableDocumentBySlug(slug)` を呼ぶ（読み込みと権限チェックを 1 ステップで行う）
-
-さらに `saveDocumentAction` は、**クライアントから来たペイロードのうち編集可能な範囲だけを採用**し、`id` / `slug` / `isTemplate` / `canSell` / `templateId` / `ownerEmail` / `createdAt` は保存済みの行から読み直します。改竄されたペイロードで所有者を移したり、自分をテンプレートに昇格させたり、別ドキュメントを上書きしたりできません。
+- UI ラベル・バリデーションメッセージ・`throw new Error()` のメッセージはすべて **日本語**
+  （エラーはそのまま UI に表示される）。
+- コードコメントは英語。
 
 ---
 
-## 4. システム構成
+## 2. 用語
 
-### 4.1 技術スタック
-
-| 領域 | 採用技術 |
+| 用語 | 意味 |
 |---|---|
-| フレームワーク | Next.js 16.3.0（App Router、Server Actions 中心） |
-| UI | React 19.2.8 |
-| 言語 | TypeScript 5 |
-| 管理画面スタイル | Tailwind CSS v4 |
-| 生成サイトスタイル | 素の CSS ＋ CSS カスタムプロパティ |
-| バリデーション | zod 4.4.3 |
-| HTML/CSS 解析 | cheerio 1.2.0 ＋ 正規表現 |
-| DB | Cloudflare D1（**HTTP REST API 経由**、Workers バインディングではない） |
-| 画像ストレージ | Supabase Storage（**Storage REST API 経由**、`@supabase/supabase-js` は使わない） |
-| AI（文章・判断） | OpenAI `gpt-5.6-terra`（`responses.parse` ＋ `zodTextFormat`） |
-| AI（画像） | OpenAI `gpt-image-2` / `gpt-image-1` |
-| 公開先 | Cloudflare Pages（`npx wrangler pages deploy`） |
+| ヒアリングシート / 申請 / リクエスト | `/mypage/apply` から送信された 1 件の申請。D1 `hearings` テーブルの 1 行（`src/lib/hearing.ts` の `HearingSheet`） |
+| slug | 1 件の申請を識別する ASCII 文字列。`generateSlug()` が `<clinic>-<base36 時刻+乱数>` 形式で生成。日本語名は `clinic-<suffix>` にフォールバック |
+| 生成サイト / バンドル | ヒアリングシートから生成した静的ファイル一式。`public/_generated/<slug>/` に書き出し、`/api/generated/<slug>/` で配信 |
+| `SiteTemplate` | 生成サイトの構造化コンテンツ（`src/lib/generatedSite/types.ts`）。OpenAI が出力し、`normalize.ts` で完全な形に整形され、`render.ts` が消費 |
+| nj-site | 生成サイト／プレビューの CSS スコープ（`<div class="nj-site">`）。トークンは `--nj-*` カスタムプロパティ |
+| プレビュー | `/preview/<slug>`（React コンポーネントで描画する手組みテンプレート。`/template-create` の成果物） |
+| マスタデータ | 申請フォームの選択肢（診療科・サービス・特徴・ターゲット・セクション）。管理者が編集 |
 
-**依存は意図的に最小限**です。ドラッグ&ドロップも当初案の `@dnd-kit` を採らず、HTML5 標準 API で実装しています（依存追加ゼロ）。
+---
 
-### 4.2 環境変数（`.env.local`）
+## 3. システム構成
 
-```
-OPENAI_API_KEY
-CLOUDFLARE_API_TOKEN
-CLOUDFLARE_ACCOUNT_ID
-CLOUDFLARE_D1_DATABASE_ID
-SUPABASE_URL
-SUPABASE_ANON_KEY
-SUPABASE_SERVICE_ROLE_KEY   （任意：anon ロールに INSERT ポリシーが無い場合のみ）
-SUPABASE_STORAGE_BUCKET     （任意：既定 "site-images"）
-```
+### 3.1 ランタイム
 
-### 4.3 データの所在
+- **Next.js 16.3**（App Router、React 19.2、Turbopack）。`next.config.ts` は `output: "standalone"`。
+- **通常の Node サーバとして動作**（Workers ランタイムではない）。すべての外部バックエンドは
+  SDK を使わず素の `fetch` で HTTP アクセスする（D1・Supabase Storage・OpenAI）。
+- Next.js 16 では `middleware.ts` が `proxy.ts` にリネームされている（`src/proxy.ts`）。
 
-| データ | 保存先 |
-|---|---|
-| ユーザー・セッション | D1 `users` / `sessions` |
-| マスタデータ（診療科・サービス・特徴・ターゲット・セクション） | D1 |
-| SiteDocument（テンプレート／サイト） | D1 `sites` / `site_sections` |
-| ヒアリングシート | **D1** `hearings` テーブル（2026-08-25 移行。旧: `data/hearings/<slug>.json`） |
-| 生成サイト | **ローカルファイル** `public/generated/<slug>/` |
-| テンプレートのプレビュー | `public/generated/_templates/<id>/` |
-| ユーザーアップロード写真 | Supabase Storage → 生成サイト内へ複製 |
+> ⚠️ Next.js 16 は破壊的変更を多く含む。Next.js のコードを書く前に
+> `node_modules/next/dist/docs/` 内の該当ガイドを読むこと（`AGENTS.md` / `nextjs` スキル）。
+
+### 3.2 ホスティング（Cloudflare Containers）
+
+`wrangler deploy` で以下をデプロイする:
+
+| 要素 | ファイル | 役割 |
+|---|---|---|
+| Worker（フロントドア） | `worker/index.ts` | 何もせず、1 つの常駐コンテナインスタンスに全リクエストを転送 |
+| Container クラス | `ClincHpContainer`（`worker/index.ts`） | `Dockerfile` をビルドしたイメージで Next.js サーバを起動（`defaultPort = 8080`, `sleepAfter = "24h"`） |
+| Durable Object | `CLINC_HP_CONTAINER` バインディング | `max_instances: 1` のインスタンスを名前で addressable に保つ |
+
+- コンテナのランタイム秘密は `wrangler secret put <NAME>` で設定し、`worker/index.ts` の
+  コンストラクタで `this.envVars` に載せ替える。アプリからは `process.env.*` でローカル開発と
+  同じように読む。
+- `instance_type: "basic"`（1/4 vCPU / 1 GiB / 4 GB ディスク）。OOM が出たら `standard-*` に上げる。
+
+### 3.3 Dockerfile
+
+`node:22-slim` の 3 ステージ（deps → builder → runner）。`npm run build`（standalone 出力）を
+コピーし、`wrangler@4` をグローバルインストール、非 root ユーザ `nextjs` で `node server.js`。
+
+> ⚠️ `Dockerfile` / `worker/index.ts` のコメントに実在しないモジュール名や誤ったパス
+> （`/app/public/generated`。実体は `public/_generated/`）が残っている。コメントの負債（§13）。
+
+### 3.4 コンテナディスクは非永続
+
+`public/_generated/*`（生成サイト）はコンテナ自身のディスクに書かれ、再デプロイ／再起動で消える。
+ただし生成元の `SiteTemplate` は D1 の `hearings.data.generatedSite.template` に保存されるので、
+エディタの「保存」で OpenAI を呼ばずに再レンダリングして復旧できる（§8.7）。
+
+---
+
+## 4. 外部サービス・環境変数
+
+ローカルは `.env.local`、本番は `wrangler secret put`。
+
+| 変数 | 用途 | 未設定時の挙動 |
+|---|---|---|
+| `CLOUDFLARE_ACCOUNT_ID` / `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_D1_DATABASE_ID` | D1 HTTP API（`src/lib/d1.ts`） | すべての D1 アクセスが日本語エラーで失敗 |
+| `SUPABASE_URL` | Supabase Storage（写真アップロード・生成画像の保存先） | アップロード不可。サイト生成は継続するが画像はプレースホルダ SVG のまま |
+| `SUPABASE_SERVICE_ROLE_KEY`（推奨）または `SUPABASE_ANON_KEY` | 同上の認証。service role は RLS をバイパス。anon は bucket に INSERT ポリシーが必要 | 上と同じ |
+| `SUPABASE_STORAGE_BUCKET` | バケット名（省略時 `site-images`）。**Public 指定必須** | `site-images` を使用 |
+| `OPENAI_API_KEY` | サイト生成（コピー＋写真、`src/lib/openai.ts`） | `/admin/requests` の「サイト生成」ボタンが日本語エラーを返す。他機能は無影響 |
+| `OPENAI_TEXT_MODEL` / `OPENAI_IMAGE_MODEL` / `OPENAI_BASE_URL` | モデル上書き | 既定 `gpt-4o` / `gpt-image-1` / `https://api.openai.com/v1` |
+| `PREVIEW_BASIC_AUTH` | トンネルデモ用の全体 Basic 認証（`src/proxy.ts`）。形式 `user:password` | 認証なしで素通し（通常のローカル開発） |
+
+> ⚠️ トンネル URL に認証情報を入れない（`https://user:pass@host`）。Chrome がその URL からの
+> `fetch` 構築を拒否し、全 Server Action が壊れる。
 
 ---
 
 ## 5. データモデル
 
-### 5.1 D1 スキーマ
+### 5.1 永続化: Cloudflare D1（HTTP 経由）
 
-#### 認証系（`0001_create_auth_tables.sql`）
+`src/lib/d1.ts` は D1 REST API に **1 リクエスト 1 ステートメント** で話す。
+スキーマは `migrations/*.sql`、`node scripts/migrate.mjs` で適用（`IF NOT EXISTS` /
+`INSERT OR IGNORE` / `ALTER TABLE ADD COLUMN` の失敗許容で冪等）。
 
-```sql
-users(id PK, email UNIQUE, password_hash, password_salt,
-      role CHECK IN ('admin','clinic_owner'), created_at)
-sessions(token PK, user_id FK→users ON DELETE CASCADE, role, expires_at, created_at)
-```
+### 5.2 テーブル
 
-- パスワード：`scrypt`（ソルト 16 バイト／鍵長 64 バイト）、照合は `timingSafeEqual`
-- セッション：32 バイト乱数、TTL **7 日**
-- Cookie `session_token`：`httpOnly` / `sameSite=lax` / 本番のみ `secure`
+| テーブル | マイグレーション | モジュール | 内容 |
+|---|---|---|---|
+| `users` | `0001` | `src/lib/auth.ts` | `id`, `email`(UNIQUE), `password_hash`, `password_salt`, `role`(`admin`/`clinic_owner`), `created_at` |
+| `sessions` | `0001` | `src/lib/auth.ts` | `token`(PK), `user_id`→`users.id` ON DELETE CASCADE, `role`, `expires_at`, `created_at` |
+| `departments` | `0002` | `src/lib/content.ts` | `id`, `name`（診療科） |
+| `services` | `0002` | `src/lib/content.ts` | `id`, `department_id`→`departments.id` CASCADE, `name` |
+| `features` | `0002` | `src/lib/content.ts` | `id`, `name`（特徴。フラットなタグ） |
+| `targets` | `0002` | `src/lib/content.ts` | `id`, `name`（ターゲット患者層。フラットなタグ） |
+| `hearings` | `0003` | `src/lib/hearing.ts` | `slug`(PK), `owner_email`, `clinic_name`, `created_at`, `data`(JSON) |
+| `sections` | `0004` | `src/lib/content.ts` | `id`, `name`（セクションのマスタ。名前のみ） |
 
-#### コンテンツ系（`0002_create_content_tables.sql`）
+インデックス: `idx_users_email`, `idx_sessions_user_id`, `idx_services_department_id`,
+`idx_hearings_owner_email`, `idx_hearings_created_at`。
 
-```sql
-sections(id PK, name)                                    -- ブロック種別マスタ
-sites(id PK, name, is_template, can_sell, created_at)
-site_sections(id PK, sec_id FK→sections, site_id FK→sites, content, position)
-departments(id PK, name)
-services(id PK, department_id FK→departments, name)
-features(id PK, name)
-targets(id PK, name)
-```
+### 5.3 `hearings.data`（JSON ブロブ）
 
-#### SiteDocument 対応（`0003_site_documents.sql`）
+`slug` / `owner_email` / `clinic_name` / `created_at` のみ独立カラム。申請者が入力した残り全部が
+`data` の 1 つの JSON。**送信時に確定し、更新パスはない**（管理者は閲覧と削除のみ。オーナーは
+自分の申請の削除と生成サイトの編集のみ）。`saveHearing()` は `slug` で UPSERT。
 
-**新テーブルを作らず既存テーブルを拡張**しています。`sites.is_template` も `site_sections.position` も元々この用途に適した形でした。
+`HearingSheet`（主なフィールド、`src/lib/hearing.ts`）:
 
-```sql
-ALTER TABLE sites ADD COLUMN slug / owner_email / template_id / design / meta
-                                 / mood / tags / source_url / thumbnail_url / updated_at;
-CREATE UNIQUE INDEX idx_sites_slug        ON sites(slug);
-CREATE INDEX        idx_sites_owner_email ON sites(owner_email);
-CREATE INDEX        idx_sites_template_id ON sites(template_id);
-
-ALTER TABLE site_sections ADD COLUMN visible INTEGER NOT NULL DEFAULT 1;
-ALTER TABLE site_sections ADD COLUMN nav_label TEXT;
-
--- 12 種のブロック種別を sections に投入（FK 解決と管理画面表示のため）
-INSERT OR IGNORE INTO sections (id, name) VALUES ('hero','メインビジュアル'); …他11種
-```
-
-#### ブロックの格納方式（`src/lib/site/store.ts`）
-
-```
-site_sections.id       → "<siteId>:<block.id>"   ← サイトIDで名前空間化
-site_sections.sec_id   → block.type              ← 固定カタログの1つ
-site_sections.content  → block.data (JSON)
-site_sections.position → 配列インデックス
-```
-
-**名前空間化の理由**：ブロック ID はドキュメント内で一意であればよく、テンプレートは意図的に読みやすい ID（`hero`、`department`）を使います。これらは HTML アンカーになるためです。一方 `site_sections.id` はグローバル主キーなので、`hero` を含む 2 つ目のテンプレートが insert に失敗します。接頭辞なしの値はそのまま通すため、名前空間化以前の行も読めます。
-
-### 5.2 SiteDocument（`src/lib/site/document.ts`）
-
-zod スキーマで全体を検証します。
-
-```ts
-type SiteDocument = {
-  id: string;
-  slug: string;          // public/generated の出力先名 兼 Cloudflare Pages プロジェクト名。ASCII のみ
-  name: string;
-  isTemplate: boolean;   // ← テンプレートとサイトの唯一の違い
-  canSell: boolean;      // テンプレート専用：自動選択に出すか
-  templateId?: string;
-  ownerEmail?: string;
-  design: DesignTokens;
-  meta: SiteMeta;
-  blocks: Block[];       // 配列順 = 表示順
-  mood?: string;         // テンプレート専用：雰囲気の散文
-  tags: string[];
-  sourceUrl?: string;
-  thumbnailUrl?: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type SiteMeta = {
-  clinicName; phone; line; address; logoImage;
-  seo: { title; metaDescription; ogTitle; ogDescription; ogSiteName };
-  snsLinks: { label; href }[];
-};
-```
-
-`navBlocks(doc)` が「表示中かつ `navLabel` が空でない」ブロックを文書順で返します。**ページの `<nav>` とフッターのリンク一覧は両方ともこの関数から導出される**ため、両者が食い違うことは原理的にありません。
-
-### 5.3 DesignTokens
-
-旧方式（`fontFamily: "sans" | "serif"` のような 2 択）を廃し、実値を保持します。zod で**範囲まで拘束**されている点が重要です。
-
-| グループ | フィールド | 型・範囲 |
+| フィールド | 型 | 由来（申請フォームのステップ） |
 |---|---|---|
-| `colors` | `primary` `accent` `light` `background` `text` `primaryInverse` `accentInverse` | `#rgb` / `#rrggbb` |
-| `font` | `headingFamily` `bodyFamily` | 非空文字列 |
-| | `googleFonts` | `string[]`（例 `"Noto Sans JP:wght@400;700"`。空＝外部リクエストなし） |
-| | `baseSize` | 12〜22 |
-| | `lineHeight` | 1.2〜2.4 |
-| | `headingWeight` | 整数 300〜900 |
-| `block` | `radius` | 0〜48 |
-| | `borderWidth` | 0〜4 |
-| | `borderColor` | hex |
-| | `shadow` | `none` \| `soft` \| `strong` |
-| | `cardLayout` | `grid` \| `list` \| `minimal` \| `overlap` |
-| `layout` | `heroLayout` | `full-bleed` \| `split` \| `centered` |
-| | `maxWidth` | 880〜1440 |
-| | `spacingScale` | 0.7〜2 |
-| | `sectionDivider` | `none` \| `wave` \| `diagonal` |
-| `layout` | `background` | `plain` \| `gradient` \| `blobs` \| `dots` \| `grid`（ページ全体の背景の作り） |
-| `layout` | `decoration` | `none` \| `accent` \| `rich`（見出し記号・セクション番号・角の飾り） |
-| `animation` | `reveal` | `none` \| `fade` \| `slide-up` \| `slide-left` \| `slide-right` \| `zoom` \| `pop` \| `flip` \| `blur` |
-| `animation` | `variety` | `boolean`（4セクション周期で登場の向きとカードの並びを変える） |
-| | `duration` | 0〜2000（ms） |
-| | `stagger` `parallaxHero` | boolean |
-
-`cardLayout` は**テンプレートが持つ最大の構造的レバー**です。`"minimal"` はカード画像をまったく描画しないため、**画像生成側がこれを参照する必要があります**（CSS 任せにすると、どの `<img>` も指さないファイルに画像生成 API 料金を払うことになる）。
-
-`primaryInverse` / `accentInverse` を計算ではなく明示値として持つのは、取り込み元サイトが実際に何をしていたかを尊重するためです。
-
-`DEFAULT_DESIGN_TOKENS` は `site.css` の `:root` フォールバックと一致しており、URL 取り込みが値を決められなかったときと、手作りテンプレートの出発点に使われます。
-
-### 5.4 ブロック（12 種の固定カタログ）
-
-```ts
-type Block = {
-  id: string;        // "blk_<random6><time3>" — HTMLアンカーになるため短い
-  type: BlockType;   // 12種
-  visible: boolean;
-  navLabel: string;  // 空文字 = 描画するがナビには出さない（hero・バナー）
-  data: …;           // type ごとの zod スキーマ（discriminated union）
-};
-```
-
-**種類ごとに data スキーマが異なる判別可能ユニオン**です。各ブロックが**固有のインスタンス ID を持つ**ことが、同じ種類を複数配置できる理由です（旧 `SITE_SPEC` は種別 ID をキーにしていたため各 1 個が上限でした）。
-
-| type | 日本語名 | 単一 | 既定 navLabel | data の主フィールド |
-|---|---|:---:|---|---|
-| `hero` | メインビジュアル | ✔ | （なし） | headline / subheadline / image |
-| `rich` | 文章＋カード | | セクション | heading / body / image? / cards[]{heading,body,image?} |
-| `hours` | 診療時間 | | 診療時間 | heading / rows[]{label,value} / note? |
-| `access` | アクセス | | アクセス | heading / address / mapQuery / note? |
-| `news` | お知らせ | | お知らせ | heading / items[]{date,title,body?} |
-| `staff` | スタッフ紹介 | | スタッフ紹介 | heading / members[]{name,role?,comment,image?} |
-| `faq` | よくある質問 | | よくある質問 | heading / items[]{question,answer} |
-| `pricing` | 料金表 | | 料金表 | heading / items[]{name,price,note?} / note? |
-| `contact` | お問い合わせ | ✔ | お問い合わせ | heading / lead（番号は「基本情報」から取得） |
-| `freeText` | 自由文 | | （なし） | heading / body / align(left\|center) |
-| `imageBanner` | 画像バナー | | （なし） | image / caption? / href? / height(short\|tall) |
-| `gallery` | 写真ギャラリー | | ギャラリー | heading / images[]{src,caption?} / columns(2\|3\|4) |
-
-`rich` は**診療科案内・ご挨拶・当院の特徴・施設案内をすべて兼ねます**。区別するのは `navLabel` と `heading` だけであり、これがそのまま文章生成 AI への指示になります。**管理者がテンプレートに 5 つ目の内容セクションを足すと、コード変更なしに AI が文章を書きます。**
-
-#### ブロックレジストリ（`src/lib/site/blocks.ts`）
-
-`BLOCK_DEFINITIONS` が**レンダラーと編集フォームを駆動する唯一の設計図**です。`BlockEditor.tsx` がこの `fields` を歩いてフォームを組み立てるため、**フィールド追加はこの 1 箇所の編集で完結**します。
-
-このモジュールは**意図的に React を含みません**。編集画面はクライアントコンポーネントなので、ここにレンダリング用コンポーネントを引き込むとレンダラー全体がブラウザバンドルに入ってしまいます。type → コンポーネントの対応は `src/lib/render/components.tsx` 側にあり、**両者は `BlockType` を網羅的に switch することで同期**しています。
-
-フィールド種別は 6 つ：
-
-| 種別 | 用途 |
-|---|---|
-| `text` / `textarea` | 単一行・複数行テキスト |
-| `image` | 画像（`adoptImageAction` 経由） |
-| `url` | リンク先 |
-| `select` | 選択肢。`numeric: true` で数値として書き戻す |
-| `list` | 繰り返し（カード・FAQ・スタッフ等）。`itemLabel` `newItem()` `max?` を持つ |
-
-`blockSummary()` が編集画面のブロック一覧に短い要約を出すため、`rich` が 4 つあっても同じ行が 4 つ並びません。
-
-### 5.5 HearingSheet（`src/lib/hearing.ts`）
-
-D1 の `hearings` テーブルに保存されます（1申請 = 1行）。
-
-| フィールド | 内容 |
-|---|---|
-| `slug` | ASCII のみ。日本語医院名は `clinic-<base36>` にフォールバック |
-| `ownerEmail` | 申請者。削除済みの旧 `/create` 経由で作られた申請では未設定 |
-| `clinicName` `address` `phone` `line` | 基本情報（院長名は 2026-08-21 に廃止） |
-| `department` `serviceNames[]` `hours` `features` `featureNames[]` `targetNames[]` `request` | 診療内容・特徴・要望 |
-| `staffMembers[]` | `{name, comment, role?, photoUrl?}`。件数がカード数になる |
-| `faqs[]` | 実データがあれば AI 創作より優先 |
-| `news[]` | 空なら AI が一般的な内容を生成 |
-| `priceItems[]` | **AI 創作しない**。空ならセクションごと非表示 |
-| `uploadedImages` | カテゴリ → Supabase Storage 公開 URL の配列 |
-| `templateId` `templateLabel` | **AI が選んだ結果の記録**（ユーザーの選択ではない） |
-| `templateReason` | AI が選んだ理由（1 文） |
-| `previewUrl` `generationError` `cloudflareUrl` `cloudflareError` | 生成・公開の結果 |
-
-画像カテゴリは 3 種：`exterior`（外部写真）／`interior`（内部写真）／`atmosphere`（治療雰囲気写真）。
-
-### 5.6 申請ステータス（`hearingStatus()`）
-
-`/admin/requests` と `/mypage/requests` で共有されます。
-
-| 状態 | 判定 | 意味 |
-|---|---|---|
-| **承認待ち** | `templateId` なし | 申請は届いたが未承認 |
-| 処理中 | `templateId` あり・`previewUrl` なし・エラーなし | 生成結果が未記録（通常は一瞬） |
-| 生成済み | `previewUrl` あり | 生成成功 |
-| 生成失敗 | `generationError` あり | 管理者が再実行できる |
+| `clinicName`, `address`, `phone`, `line` | string | 基本情報 |
+| `department` | string | 選択サービスの診療科名を `・` 連結（送信時に導出） |
+| `serviceNames`, `featureNames`, `targetNames` | string[] | 診療科／特徴／ターゲットの選択スナップショット |
+| `features` | string | `featureNames` を `、` 連結（レガシー自由文。プロンプトが直接読む） |
+| `schedule` | `{ days: string[]; rows: {label; marks}[]; notes: string[] }` | 診療時間（構造化。生成サイトにそのまま反映） |
+| `hours` | string | レガシー自由文の診療時間（旧レコード用） |
+| `director` | `{ name; role; greeting; photoUrl? }` | 院長紹介 |
+| `staffMembers` | `{ name; comment; role?; photoUrl? }[]` | レガシー（現フォームは院長のみ） |
+| `priceItems` | `{ name; price; note? }[]` | 料金表（金額があるときのみ） |
+| `faqs` | `{ question; answer }[]` | よくあるご質問 |
+| `news` | `{ date; title }[]` | お知らせ |
+| `request` | string | ご要望（自由文） |
+| `uploadedImages` | `{ exterior?: string[]; interior?: string[]; atmosphere?: string[] }` | 写真（Supabase の公開 URL） |
+| `heroImageUrl` | string | トップ画像 1 枚（ヒーロー背景に使用） |
+| `generatedSite` | `{ at; editedAt?; imagesGenerated?; imagesFromUploads?; template? }` | サイト生成後に管理者アクションが付与 |
 
 ---
 
-## 6. 機能仕様
-
-### 6.1 全体フロー
-
-```
-【管理者】テンプレートを作る
-  (A) 作成済みサイトから作る … デザイン値を「読み取る」（推測なし）
-  (B) 外部サイトのURLから作る … HTML/CSS を解析して AI が数値化
-    → D1 に isTemplate=true / canSell=false で保存
-    → 編集画面で微調整 → 「販売可」に切替
-
-【ユーザー】サイトを作る
-  ヒアリングシート入力（テンプレートは選ばない）
-    → AI が canSell=true のテンプレから最適な1つを自動選択
-    → デザインと構成を複製
-    → AI が文章を執筆・画像を生成して差し替え
-    → D1 に保存 ＋ public/generated/<slug>/ へ書き出し
-
-【両方】編集する
-  同じデータ構造 → 編集画面は1つを共用
-```
-
-### 6.2 クリニックオーナーの申請（`/mypage/apply`）
-
-ウィザード形式。各ステップを自由に前後移動し、確認画面から送信します。
-
-| Step | 内容 | 必須 |
-|---|---|---|
-| 1 | 基本情報（クリニック名・住所・電話・LINE） | クリニック名のみ |
-| 2 | 写真（外部・内部・治療雰囲気）。ファイル or URL | 任意 |
-| 3 | 診療科・サービス選択 | 任意 |
-| 4 | 医院の特徴選択 | 任意 |
-| 5 | ターゲット選択 | 任意 |
-| 6 | 確認・申請 | — |
-
-**デザインテンプレートの選択項目も、サイトカラーの選択項目も存在しません。** 送信すると `/mypage/requests` へ遷移し「承認待ち」になります。この時点ではまだサイトは生成されません。
-
-### 6.3 管理者の承認・生成（`approveRequestAction`）
-
-`/admin/requests` に全クリニック横断で申請が並び、「承認待ち」の行にのみ**「承認して生成」の 1 ボタン**が出ます。テンプレートは AI が選ぶため、管理者が選ぶセレクトボックスはありません。
-
-生成は**インラインで同期実行**されます（キューイングしない）。管理者がその場で結果を見られるようにするためです。選ばれた理由（`templateReason`）はサイト詳細画面に表示され、**テンプレートの `mood` 文を直せば選定精度が上がる**という運用ができます。
-
-### 6.4 テンプレート作成 (A) — 作成済みサイトから（`importFromGeneratedSite.ts`）
-
-**推測がゼロ**の経路です。生成済みページは自分のデザインを `<html style>` にインラインで持っています（`--primary` `--radius` `--font` `--space-scale`）。加えて `hero-split` `cards-list` といったクラス名があるため、**トークンは「推論」ではなく「読み取り」**になります。
-
-写真もそのまま引き継ぎます。自社が自社サイトのために生成した画像なので、第三者サイトと違い再利用に問題がありません。テンプレートが実写真でプレビューされるため、良し悪しの判断もしやすくなります。
-
-**AI に任せるのは名前・雰囲気説明（`mood`）・タグのみ**です。判断が本当に必要なのはそこだけで、`mood` は自動選択が読む唯一の材料だからです。
-
-### 6.4.5 テンプレートは1枚のJSON（`src/lib/site/templates/*.json`）
-
-⚠️ **テンプレートの定義は TypeScript ではなく JSON です。** 以前は構成が `archetypes.ts` に、配色が `defaultTemplate.ts` / `typographicTemplate.ts` に、seed の分岐が `seed-template.mts` に散っており、**テンプレートを1つ増やすのに3か所のコードを書く**必要がありました。さらに文章は `sampleCopy.ts` が全テンプレート共通だったため、**2つのテンプレートが違うのは色・書体・セクション順だけで、読み手の目が実際に止まるもの（医院名・言葉・写真）は1バイトも違いませんでした。**
-
-1テンプレート＝1ファイル。中身は `siteDocumentSchema` から DB の都合のフィールド（`id`・時刻・所有者）を除いたものに、管理画面用の `description` を1つ足しただけです。**新しいバリデーションは書いていません。**
-
-```jsonc
-{ "slug", "name", "description", "mood", "tags", "design", "meta", "pages", "blocks" }
-```
-
-`meta` と `blocks[].data` がファイルの中にあるので、**テンプレートごとに違う架空の医院**になります。
-
-| ファイル | 架空の医院 | 配色 | 地紋／動き | ヘッダー／フッター |
-|---|---|---|---|---|
-| `one-page-classic` | みどり台ファミリークリニック（内科・小児科） | 青 | dots-fine ／ float | bar ／ dark |
-| `one-page-editorial` | 白河いつき皮膚科 | 墨と真鍮 | asanoha ／ なし | minimal ／ light |
-| `multi-page-clinic` | 青葉デンタルオフィス（歯科） | 深緑と真鍮 | seigaiha ／ drift | stacked ／ band |
-| `landing-lite` | こもれび眼科 | テラコッタ | arc ／ sheen | bar ／ compact |
-
-⚠️ **電話番号と住所はテンプレートごとに変えません。** `00-0000-0000` と `東京都〇〇区〇〇 1-2-3` のまま固定です。もっともらしい電話番号をテンプレートに載せると、**実在の誰かの番号**になりえます。言葉は変えてよく、事実は変えてはいけない、という線引きです。
-
-⚠️ **`fs` で実行時に読まず、`templates/index.ts` で静的 import しています。** 理由は3つ、どれも設定に基づくものです：`output: "standalone"` は `public/` の外にあり静的 import もされていないファイルを**トレースしない**（実行時読み込みだと本番でだけテンプレートが消える）／`ArchetypeSelect` は `"use client"` でこの名前を読む／`archetypeBlocks()` が同期のままでいられる。代償は import 1行で、書き忘れは `scripts/verify-templates.mts` が**ディレクトリと登録を突き合わせて**落とします。
-
-⚠️ **`templateLayout()` は必ず deep copy を返します。** パースされたファイルはモジュール共有のオブジェクトなので、参照を渡すと1回の取り込みの編集が以降すべてに届きます（13.19 と同じ欠陥で、症状が「2つのテンプレートが同じになった」なので**この変更では特に見つけにくい**）。
-
-`archetypes.ts` はこのライブラリへの薄い層に変わりました。`ArchetypeKey` / `archetypeBlocks` / `ARCHETYPES` のシグネチャは同じなので、呼び出し側5ファイルは無変更です。
-
-**運用**：`seed-template.mts --all` で全部 D1 へ。取り込んで良かったテンプレートは `export-template.mts <slug> --key <名前>` でファイルに落とし、`index.ts` に1行足せばライブラリの一員になります。
-
-### 6.5 テンプレート作成 (B) — 外部サイトの URL から（`importFromUrl.ts`）
-
-```
-1. extractDesignSignals(url) … HTML/CSS を機械的に計測（塗り）
-   └ extractStructure()   … ナビ・セクション・カード枚数・ヘッダー/フッターの形を計測（骨格）
-2. 参考画像の URL を検証（到達確認）
-3. 計測結果（散文化）＋画像を gpt-5.6-terra に渡す
-4. AI が DesignTokens 候補 ＋ chrome ＋ structure ＋ mood ＋ tags を構造化出力で返す
-5. normalizeDesignTokens() で全値をクランプ・フィールド単位でフォールバック
-6. resolveStructure() … 型名を返してきたら archetypeBlocks()、"custom" なら normalizeBlockPlan()
-7. applySampleCopy() でサンプル文章を載せる
-8. checkDesign() を最終ゲートに通し、構造の HIGH が出たら標準構成へ退避
-9. D1 に isTemplate=true / canSell=false で保存
-10. renderSiteFiles() でプレビューを書き出し
-    ── ここで管理者に応答を返す。以下は応答後に走る ──
-11. generateSampleCopy() … 参考サイトを見せない2回目の呼び出しで、架空の医院と文章を書く
-12. illustrateTemplate(limit: 5) … ロゴとメインビジュアルなど5枚を生成
-```
-
-**取り込むのはデザインの「方向性」（配色・書体・角丸・影の深さ・動き）と「骨格」（セクションの種類・並び・枚数）だけ**であり、参考サイトの内容や画像ファイルは取りません。画像は解析のためにモデルへ URL として見せるだけで、**ダウンロードも保存もしません**。
-
-#### AI の数値は「真実」ではなく「提案」として扱う
-
-OpenAI の構造化出力は**数値の上下限や文字列パターンを強制できません**。そのため AI に渡すスキーマは意図的に緩く（min/max なし・色の正規表現なし）、検証は `normalizeDesignTokens()` が行います。全値をレンダラーが表現できる範囲にクランプし、駄目ならフィールド単位で `DEFAULT_DESIGN_TOKENS` に落とします。フォントスタックに総称ファミリが無ければ補います（無いと、先頭のファミリを持たない環境で Times になるため）。
-
-#### 装飾は「写す」のではなく「割り当てる」（`src/lib/site/decoration.ts`）
-
-⚠️ **忠実さが、同一性を生んでいました。** 地紋・常時の動き・ヘッダーとフッターの形は、当初「参考サイトの形を写す」設計でした。ところが実在の日本のクリニックサイトが持っているのは、ほぼ例外なく**横並びナビ・濃色フッター・地紋なし・常時の動きなし**です。それは既定値そのものなので、**正しく忠実に取り込んだ結果が、毎回まったく同じ見た目**になっていました。
-
-「テンプレートに動きも素材も無い場合どう解決するか」という要求に対して、「参考サイトにも無いことを写す」は答えになりません。そこでこの4軸だけ線の反対側へ移し、**このアプリが用意する**ものにしました。構造・配色・書体は今も参考サイトに忠実です。
-
-| 軸 | 決め方 |
-|---|---|
-| `layout.ornament` | 5種から。**既存テンプレートが使っていない柄を優先**するので、最初の5件は必ず全部違う |
-| `layout.ornamentStrength` | 0.10〜0.22。⚠️ 0.3 を超えると柄が本文より目立つ（実測） |
-| `animation.ambient` | drift / float / sheen。⚠️ **`none` は候補に入れない** — 常時の動きが、求められていた「動くキラキラ」そのものだから |
-| `animation.progressBar` | seed から半々 |
-| `chrome.header` | bar / stacked / minimal。⚠️ **電話番号を持つテンプレートに `minimal` は当てない**（`.header-tel` を消すため） |
-| `chrome.footer` | dark / light / compact / band |
-
-乱数は使わず、既存の `hashToUnit(seed)` で決めます（`derivePalette` と同じ理由 —— **作り直すたびに勝手に化粧が変わってはいけない**）。
-
-⚠️ **上書きは軸ごと**です（`fillMissingDecoration`）。モデルが「参考サイトには柄がある」「ヘッダーが縦積みだ」と答えた軸はその答えを残し、既定値のままだった＝何も分からなかった軸だけを埋めます。全体を1つの判断として扱うと、隣に無情報な軸があるせいで正しい観察まで捨てることになります。
-
-⚠️ **`importFromGeneratedSite` には適用しません。** あちらは「このアプリが作ったページを推測ゼロで再現する」経路で、ページ自身が `data-ornament` / `data-ambient` / `data-header` / `data-footer` を**明示している**からです。割り当てるのではなく**読み取り**ます（読み取り対象は `rule` / `displayScale` / `headingLetterSpacing` / `reveal` / `stagger` / `parallax` / `variety` にも広げました）。⚠️ ただし `backdrop` だけは引き継ぎません — `backdropImage` は**元サイトの images/ を指すパス**で、テンプレートが他人のファイルを参照することになるためです。
-
-#### テンプレートの写真（`src/lib/template/illustrateTemplate.ts`）
-
-⚠️ 取り込んだテンプレートの `images/` には `placeholder.svg` しかありません。管理者が良し悪しを判断する画面が**灰色の枠の集まり**になるのは、これが原因です。
-
-- **取り込み直後に5枚だけ自動生成**します（ロゴ → メインビジュアル → セクション自身の写真 → ギャラリー → スタッフ、の順）。⚠️ **await しません** — Cloudflare の100秒制限で待つ Server Action は切られます（`void runGeneration` と同じ理由）
-- 残りは管理画面の**「写真を作る」**ボタンから。⚠️ **2クリック**です。1回目で枚数を数えて表示し、2回目で実行します。押す前に何枚ぶん課金されるかが見えない請求ボタンは作れません
-- ⚠️ **ロゴは `gpt-image-1`。** `gpt-image-2` は `background: "transparent"` を**拒否**するので（[generateSiteImage.ts](src/lib/render/../openai/generateSiteImage.ts) の分岐）、以前のスクリプトが作っていた `images/logo.png` は**不透明**でした。共通化のついでに `generateSiteImage()` に通し、この分岐を1か所に戻しています
-- 二重課金の錠は**プロセス内の Set**。常駐 Node サーバーである前提はアプリ全体が既に置いています。再起動で消えますが、**ディスクにある画像は飛ばす**ので実害は再描画1回分
-
-#### 骨格の取り込み（`extractStructure.ts` / `blockPlan.ts`）
-
-以前は `blocks: applySampleCopy(defaultTemplateBlocks())` が直書きで、**参考サイトから取っていたのは塗りだけ、骨格は定数**でした。4 つのテンプレートが配色しか違わなかった直接の原因です。
-
-計測するもの：
-
-| 項目 | 判定のしかた |
-|---|---|
-| ページ数 | `header nav a` → `nav a` → `[role=navigation] a` → `header ul a` の順に候補を取り、リンク 3〜15 本・同一オリジン 70% 以上のものを採用。**すべて `#` リンクなら 1 枚もの** |
-| セクション | `main` 配下の**葉の** `<section>`（見出しを含み、内側に `<section>` を持たないもの）が 3 つ以上あればそれを使う。無ければ `h2,h3` を歩いて `nextUntil()` で本文を取る。14 個で打ち切り |
-| セクションの種類 | 見出しをキーワードで分類（診療時間・料金・アクセス…）。**分類できたときは見出し文をモデルに渡さない**。分類できなかったときだけ 16 文字に切って渡す |
-| カード枚数 | 1 つの親の下で ①2〜8 個 ②同じタグ名 ③70% 以上が**同一の class 文字列** ④それぞれが 4 文字以上の見出しを含む —— 最大の兄弟グループ。**class の「名前」は一切参照しません**（`.p-card` でも `.elementor-column` でも同じに動く） |
-| ヒーローの形 | 最初の見出しから**上に歩き**、ページ全体の本文の 40% を超える手前で止めた領域を「冒頭の帯」とする。写真があれば `full-bleed`、2 カラムで片方だけが写真なら `split`、写真が無ければ `centered` |
-| ヘッダーの形 | `tel:` が無くリンク 2 本以下なら `minimal`、それ以外は `bar`。**`stacked` は返しません** — HTML だけでは判定できないため、外すより既定を返すほうを選びます |
-| フッターの形 | 取得済みの CSS から `footer` の背景色を読み、輝度 0.4 未満なら `dark`、以上なら `light`。色が読めず文字数が少なければ `compact` |
-
-⚠️ **背景写真は `<img>` ではありません。** 日本のクリニックサイトで最も多いヒーローは `background-image` を class に当てたものです。素朴に `img` だけを見ると**そういうサイトは全部「写真なし・中央寄せ」**と読まれます。そのため、取得済みの CSS から「背景画像を持つ class 名の集合」を作り、要素がその class を持つかで判定します（class 名の意味は解釈しません）。
-
-#### サンプル文章は、参考サイトを見せない呼び出しで書く（`generateSampleCopy.ts`）
-
-骨格だけを借りた取り込みには言葉がありません。以前は `sampleCopy.ts` の共通文で埋めていたので、**どのテンプレートも同じ言葉**になっていました。いまは2回目のモデル呼び出しで、そのテンプレート専用の架空の医院と文章を書きます。
-
-⚠️ **この呼び出しは参考サイトを一切見ません。** HTMLもCSSも画像URLもタイトルも渡しません。渡すのは、1回目のデザイン解析が出した `mood` と `tags`、そしてこちらのブロックID・型・カード枚数だけです。
-
-これは**防壁の置き直し**です。参考サイトの文章を写さない仕組みの第一層は「`aiTemplateSchema` に文章の置き場が無い」ことでした。文章を書かせる以上その層は使えないので、**書く側が写す元を持っていない**という情報の遮断に替えています。持っていないものは再現できません。残り4層（`navLabel` 許可リスト・画像はプレースホルダ・`checkDesign` の最終ゲート・プロンプトの明示）はそのままです。
-
-⚠️ **失敗しても取り込みは成功させます。** 共通の手書き文に落ちるだけで、それは今までの全テンプレートと同じ状態です。数十秒かけた取り込みを文章のために丸ごと落とすことはしません。
-
-⚠️ **電話番号・住所・料金・診療時間の行は書かせません。** `applyGeneratedSampleCopy` はそれらを触らず、ダミーのまま残します。架空でも「もっともらしい事実」を作らないための線です。
-
-⚠️ **取り込んだ文章セクションには、`navLabel` から見出しを入れます。** これが無いと、モデルが組んだ構成の 文章＋カード セクションは**見出しが空のまま**届きます（`applySampleCopy` は本文とカードを書きますが見出しは書かず、アーキタイプに見出しがあるのは人が書いたからです）。実測で、取り込んだテンプレートの4セクションがこの状態でした。
-
-#### 骨格も「提案」として扱う — `normalizeBlockPlan()`
-
-`normalizeDesignTokens` と同じ規律で、**例外を投げず、必ず妥当な構成を返します**。
-
-- 知らないブロック型は捨てる。生き残りが無いページは捨てる。全滅なら `one-page-classic` に丸ごと退避
-- ページ 6 つ・1 ページ 12 ブロック・全体 24 ブロックで打ち切り
-- 先頭ページを `path:""` に強制。path は小文字化 → `[^a-z0-9-]` を `-` に → **非 ASCII は音訳せず落とす** → 予約語回避 → 重複は `-2`
-- singleton（`BLOCK_DEFINITIONS` が持つ）はページごとに先頭だけ。**お問い合わせはサイト全体で 1 つ**
-- ヒーローは各ページの先頭へ移動（**下層ページには挿入しない** — `structure-no-hero` はトップだけの規則）。トップに無ければ挿入。お問い合わせはどこにも無ければ最終ページの末尾に追加
-- `variant` は `variantsFor(type)` に無ければ捨てる。`cardCount` は `rich` のみ・2〜6 にクランプ
-- **ブロック ID はここで採番**します。⚠️ 一意性はページ内ではなく**文書全体**で — `slotKey(blockId, i)` が生成画像の**ファイル名**で、`images/` は全ページ共有だからです
-
-最後に **`checkDesign` を最終ゲート**として通します。⚠️ 見るのは `structure-*` の HIGH **だけ**です。コントラストの HIGH は配色の話であり、モデルが選んだ色が薄いことを理由に忠実なページ構成を捨てるのは、正しいものを間違った理由で捨てることになります。
-
-#### ⚠️ 参考サイトの文章を写さないための 5 層
-
-| 層 | 内容 |
-|---|---|
-| 1. スキーマ | 構成のスキーマに**文章の置き場所がありません**（`type` / `navLabel` / `variant` / `cardCount` だけ）。規則ではなく構造なので、これが第一の防壁 |
-| 2. 許可リスト | `navLabel` が唯一の自由文字列。一般的なセクション名の**許可リストに一致しなければ既定値に置換**します。医院名やキャッチコピーは通れません。リストは `BLOCK_DEFINITIONS` の `defaultNavLabel` を**導出して**含みます（置換先が許可リストに無いと、この関数が自分で作った値を自分で拒む形になるため） |
-| 3. 本文 | すべて `applySampleCopy`（手書き・全テンプレート共通） |
-| 4. 画像 | すべて `images/placeholder.svg`。参考画像は URL のままモデルに見せるだけで、**ダウンロードも保存もしません** |
-| 5. プロンプト | 「セクションの種類・並び・枚数だけを出力する」と明記。最も弱い層なので最後 |
-
-検査は `npx tsx scripts/verify-block-plan.mts`。参考サイトの語句を **8 文字のシングルに割って**、結果の JSON に 1 つも含まれないことを機械的に確かめます。
-
-#### WordPress 対策（実務上の要）
-
-日本のクリニックサイトは WordPress が大多数です。素朴に「最初の数枚のスタイルシート」を読むと、WordPress の既定エディタパレットと Font Awesome のアイコンアニメーションを説明するだけで、そのクリニックについては何も分かりません。
-
-| 除外・優先の仕組み | 内容 |
-|---|---|
-| `BOILERPLATE_STYLESHEET` | フレームワーク由来の CSS を除外 |
-| `THEME_STYLESHEET` | `/wp-content/themes/`・`style.css`・`main.css`・`common.css` 等を優先取得 |
-| `FRAMEWORK_PROPERTY` | `--wp-` `--fa-` `--bs-` `--tw-` `--swiper-` `--slick-` を除外 |
-| `ICON_FONT` | Font Awesome・dashicons 等を font-family 集計から除外（アイコン規則が繰り返されるため、本文フォントより多く出現してしまう） |
-
-**取得上限**：HTML 1MB、CSS 5 ファイル・合計 700KB。
-
-#### 画像の堅牢化
-
-- **形式フィルタ**：OpenAI の画像入力は jpeg/png/gif/webp のみ。SVG ロゴや .ico ファビコンが混ざると**リクエスト全体が失敗**するため、収集時点で除外します（拡張子なしの URL は CDN で多いので残します）
-- **到達確認**：`HEAD` ではなく **1 バイトのレンジ GET**（HEAD に 405 を返すサーバーが多いため）。1 つのリンク切れが「Error while downloading file」という、どの画像が原因か分からないエラーで全体を失敗させるのを防ぎます
-- **画像なし再試行**：それでも失敗したら画像を外して 1 回だけ再試行し、警告を返します
-
-#### 警告の返却
-
-SPA（React 製など）は HTML に中身が無く CSS もほとんど読めません。`looksClientRendered` を検出して**管理者に警告を返します**（「参考画像を追加するか、作成後に編集画面で調整してください」）。結果を黙って defaults で埋めるのではなく、何に依拠した結果かを伝える設計です。
-
-#### 保存失敗時のロールバック
-
-D1 への保存は「サイト行」「ブロック行」の 2 系統に分かれ、**両者をまたぐトランザクションがありません**。途中で失敗するとブロックのないテンプレートが残り、管理画面には実在する壊れたテンプレートとして並びます。そのため失敗時は `deleteDocument()` で行を巻き戻します。
-
-### 6.5.1 装飾と動き（地紋・常時アニメ・背景写真）
-
-「テンプレートに動きやインタラクション、背景のための素材がない」への対応です。**素材ファイルは1枚も増やしていません。**
-
-| トークン | 値 | 出力 |
-|---|---|---|
-| `layout.ornament` | none / seigaiha / asanoha / dots-fine / hairlines / arc | `<html data-ornament>` ＋ セクションごとの `<span class="ornament">` |
-| `layout.ornamentStrength` | 0〜1（既定 0.16） | `--ornament-strength` |
-| `animation.ambient` | none / drift / float / sheen | `<html data-ambient>` |
-| `animation.progressBar` | 真偽 | `<div class="scroll-progress">` ＋ `main.js` |
-| `layout.backdrop` | none / page / sections | `<html data-backdrop>` ＋ ページ内の `<style>` |
-| `layout.backdropImage` | 画像パス | 画像パイプラインが埋める（`BACKDROP_SLOT`） |
-| `gallery` のバリアント `marquee` | — | 写真が横へ流れ続ける帯 |
-
-#### 柄は「画像」ではなく「マスク」
-
-⚠️ **データURIのSVGは CSS カスタムプロパティを読めません。** 既存のドット柄・方眼柄（`data-bg`）が黒の低不透明度なのはそのためで、テーマ色に追従できません。
-
-そこで柄は **CSS グラデーションを `mask-image` として使い、その下に `var(--primary)` を敷きます**。柄は必ずテーマ色になり、ファイルもリクエストも増えず、URLエンコードの事故も起きません。
-
-#### 安全規則（発見ではなく規則として）
-
-| 規則 | なぜ |
-|---|---|
-| 装飾は必ず `position: absolute; inset: 0; pointer-events: none` | `inset:0` は親（`.section` は `overflow-x: clip`）を超えられない。390px の横スクロール不具合を構造的に呼び戻せなくする。操作も奪わない |
-| **負のマージンで「はみ出させる」装飾を作らない** | 上の保証を壊す唯一の道 |
-| 動かしてよいのは `.ornament` だけ | 文字の入った箱は動かさない |
-| `data-ambient` を読む規則には**必ず** `html:not([data-reveal="none"])` を付ける | 「静けさを選んだテンプレートでは全部止める」という既存の約束。常時アニメはそれを忘れやすい場所 |
-| `background-attachment: fixed` は明示的に外す | ⚠️ **スクロール連動だがアニメーションではないので、`prefers-reduced-motion` の一括指定（`animation-duration: 0.01ms`）では止まりません。** iOS では実装差で崩れるため、モバイルでも外します |
-| 背景写真には必ず `--bg` のスクリムを重ねる | ⚠️ `checkContrast` はトークンどうししか比べられず、**写真の上の本文は見えていません**。実効の背景色をトークンのままに保つことが、既存の検査を嘘にしないための条件 |
-
-これらは `scripts/check-ornaments.mts` が **site.css を機械的に読んで** 検査します（目視では絶対に見つからない種類のため）。
-
-#### ⚠️ 背景写真の CSS は site.css に置けない
-
-相対 `url()` は「**それを使ったスタイルシート**」を基準に解決されます。site.css は `css/site.css` から配られるので、`url("images/backdrop.jpg")` がカスタムプロパティ経由で site.css に届くと **`css/images/backdrop.jpg`** になり、写真は黙って出ません（Chromium で実測）。
-
-`<style>` 要素の基準はドキュメントなので、背景写真の規則だけは `components.tsx` の `backdropCss()` が**パスを直接書いて**ページの中に出力します。site.css に残すのはスクリムの色（`url()` を含まない）だけです。
-
-#### 背景写真は画像の台帳に載せる
-
-ブロックのフィールドにはしません。`documentImageSlots` に `BACKDROP_SLOT` を足すだけで、`buildImageJobs` のギャップ埋め・`checkImages` のファイル存在検査・`scripts/illustrate-template.mts` が**すべてただで付いてきます**（BUG-01 の教訓）。`layout.backdrop` が `none` のときはスロットを出さないので、使わない写真に課金されません。
-
-⚠️ **写真がまだ無い間は、背景の指定ごと無効になります。** そうしないと、管理者が頼んでいない薄い膜だけが出ます。
-
-### 6.5.2 テンプレート固有の CSS / JS（スタイルキット）
-
-`ornament` の5種と `ambient` の3種は**閉じた語彙**です。「きらきら」「ホバーの反応」「素材感」を増やすたびに列挙を増やすと、いずれ 6.4.5 が解いた「全部同じに見える」に戻ります。そこで、**そのテンプレートだけのCSSとJS**を書ける口を1つ用意しました。
-
-| 置き場所 | 中身 |
-|---|---|
-| `src/lib/render/kits/<key>.ts` | `export default { css: string; js?: string }` |
-| `src/lib/render/kits/index.ts` | 静的 import での登録（`templates/index.ts` と同じ理由 — `output: "standalone"` は import されないファイルを追跡しない） |
-| `design.layout.styleKit` | **キットの「名前」だけ**。既定は空文字 |
-
-出力は `css/kit.css` と `js/kit.js`。`<link>` は **site.css の後**（同じ詳細度ならキットが勝つ）、`<script defer>` は **main.js の後**（`defer` は文書順を守る）。
-
-#### ⚠️ ドキュメントが持つのは「名前」であって中身ではない
-
-これは書き味の都合ではなく security の設計です。`SiteDocument` はテンプレートと医院サイトで同じ形で、`instantiateTemplate` が一方を他方に複製します。生のCSS/JSを入れる欄を作ると、**URL取り込み（＝任意の第三者サイトを読んだAIの出力）が、公開される医院のページにスクリプトを書き込める経路**になりえます。
-
-名前だけを持たせると、信用できない入力は**リポジトリに実在するものしか選べません**。知らない名前は `resolveStyleKit` が `null` を返し、素の見た目に戻るだけです。`composition.ts` の `variant` と同じ封じ込めで、同じ失敗の仕方（＝テンプレート本来の見た目）をします。`importFromUrl.ts` の `aiTemplateSchema` に対応する欄が無いので、モデルはそもそも触れません。
-
-#### キットが描く場所
-
-`.ornament` を使います。`site.css` が用意した「absolute / inset:0 / pointer-events:none、親は `overflow-x: clip`」の板で、**キットがあるときは地紋なしでも出力されます**。
-
-⚠️ そのため `.ornament` の既定の塗りは**カスタムプロパティ越し**（`--ornament-paint` / `--ornament-opacity`）にしてあります。`html[data-ornament="none"] .ornament { background: none }` のような打ち消し規則にすると、詳細度 (0,2,1) がキット側の素の `.ornament` (0,1,0) に勝ってしまい、**キットが自分の層を塗れなくなります**（実測）。カスタムプロパティは継承なので、詳細度の争いがそもそも起きません。
-
-⚠️ **`.ornament` を使うキットのテンプレートは、`layout.ornament` と `animation.ambient` を両方 `"none"` にすること。** site.css 側の規則は `html:not([data-reveal="none"])[data-ambient="float"] .ornament` のように詳細度 (0,3,1) で、キット側には絶対に勝てません。同じ層を奪い合うと、キットの絵と動きが「なぜか出ない」という形で黙って消えます。`scripts/verify-templates.mts` が落とします。
-
-#### 安全規則
-
-6.5.1 の規則がそのまま適用され、加えて `verify-templates.mts` が全キットの文字列を機械的に検査します：モバイルメニューの仕掛け（`.nav-toggle:checked ~ nav.site-nav`）に触れていないか／`100vw` と負のマージンが無いか／動きを書いたなら `prefers-reduced-motion` の出口があるか／静止状態で文字の箱を動かしていないか／JSに `</script>` が無いか。
-
-#### 後始末
-
-⚠️ `renderSiteFiles` は出力ディレクトリを消さない設計なので、キットを外したときは `css/kit.css` と `js/kit.js` を**明示的に削除**します。`wrangler pages deploy` は見つけた木をそのまま上げるため、消さないと公開URLに古いキットが残り続けます。
-
-### 6.5.3 セクションごとの背景写真とボタンの大きさ
-
-| トークン | 値 | 出力 |
-|---|---|---|
-| `Block.backgroundImage` | 画像パス（既定は空） | `<section>` のインライン `background-image` |
-| `Block.backgroundScrim` | 0〜1（既定 0.72） | 写真の上に重ねる `--bg` の濃さ |
-| `design.block.buttonScale` | 0.8〜1.8（既定 1） | `--btn-scale` → `.btn` の padding と文字サイズ |
-
-⚠️ **インラインで書くのは 6.5.1 と同じ理由**（相対 `url()` の解決基準）。要素の `style` 属性の基準はドキュメントなので、`<img src>` と同じに解決されます。React が `"` を `&quot;` に直しますが、HTMLパーサが復号してからCSSパーサに渡るので問題ありません（実測で確認）。
-
-⚠️ **スロットは `backgroundImage` が空でないブロックにだけ作られます**（`backgroundSlotKey`）。全ブロックに常時作ると、セクションの数だけ画像生成が課金されます。`BACKDROP_SLOT` が `backdrop !== "none"` で門番されているのと同じ作法です。
-
-⚠️ **`backgroundScrim` を 0.6 未満にしたセクションに本文を置かないこと。** `checkContrast` はトークンどうししか比べられず、写真の上の文字は構造的に測れません。
-
-⚠️ `.contact-section .btn` の `min-width` は `min(100%, calc(220px * var(--btn-scale)))`。`--btn-scale` が 1.8 のとき 220px は 396px になり、390px の画面では `min-width` が `width: 100%` に勝って横スクロールが出ます。
-
-### 6.5.4 テンプレート作成 (C) — Claude Code で URL から手作りする
-
-`.claude/skills/template-from-url/SKILL.md`。`/template-from-url <URL>` で呼び出します。
-
-**(B) のアプリ内取り込みとは別の道具で、どちらも残ります。**
-
-| | (B) `importFromUrl.ts` | (C) `template-from-url` スキル |
-|---|---|---|
-| 誰が動かすか | 管理者が管理画面から | 開発者が Claude Code から |
-| 参考サイトの読み方 | HTML と CSS を**文字列として**解析 | ブラウザで**実際に描かれたページ**を `getComputedStyle` で実測 |
-| 成果物 | D1 のテンプレート行 | リポジトリの `templates/*.json`（＋必要なら `kits/*.ts`） |
-| 実行時のAI判断 | 残る | **一切残らない**（ファイルとして固定される） |
-| スタイルキット | 書けない（設計上の壁。6.5.2） | 書ける |
-| 費用 | 実行のたびに課金 | 1回だけ（写真を入れるときのみ） |
-
-⚠️ **方針は「参考サイトに寄せる」ではなく「印象を再現し、具体値は作り直す」**です。明度・彩度の傾き、書体の分類、見出しと本文の大きさの比、余白の広さ、角の丸さ・影の度合い、写真の量、動きの多さ、セクションの**役割の並び** — この8つは測って合わせ、hex・書体名・並びの丸写し・文章は `frontend-design` スキルが作り直します。この線引きは同時に著作権の壁でもあり、参考サイトの言葉・画像・具体値は1つもテンプレートに入りません。
-
-⚠️ **複数ページの参考サイトでも、まず LP 1枚（`pages` は home のみ）にまとめます。** 分けるのは後からできますが、まとめ直すのは難しく、ページを増やすと空のページができやすいためです。
-
-⚠️ **新しいブロック型は作りません。** 合う箱が無いセクションは汎用の `freeText` / `rich` / `imageBanner` / `gallery` に割り当てます。型を1つ足すと、レンダラー・編集画面・画像台帳・検査の4か所に波及します。
-
-### 6.6 テンプレート自動選択（`selectTemplate.ts`）
-
-クリニックは選びません。それがこのフローの主眼であるため、**十分な精度が必要である一方、生成失敗の原因になっては絶対にいけません**。全失敗経路がフォールバックします。
-
-| 状況 | 動作 |
-|---|---|
-| `canSell=true` のテンプレートが 0 件 | 組み込みの標準テンプレート（`buildDefaultTemplate()`） |
-| 1 件 | **AI を呼ばずに**そのテンプレートを使用 |
-| 2 件以上 | AI が選択 |
-| AI が候補外の id を返した | 最新のテンプレートにフォールバック（警告ログ） |
-| AI 呼び出しが例外 | 同上。**例外を投げない** |
-
-モデルに見せるのは**各テンプレートの名前・`mood`・タグだけ**です。これは意図的で、`mood` は管理者が書く文章なので、**選定精度の改善はプロンプト調整ではなく編集作業になります**。
-
-システムプロンプトは診療科の対象年齢層（小児科なら明るく親しみやすい、審美・自由診療なら落ち着いた高級感）、患者層、要望との相性を重視するよう指示しています。
-
-### 6.7 サイト生成パイプライン（`siteGenerator.ts`）
-
-```
-generateSite(hearing)
- 1. selectTemplate(hearing)              テンプレート決定
- 2. instantiateTemplate()                深いコピー。新ID・templateId記録・テンプレ専用項目を落とす
- 3. meta にクリニック名・電話・LINE・住所を反映
- 4. applyFactualVisibility()             材料が無いブロックを非表示に
- 5. generateContentPlan()                文章をAIが執筆
- 6. applyContentPlan()                   文章をブロックへ
- 7. applyFactualContent()                ヒアリングの事実をブロックへコピー
- 8. rm -rf outDir → mkdir                ★全再生成なのでここだけ削除が正しい
- 9. produceImages()                      アップロード写真の割当 + AI生成（並列度3）
-10. applyImagePaths()
-11. saveDocument(doc)                    D1へ
-12. renderSiteFiles(doc)                 静的ファイル書き出し
-```
-
-#### 事実に基づく非表示（Step 4）
-
-材料が無いブロックを**文章生成の前に**隠します。空の料金表は「料金表が無い」より悪く、見出しの下に空の表が出て**壊れたページに見える**ためです。生成前に隠すことで、出荷されないセクションの文章をモデルが書くことも防げます。
-
-対象：`hours`（診療時間の記載）／`access`（住所）／`staff`（スタッフ）／`pricing`（料金）。
-
-#### 事実のコピー（Step 7）
-
-**この複製こそが後の編集を可能にします。** ここから先はドキュメントが正であり、レンダリング時にヒアリングシートを読み直すと（旧実装がそうしていた）**ユーザーの編集を黙って取り消してしまいます**。
-
-- `hours.rows` … `hearing.hours` を改行分割し `ラベル：値` を分解。**決定論的で AI を通しません**。クリニックが実際に入力した内容から乖離しないため
-- `access` … 住所と、そこから導出した `mapQuery`（別々に編集可能。郵便住所と地図のピンは必ずしも一致しないため）
-- `pricing` `staff` … そのまま複製
-- `news` `faq` … **実データが常に勝ち**、AI の一般的な内容は空のときだけ埋める
-
-#### 文章生成（`generateContentPlan.ts`）
-
-モデルに見せるのは**テンプレートそのもの**です。各「執筆対象」ブロックの type・navLabel・サンプル見出しがブリーフになります。旧 SITE_SPEC 版のように `department / greeting / features / facility` を列挙しないため、**テンプレートに 5 つ目のセクションを足しても、並べ替えてもコード変更なしに機能します**。
-
-**執筆対象**：`hero` `rich` `freeText` `contact` `gallery` `imageBanner`  
-**モデルに渡さない**：`hours` `access` `pricing` `staff`（事実の報告であって執筆ではない）。`news` `faq` はクリニックが未提供のときだけ例外的に依頼。
-
-繰り返し項目の件数は、テンプレートのサンプルが示す件数を目標値として渡します（3 カラム前提のテンプレートに 7 枚返らないように）。
-
-出力の全文字列から **HTML タグらしきものを除去**します。React が自動エスケープするため XSS ではありませんが、モデルがヒーロー見出しに改行のつもりで `<br>` を混ぜることが実際にあり、そのままだと醜い literal として表示されるためです。
-
-#### 執筆ルール（`authoringRules.ts`）
-
-テンプレートの行ではなくコードに置かれています。**デザインの選択ではないため、管理者が「AI は電話番号を創作してはならない」というルールを無効化できてはいけない**からです。
-
-```
-HONESTY_RULES（最重要）
-  1. 電話番号・住所・LINE・診療時間・料金は hearing の実データのみ。AIは絶対に創作しない。
-     記載が無ければ該当箇所を非表示にする
-  2. お知らせ・よくある質問のみ、実データが無い場合にAIが一般的な内容を生成してよい
-  3. 資格・実績年数・症例数など、hearingに記載の無い具体的事実を創作しない
-
-IMAGE_STYLE_RULES
-  ・被写体をキャンバス端まで届かせる（白フチ・レターボックスを作らない）
-  ・明るく清潔感のある医療機関らしい構図。顔のクローズアップは避ける
-  ・画像内に文字・ウォーターマークを入れない
-
-LOGO_RULE
-  ・医療系モチーフのみ。医院名などの文字は入れない（HTMLテキスト側で表示）。背景は透過
-```
-
-#### 画像の解決（`produceImages`）
-
-**クリニックが実際にアップロードした写真が、常に生成画像に優先します。**
-
-```
-1. matchImagesToCategories()   AIが「どの配置にどのカテゴリの写真が合うか」を判定
-2. スタッフ本人の photoUrl があれば、カテゴリ判定より優先（強制割当）
-3. 割り当たらなかった配置だけを AI 生成（並列度 3）
-4. 各アップロード写真は最大1回まで使用
-```
-
-**構造的な保証**（モデルに任せられない分）として、ロゴとヒーロー画像は計画に無くても必ずジョブに積みます。ロゴが無いと全ページに壊れた `<img>` が残るためです。
-
-`cardLayout === "minimal"` のときは `rich` のカード画像ジョブを積みません。**どの `<img>` も指さないファイルに実際の画像生成 API 料金を払うことになる**ためです。
-
-### 6.8 画像生成（`generateSiteImage.ts`）
-
-| 用途 | モデル | 理由 |
-|---|---|---|
-| ロゴ・アイコン | `gpt-image-1` | 透過に対応。ただしサイズは 1024x1024 / 1536x1024 / 1024x1536 の 3 固定 |
-| それ以外 | `gpt-image-2` | 任意解像度でアスペクト比を合わせられる。**ただし `background:"transparent"` を API が明確に拒否する** |
-
-- **最小ピクセル制約**：`gpt-image-2` には総ピクセル数の下限があり（`400 Invalid size ... below the current minimum pixel budget`）、正確な規則は非公開。1024×1024 ≒ 105 万 px を下限として計算し、それでも 400 なら **1024x1024 で 1 回だけ再試行**します
-- **透過の徹底**：`background:"transparent"` パラメータだけではモデルが背景に不透明な図形（円・バッジ・カード・影の板）を描いてしまうため、**プロンプトでも明示的に全面禁止**しています
-
-アスペクト比は `1:1`(1024²) / `4:3`(1200×900) / `16:9`(1200×675) / `2:1`(1200×600)。
-
-### 6.9 画像アップロード（`POST /api/uploads`）
-
-| 項目 | 値 |
-|---|---|
-| 保存先 | Supabase Storage（`SUPABASE_STORAGE_BUCKET`、既定 `site-images`）、`clinc-hp/<category>/<uuid>.<ext>` |
-| 枚数 | 最大 10 枚／回 |
-| サイズ | 最大 8MB／ファイル |
-| MIME | `image/*` のみ |
-| カテゴリ | `^[a-z0-9_-]{1,32}$` |
-
-### 6.10 編集画面
-
-テンプレートとサイトで**同一の `SiteEditor` コンポーネント**を使います。「テンプレート編集画面」という別物が存在しないため、本物との同期ズレが起きません。
-
-| ルート | 対象 | 権限 |
-|---|---|---|
-| `/admin/templates/[id]` | テンプレート | 管理者のみ（レイアウトでロールをガード） |
-| `/sites/[slug]/edit` | サイト | オーナー＋管理者 |
-
-`/sites/[slug]/edit` は**意図的に `/admin/*` にも `/mypage/*` にも属しません**。前者は管理者専用、後者は `clinic_owner` 専用ですが、この 1 画面だけは両方に応える必要があるためです。チェックはページと、より重要な点として**すべての編集 Server Action**にあります。
-
-**画面構成**：左＝ブロック一覧（ドラッグ・↑↓・表示切替・削除）、中＝レジストリから自動生成されるフォーム、＋ブロック追加パレット（単一制約のブロックは使用済みでグレーアウト）、デザインパネル、基本情報パネル、右＝ライブプレビュー iframe、未保存インジケータ。
-
-#### Server Action（`editorActions.ts`）
-
-| アクション | 内容 |
-|---|---|
-| `saveDocumentAction(id, doc)` | 権限 → 識別子を保存済み行から復元 → zod 検証 → D1 保存 → `renderSiteFiles()` → `revalidatePath` |
-| `adoptImageAction(id, sourceUrl)` | Supabase Storage の画像をサイト出力ディレクトリへ複製し、**サイト相対パス**を返す |
-| `publishDocumentAction(id)` | 再レンダリング → Cloudflare Pages へ公開。**テンプレートは公開不可** |
-| `checkGuidelineComplianceAction(id, doc)` | 医療広告ガイドライン確認。読み取りのみ、保存しない |
-| `rewriteBlockAction(id, block, instruction)` | **1ブロックの文章だけ**をAIが書き直し、編集内容を返す。D1 に書かず再レンダリングもしない |
-
-`adoptImageAction` の複製は冗長ではありません。生成サイトは自己完結ディレクトリとして Cloudflare Pages に配布されるため、`<img>` が Supabase Storage の URL を指していると、**公開後のすべてのページがそのバケットの到達性とオブジェクトの公開状態に依存し続けます**。
-
-`rewriteBlockAction` がブロックを**クライアントから受け取る**のは、編集中の未保存の内容を書き直し対象にするためです（保存済みの行を読むと、利用者が見ている段落とは違う古い版を書き直すことになる）。受け取ったブロックは `blockSchema` で検証してからモデルに渡し、返すのは編集案のみ — D1 には書かず、再レンダリングもしません。権限は他の編集アクションと同じくドキュメント ID で確認します（Server Action は直接 POST 可能なため、画面側のガードには依存できない）。
-
-対象を1ブロックに限定しているのは意図的です。ページ全体を対象にすると、1回の生成失敗で承認済みの原稿が丸ごと置き換わり、変更箇所のどれが問題かを利用者が判別できません。ブロック単位なら差分が読める分量に収まり、失敗しても「元に戻す」1回で復帰できます。
-
-`saveDocumentAction` は `updatedAt` を返します。編集画面が**自分で発明していない値**でプレビュー iframe のキャッシュを破棄できるようにするためです。
-
-### 6.11 レンダリング（`renderSiteFiles.ts`）
-
-`index.html` ＋ `css/site.css` ＋ `js/main.js` ＋ `images/placeholder.svg` を書き出します。
-
-> **AI を一切呼ばず、画像ファイルに一切触れません。** これが編集画面の「保存」のすべてであり、文章編集が数分ではなく一瞬で終わり、料金もかからない理由です。
-
-> **出力ディレクトリを絶対に削除しません。** 画像は `<outDir>/images/` にあり、**ドキュメントからは再現できません**（一度だけ生成またはアップロードされたもの）。旧実装のように毎回削除すると、書いたばかりの HTML の全 `<img>` が存在しないファイルを指すことになります。削除が正しいのは `siteGenerator` の全再生成時だけです。
-
-**出力先**：サイトは `public/generated/<slug>/`、テンプレートは `public/generated/_templates/<id>/`。先頭のアンダースコアで、`[a-z0-9-]` しか取らない生成スラッグとの衝突を防いでいます。
-
-`ensureRenderedSite()` は、D1 にドキュメントがあってもディスクにファイルが無い場合（新規チェックアウト、`public/generated` の掃除、書き込み中の dev サーバー停止）にレンダリングし直します。**空の iframe は「ファイルが無い」ではなく「編集画面が壊れている」ように見える**ためです。
-
-### 6.12 公開（`cloudflareDeploy.ts`）
-
-```
-npx wrangler pages deploy public/generated/<slug> \
-  --project-name clinc-hp-<slug>  (58文字で切り詰め) --branch preview
-```
-
-タイムアウト 5 分。標準出力から `https://*.pages.dev` を正規表現で抽出します。ディレクトリを丸ごと配るため、**編集結果はそのまま反映されます**。
+## 6. 認証・認可
+
+### 6.1 パスワード・セッション（`src/lib/auth.ts`）
+
+- パスワードは **scrypt**（64 バイト、16 バイトの hex ソルト）。検証は `timingSafeEqual`。
+- セッショントークンは 32 バイト乱数の hex。D1 `sessions` に保存。
+- Cookie `session_token`: `httpOnly`, `sameSite=lax`, `path=/`, 本番のみ `secure`, TTL **7 日**。
+- `getSession()` は cookie → `sessions JOIN users` を引き、期限切れなら行を削除して `null`。
+
+### 6.2 ロールと画面ガード
+
+- 2 ロール: `admin` / `clinic_owner`。
+- ページ側ガード（`layout.tsx` の `redirect()`）だけでは不十分。**Server Action は直接 POST 可能**な
+  エンドポイントなので、認可は各アクションの先頭で行う:
+  - 管理者アクション（`src/lib/contentActions.ts`）: 各関数の冒頭で `requireAdmin()`。
+  - オーナーアクション（`src/lib/applicationActions.ts`）: `getSession()` を再確認し、削除時は
+    行の `ownerEmail` とセッションの `email` の一致も確認。
+  - 生成サイトのエディタアクション: `requireSiteEditAccess(slug)` が「管理者」または
+    「その申請を出した `clinic_owner` 本人」のみ許可。
+- `listUsers()` は `role != 'admin'` のみ返す（管理画面に他の管理者を出さない）。
+- `listHearingsByOwner()` は SQL の `WHERE owner_email = ?` で自分の申請だけに絞る
+  （全件読んで JS で捨てる実装にしない = リーク防止）。
+
+### 6.3 プレビュー用 Basic 認証（`src/proxy.ts`）
+
+- `PREVIEW_BASIC_AUTH` が設定されているときだけ有効。アプリ全体に HTTP Basic をかける
+  （トンネルデモ用。アプリ本来のログインの代替ではない）。
+- `matcher`: `_next/static` / `_next/image` 以外すべて。`/api/*` と生成サイトはゲートの内側。
+- 401 応答に `X-Robots-Tag: noindex, nofollow`。
 
 ---
 
-## 7. 画面一覧
+## 7. 画面一覧（ルート）
 
-> 各画面の詳細（目的・画面要素・操作と結果・遷移・エラー文言）は **[画面設計書 SCREENS.md](./SCREENS.md)** を参照してください。ここでは一覧のみ示します。
+| パス | ロール | 説明 |
+|---|---|---|
+| `/` | 公開 | マーケティング用ランディング（`src/app/page.tsx`, `src/components/landing/*`）。`public/landing/templates.json` があればショーケースを表示、なければ非表示。session を読むのは「ログイン済みは自分のページへ」＋「ルートを動的に保つ」ため |
+| `/login` | 公開 | クリニックオーナーのログイン |
+| `/signup` | 公開 | クリニックオーナーの新規登録（パスワード 8 文字以上、確認一致） |
+| `/admin` | 公開 | 管理者ログイン |
+| `/home` | clinic_owner | ログイン後の最初の画面。申請件数＋ナビ |
+| `/mypage/apply` | clinic_owner | ヒアリングシート申請フォーム（§8.2） |
+| `/mypage/requests` | clinic_owner | 自分の申請一覧（閲覧・削除・生成サイトへのリンク） |
+| `/mypage/requests/<slug>/edit` | clinic_owner（本人） | 生成サイトのエディタ概要（テーマ・セクション並び） |
+| `/mypage/requests/<slug>/edit/<section>` | clinic_owner（本人） | 1 セクションの内容編集 |
+| `/admin/dashboard` | admin | ユーザー・リクエスト・部門の件数カード |
+| `/admin/users` | admin | `clinic_owner` の一覧・作成・削除 |
+| `/admin/requests` | admin | 全申請の一覧。閲覧／削除／「サイト生成」／「編集」 |
+| `/admin/requests/<slug>/edit` (+ `/<section>`) | admin | 生成サイトのエディタ（オーナー側と同じコンポーネント） |
+| `/admin/departments` (+ `/<id>`) | admin | 診療科とそのサービスの CRUD |
+| `/admin/features` | admin | 特徴の CRUD |
+| `/admin/targets` | admin | ターゲットの CRUD |
+| `/admin/sections` | admin | セクションマスタの CRUD |
+| `/preview/<slug>` | 公開（Basic 認証の内側） | 手組みテンプレートの React 描画（`midori`, `nojima`）。生成サイトとは別系統（§9.1） |
+| `/api/uploads` | 要ログイン相当 | 写真アップロード（§8.3） |
+| `/api/generated/<slug>/[[...path]]` | 要ログイン | 生成サイトバンドルの配信（§8.8） |
 
-### 7.1 クリニックオーナー向け
-
-| ルート | 画面 |
-|---|---|
-| `/` | ログイン |
-| `/signup` | アカウント登録（`clinic_owner` 固定） |
-| `/home` | ホーム（サイドバー＋トップバー） |
-| `/mypage` | マイページ |
-| `/mypage/apply` | 新規申請ウィザード（10 ステップ：基本情報／写真／診療科／特徴／ターゲット／診療時間／スタッフ紹介／料金表／**ご要望**／申請） |
-| `/mypage/requests` | 申請一覧（自分の分のみ） |
-| `/mypage/sites` | サイト一覧（生成完了分のみ）＋「編集する」 |
-| `/sites/[slug]` | サイト詳細・プレビュー |
-| `/sites/[slug]/edit` | **サイト編集**（オーナー＋管理者） |
-
-### 7.2 管理者向け（`src/app/admin/(dashboard)/`）
-
-| ルート | 画面 |
-|---|---|
-| `/admin` | 管理者ログイン |
-| `/admin/dashboard` | ダッシュボード |
-| `/admin/requests` | **リクエスト管理（中心業務）**。「承認して生成」 |
-| `/admin/templates` | テンプレート一覧。販売可切替・削除 |
-| `/admin/templates/new` | テンプレート新規作成（2 経路） |
-| `/admin/templates/[id]` | **テンプレート編集**（`SiteEditor`） |
-| `/admin/sections` | セクション種別（固定カタログ） |
-| `/admin/departments` `/admin/departments/[id]` | 診療科・サービス管理 |
-| `/admin/features` | 特徴タグ管理 |
-| `/admin/targets` | ターゲットタグ管理 |
-| `/admin/users` | クリニックオーナー管理 |
-
-### 7.3 API
-
-`POST /api/uploads` — 画像アップロード
+アプリシェルの画面は Tailwind v4（`src/app/globals.css`）。
 
 ---
 
-## 8. サーバーアクション一覧
+## 8. 機能仕様
 
-| モジュール | アクション |
-|---|---|
-| `authActions.ts` | `loginClinicOwnerAction` / `loginAdminAction` / `signupClinicOwnerAction` / `logoutAction` |
-| `actions.ts` | `regenerateSiteAction` / `deployToCloudflareAction` |
-| `applicationActions.ts` | `createApplicationAction` / `deleteOwnApplicationAction` |
-| `contentActions.ts` | `approveRequestAction` / `deleteRequestAction` / ユーザー・サイト・セクション・診療科・サービス・特徴・ターゲットの CRUD |
-| `templateActions.ts` | `importTemplateAction` / `importFromGeneratedSiteAction` / `setTemplateCanSellAction` / `deleteTemplateAction` |
-| `site/editorActions.ts` | `saveDocumentAction` / `adoptImageAction` / `publishDocumentAction` / `checkGuidelineComplianceAction` / `checkDesignAction` / `rewriteBlockAction` |
+### 8.1 サインアップ／ログイン（`src/lib/authActions.ts`）
 
-### 8.1 ハイドレーション前送信への対応
+- `signupClinicOwnerAction`: email / password / passwordConfirm。8 文字以上・一致を検証 →
+  `createUser(email, pw, "clinic_owner")` → `login()` → `/home` へ redirect。
+- `loginClinicOwnerAction`: `login(email, pw, "clinic_owner")` → `/home`。
+- `loginAdminAction`: `login(email, pw, "admin")` → `/admin/dashboard`。
+- `logoutAction`: セッション削除 → `/`（ログインフォームではなくランディング）へ。
+- 管理者アカウントは UI から自己登録できない。`node scripts/seed-admin.mjs <email> <pw> admin` が
+  `INSERT` 文を出力（`/admin/users` の作成フォームでも `admin` を選べる）。
 
-`templateActions.ts` の `readField()` は `formData.get(name) ?? formData.get("_1_" + name)` を読みます。
+### 8.2 ヒアリングシート申請（`src/components/apply/ApplyForm.tsx` → `createApplicationAction`）
 
-**React のハイドレーション前にフォームが送信されると、React は素のブラウザ POST にフォールバックし、引数を位置引数としてエンコードします**（`_1_<name>`。引数 0 は前回の state）。素の名前だけを読むと、**URL が明らかに入っていたフォームが「URLを入力してください」で弾かれます**。実際に報告された不具合であり、両形式を読むことで解消しています。
+- **申請がシステムに入る唯一の経路**。単一のクライアントコンポーネント（約 1,200 行）で
+  12 ステップのウィザード。`STEP_TITLES`:
+  1. 基本情報（クリニック名〔必須〕・住所・電話・LINE/予約 URL）
+  2. 写真（任意。§8.3）
+  3. 診療科（`services` をチェック。診療科名は送信時に導出）
+  4. 特徴（`features` をチェック）
+  5. ターゲット（`targets` をチェック）
+  6. 診療時間（構造化グリッド。行 = 時間帯ラベル＋曜日ごとのマーク）
+     - マーク: `●` 診療 / `▲` 午前のみ / `／` 休診
+  7. 院長紹介（院長名・肩書き〔既定「院長」〕・あいさつ文・写真。すべて任意）
+  8. 料金表（任意。金額は創作しないため、実在する場合のみ入力）
+  9. よくあるご質問（Q/A のペア）
+  10. お知らせ（日付・見出し）
+  11. ご要望（自由文）
+  12. 申請（入力内容のサマリを確認して送信）
+- サーバ側 `createApplicationAction`（`src/lib/applicationActions.ts`）:
+  - `getSession()` が `clinic_owner` でなければ拒否。
+  - `parseSchedule()` が JSON 文字列の `schedule` フィールドを厳格にパース（不正・空なら `undefined`）。
+  - 選択 ID から `serviceNames` / `featureNames` / `targetNames` と `department`（診療科名の `・` 連結）を導出。
+  - `generateSlug(clinicName)` で slug を生成し `saveHearing()` → `/mypage/requests` へ redirect。
+- 送信後の修正手段はない（生成サイトの編集は可能）。
+
+### 8.3 写真アップロード（`POST /api/uploads` → `src/app/api/uploads/route.ts`）
+
+- `multipart/form-data`。`category`（`^[a-z0-9_-]{1,32}$`）と `files`（最大 10、各 8 MB 以下、
+  MIME が `image/*`）。
+- 拡張子は **MIME から**決定（`src/lib/imageFormats.ts` の `imageExtensionFor()`）。未対応形式は
+  日本語エラー。
+- 保存先キー: `clinc-hp/<category>/<uuid>.<ext>`。Supabase Storage に PUT（`x-upsert: true`）し、
+  公開 URL を `{ urls: [...] }` で返す。
+- フォームのカテゴリ（`src/lib/imageCategories.ts`）:
+  | key | ラベル | 生成サイトでの用途 |
+  |---|---|---|
+  | `exterior` | 外部写真 | アクセス欄の外観・ヒーロー背景の予備 |
+  | `interior` | 内部写真 | 院内ギャラリー |
+  | `atmosphere` | 治療雰囲気写真 | 診療案内カード・院内ギャラリー |
+  - 院長写真は `staff`、トップ画像は `hero` カテゴリで別途アップロードされる。
+- Supabase 未設定時は 500（日本語）。
+
+### 8.4 管理: マスタデータ（`src/lib/contentActions.ts`, `src/lib/content.ts`）
+
+- `departments` / `services` / `features` / `targets` / `sections` の CRUD。全アクション冒頭で
+  `requireAdmin()`、成功後に該当パスを `revalidatePath()`。
+- `createDepartmentWithServices(name, serviceNames[])`: 新規診療科モーダルから診療科＋サービスを一括作成。
+- ID は `crypto.randomUUID()`。
+
+### 8.5 管理: リクエスト管理（`/admin/requests`）
+
+- `listHearings()` で全件を新しい順に表示（クリニック名・申請者・送信日時・サイト・削除）。
+- `deleteRequestAction(slug)`: `requireAdmin()` → `deleteHearing()`（無制限削除）。
+- 各行に「サイト生成」ボタン（§8.6）。生成済みなら「編集」リンクと生成サイトのプレビュー URL。
+
+### 8.6 サイト生成（`generateSiteAction` → `src/lib/buildSiteFromHearing.ts`）
+
+管理者トリガの **同期・低速**（画像生成で数十秒）処理。`OPENAI_API_KEY` 必須。
+
+1. **コピー＋構造**: `openaiJSON()` で 1 回の chat completion（`response_format: json_object`,
+   `temperature 0.7`, `max_tokens 4000`, タイムアウト 90 秒）。システムプロンプトは医療広告的に
+   不適切な断定を禁止し、シートにない固有事実（装置名・症例数・資格・受賞）の創作を禁止。
+   欠損の電話／住所／予約 URL はダミー値。出力を `normalizeTemplate()` で完全な `SiteTemplate` に整形。
+2. **事実の上書き**: シートに値があれば `contact.phone` / `address` / `reserveUrl` はモデル出力より
+   優先。`schedule.rows` はそのまま反映。`director` の氏名・肩書きは verbatim、あいさつ文は
+   空行区切りで段落化。
+3. **写真**（`isStorageConfigured()` のときのみ AI 生成。優先順は アップロード → OpenAI → プレースホルダ SVG）:
+   - `uploadPool` = `interior` + `atmosphere`、`exteriorPool` = `exterior`。
+   - 院長ポートレート: `director.photoUrl` → staff 写真 → AI（`1024x1536`）
+   - 院内ギャラリー: `uploadPool` → AI（`1536x1024`）
+   - ヒーロー背景: `heroImageUrl` → `uploadPool` → AI（`1536x1024`）→ 装飾（null）
+   - アクセスの外観: `exteriorPool` → AI（`1536x1024`）
+   - 診療案内カード: 残りの `uploadPool` → AI（先頭 2 枚まで）
+   - 画像は `images/generations`（`gpt-image-1`, base64 or URL, タイムアウト 120 秒）で生成し
+     `generated/<slug>/<slot>-<uuid>.png` として Supabase にアップロード。
+4. **書き出し**: `renderBundle(template)` の結果を `public/_generated/<slug>/` に全置換で書き込み。
+5. `generateSiteAction` が `hearing.data.generatedSite`（`at`, `imagesGenerated`,
+   `imagesFromUploads`, `template`）を `saveHearing()` で保存し `/admin/requests` を revalidate。
+6. 戻り値: `{ ok, url: "/api/generated/<slug>/", imagesGenerated, imagesFromUploads, warnings[] }`。
+   画像生成失敗は throw せず `warnings` に積んでプレースホルダで続行。
+
+再生成すると既存バンドルと `generatedSite` を上書きする。
+
+### 8.7 生成サイトの編集（`src/components/siteEditor/*`, `src/lib/generatedSiteEditor.ts`）
+
+- 対象: 管理者 または その申請を出した `clinic_owner` 本人（`requireSiteEditAccess`）。
+- `loadEditableSite(slug)`: `hearing.generatedSite.template` → なければバンドルの `template.json` を
+  読み、`normalizeTemplate(..., { trustLayout: true })`（既存セクション集合を維持）。
+  未生成なら `template: null` を返し、UI は「まだ作成されていません」を表示。
+- 概要画面（`SiteEditorOverview`）: テーマ（配色 `--nj-*`、フォント、`fontScale` 0.9–1.15）と
+  セクションの並び。セクション行をタップすると内容編集ページへ（保留中の変更は先に保存）。
+- アクション（`src/lib/contentActions.ts`、いずれも OpenAI 非依存のものは即時）:
+  - `saveGeneratedTemplateAction(slug, template)`: 正規化 → `writeBundle()` で再レンダリング →
+    `generatedSite.template` / `editedAt` を保存 → `/admin/requests` と `/mypage/requests` を revalidate。
+  - `regenerateSectionAction(slug, sectionId, template)`: OpenAI で 1 セクションのコピーを書き直し、
+    更新後の `SiteTemplate` を返す（保存はエディタ側の判断）。レイアウトと他セクションは保持。
+  - `generateImageAction(slug, kind, hint)`: `kind` = `portrait` | `interior` | `exterior`。
+    OpenAI で 1 枚生成 → Supabase に保存 → URL を返す（テンプレへの反映と保存は別途）。
+- 自由ブロック（`customBlocks`）: `text` / `image` / `grid` をエディタから挿入可能。`layout` から
+  `id` で参照。CSS は `staticAssets.ts` の `custom.css`。
+
+### 8.8 生成サイトの配信（`/api/generated/<slug>/[[...path]]` → route handler）
+
+- `export const dynamic = "force-dynamic"`。`getSession()` が無ければ 401（＝サインインユーザなら誰でも閲覧可）。
+- パストラバーサル防御: slug と各セグメントに区切り文字・`.` / `..` を許さず、解決後のパスが
+  `ROOT/<slug>/` 配下（または `index.html`）であることを再確認。
+- `public/_generated/` に置くのはビルド後・実行時に作られるファイルのため（`next start` はビルド時に
+  存在した `public/` しか配信しない）。
+- HTML はレスポンス時に `<head>` 直後へ `<base href="/api/generated/<slug>/">` を注入
+  （バンドルは相対 URL を使うので、末尾スラッシュ有無で相対解決がずれるのを防ぐ）。
+- 全レスポンスに `Cache-Control: no-store` と `X-Robots-Tag: noindex, nofollow`。
+
+### 8.9 静的エクスポート（`scripts/export-static.mjs`, `npm run export`）
+
+クライアントにプレーンなファイル一式を渡すための手順:
+
+```bash
+npm run build && npm run start          # 別ターミナル、port 3000
+npm run export -- <slug>                # → public/_generated/<slug>/
+npm run export -- --all                 # src/app/preview/* の全ディレクトリ
+```
+
+- 動いているサーバから `/preview/<slug>` を取得（`PREVIEW_BASIC_AUTH` を送信）、Next.js の
+  アーティファクトを除去、Google Fonts の `<link>`（`data-nj-font` マーカーで発見）を CDN 参照として残す。
+- **CSS / JS / HTML をセクション単位に分割**: `.nj-site` の CSS バンドルを `css/site.css`（トークン・
+  リセット）/ `css/ui.css`（Container・SectionHeading）/ 使用セクションごとの `css/<section>.css` に
+  分割（dev ビルドの per-file コメントマーカー、prod は `<Name>-module__` プレフィックスで判定）。
+  `html/<section>.html` は各トップレベル `.nj-site` 子要素の生マークアップ（`<header>` メニューを前置）。
+- `js/motion.js` は `public/nj-motion.js` をそのままコピー。`index.html` の `<link>` / `<script>` 順:
+  fonts → site → ui → sections → motion.js。
+- 出力（`public/_generated/`）は `.gitignore` 済み。
+
+### 8.10 プレビュールートと Basic 認証プロキシ
+
+- `/preview/<slug>/page.tsx`（`midori`, `nojima`）は §9.1 の手組みテンプレートを描画する。
+  生成サイト（§8.6）とは別のコード。
+- `src/proxy.ts` の Basic 認証は §6.3。
 
 ---
 
-## 9. セキュリティ
+## 9. サイトのレンダリング（2 系統）
 
-### 8.2 後方互換のための zod `.default()`
+同じ「nj-site」デザイン DNA を、**異なるコード** で生成する 2 経路がある。
 
-`layout.background` / `layout.decoration` / `animation.variety` は `designTokensSchema` で `.default()` を付けています。これは整形上の都合ではなく**データ保全のため**です。
+### 9.1 手組みテンプレート — `/preview/<slug>`（`/template-create` の成果物）
 
-`getDocument()` は保存済み JSON を `safeParse` し、**失敗すると `DEFAULT_DESIGN_TOKENS` を丸ごと当てます**（`src/lib/site/store.ts:156`）。フィールドを必須で足すと、追加前に保存された全ドキュメントがその検証に落ち、**実際の配色とフォントを失って既定値に戻ります**。`.default()` があれば旧 JSON もそのまま通り、新機能だけが「オフ」の状態で読み込まれます。
+- `src/app/preview/<slug>/page.tsx` が `<div class="nj-site">` 配下に React セクション
+  （`src/components/sections/<Name>/`＝`.tsx` + CSS Module）を描画。`registry.ts` の
+  `type:variant` → コンポーネントで解決（未登録の組み合わせは描画しない）。
+- コンテンツは 1 つの JSON: `src/components/sections/data/template.json`
+  （スキーマ `template.schema.json`）。`meta` / `theme`（`colors` + `fonts`）/ `brand` / `contact` /
+  `layout`（`{type, variant}[]`）/ `nav` / `sections.<name>`。画像スロット `{src, alt}`、`src: null` で
+  組み込みプレースホルダ SVG。
+- `data/template.ts` が型付けし `themeStyle`（`--nj-*` インライン）/ `fontHref` / `content` を公開。
+  `data/{clinic,departments,sections}.ts` は薄い後方互換シム。
+- 装飾はすべてインライン SVG（`ui/Illustration.tsx`）。
+- 新しいサイトは `template.json` をコピーして値を編集するだけ（セクションコンポーネントに
+  ハードコード文字列はない）。
+- レジストリ登録: `header:bar`, `hero:full-bleed`, `schedule:table`, `news:list`, `reasons:numbered`,
+  `greeting:portrait`, `philosophy:centered`, `medical:grid`, `fees:table`, `flow:steps`,
+  `faq:accordion`, `access:map-side`, `contact:cta`, `footer:band`。
+
+### 9.2 生成バンドル — `public/_generated/<slug>/`（ヒアリングシート由来）
+
+- `src/lib/generatedSite/render.ts` が `SiteTemplate` を **文字列テンプレートで** ビルドし、
+  ファイル一式（`index.html`, `css/*`, `js/site.js`, `html/*`, `assets/*`, `template.json`,
+  `README.md`）を返す（`renderBundle()`）。
+- CSS / JS は全サイト共通（`src/lib/generatedSite/staticAssets.ts`。`hidamari-hifuka` バンドルから
+  自動生成。西宮の皮ふ科サイトを参照した「水彩のにじみ＋植物線画＋丸／筆書体」の DNA）。
+  クリニックごとの差分はセクション HTML と `.nj-site` にインラインで置く `--nj-*` カスタムプロパティのみ。
+- `SiteTemplate` の構造（`src/lib/generatedSite/types.ts`）:
+  - `meta`, `theme`（`colors` 8 色 / `washes` 5 色 / `botanicalStroke` / `fonts` / `fontScale`）,
+    `brand`, `contact`, `layout: {id, kind}[]`, `nav: {href, label}[]`, `sections`, `customBlocks`。
+  - `sections`: `hero`, `greeting`, `medical`, `philosophy`, `gallery`, `schedule`, `fees`, `flow`,
+    `faq`, `news`, `access`, `contact`, `footer`。
+  - `KNOWN_SECTION_IDS` にない `layout` エントリはスキップ。
+  - `medical.items[].icon` は `skin|child|sparkle|care|tooth|eye|bone|heart|allergy|general` のいずれか
+    （`render.ts` の `ICON_INNER`）。
+- `normalize.ts` の 3 つのガードレール:
+  1. **コントラスト**: 淡すぎる配色を、見出し／ボタンが WCAG を満たすまで濃くする。
+  2. **フォント**: Latin 専用フォント（Roboto 等）を日本語対応に差し替え、`googleHref` を再構築。
+  3. **セクション**: ベースライン集合（greeting, medical, philosophy, schedule, flow, faq, access,
+     contact）を常に出す（欠損は合成コピー）。`trustLayout: true` のときはこの追加を行わない。
+
+### 9.3 モーション・装飾（両系統共通）
+
+- `public/nj-motion.js`（依存なし、`<script src="/nj-motion.js" defer>`）: `IntersectionObserver` の
+  スクロールリビール（`.nj-reveal` / `[data-nj-anim]` → `.is-visible`）、`[data-nj-count]` カウントアップ、
+  ヘッダー影＋`.nj-progress` スクロールバー＋`[data-nj-parallax]`、スティッキーヘッダー分を差し引く
+  アンカースクロール（`--nj-header-h`）、モバイルメニューを閉じる。スクロールスパイはなし。
+- JS なしでも完全に描画される（メニューは CSS `:checked`）。`prefers-reduced-motion` でモーション無効。
+- 純 CSS 装飾: `@keyframes nj-twinkle`（見出し脇の 4 点星 `.nj-spark`）、`@keyframes nj-float`、
+  リビール時の `blur(6px)→0`。すべて `site.css` / `staticAssets.ts` 内で `prefers-reduced-motion` ガード。
 
 ---
 
-### 9.0 プレビュー用 Basic 認証（`src/proxy.ts`）
+## 10. Server Actions 一覧
 
-ローカル起動のインスタンスをトンネル（cloudflared 等）経由でクライアントに見せるための、アプリ全体の前段ゲートです。
+| アクション | ファイル | 認可 | 効果 |
+|---|---|---|---|
+| `signupClinicOwnerAction` / `loginClinicOwnerAction` / `loginAdminAction` / `logoutAction` | `authActions.ts` | 公開 | 認証。redirect |
+| `createApplicationAction` | `applicationActions.ts` | `clinic_owner` | ヒアリングシートを UPSERT → `/mypage/requests` |
+| `deleteOwnApplicationAction(slug)` | `applicationActions.ts` | `clinic_owner`（本人） | 自分の申請を削除 |
+| `createUserAction` / `deleteUserAction(id)` | `contentActions.ts` | `requireAdmin()` | ユーザー作成／削除 |
+| `deleteRequestAction(slug)` | `contentActions.ts` | `requireAdmin()` | 申請を無制限削除 |
+| `generateSiteAction(slug)` | `contentActions.ts` | `requireAdmin()` | OpenAI でサイト生成（§8.6） |
+| `saveGeneratedTemplateAction(slug, template)` | `contentActions.ts` | 管理者 or 本人 | バンドル再レンダリング＋保存（OpenAI なし） |
+| `regenerateSectionAction(slug, sectionId, template)` | `contentActions.ts` | 管理者 or 本人 | 1 セクションのコピーを OpenAI で再生成 |
+| `generateImageAction(slug, kind, hint)` | `contentActions.ts` | 管理者 or 本人 | 画像 1 枚を OpenAI 生成 |
+| `create/update/deleteDepartmentAction`, `...ServiceAction`, `...FeatureAction`, `...TargetAction`, `...SectionAction` | `contentActions.ts` | `requireAdmin()` | マスタ CRUD |
+
+---
+
+## 11. セキュリティ考慮
+
+- Server Action は直接 POST 可能 → 認可は各アクション先頭（§6.2）。
+- テナント分離: オーナー系の読み取りは SQL の `WHERE owner_email = ?` で絞る。削除は
+  `ownerEmail === session.email` を再確認。
+- 生成サイト配信・アップロードはサインイン必須。生成サイト配信はパストラバーサル二重チェック。
+- OpenAI / D1 / Supabase の各キーはサーバ側でのみ読む（ブラウザに出さない）。
+- OpenAI 出力は信用しない: `normalizeTemplate()` が全フィールドを整形し、`render.ts` の `esc()` /
+  `emphasise()`（1 段階のみ）で HTML エスケープ。
+- 全生成レスポンスに `noindex, nofollow`。
+- `PREVIEW_BASIC_AUTH` はプレビューのゲートであり、アプリのログインの代替ではない。
+
+---
+
+## 12. デプロイ・運用
+
+### 12.1 コマンド（`package.json` / `CLAUDE.md`）
+
+```bash
+npm run dev            # Next.js dev（Turbopack）
+npm run build          # 本番ビルド（output: "standalone"）
+npm start              # 本番ビルドを起動
+npm run lint           # eslint
+npx tsc --noEmit       # 型チェック
+npm run clean          # rm -rf .next tsconfig.tsbuildinfo（Turbopack / route-type の stale 対策）
+npm run export -- <slug>   # 静的バンドルの書き出し（§8.9）
+npm run preview:tunnel     # cloudflared tunnel --url http://localhost:3000
+npm run cf:dev / cf:deploy # wrangler dev / deploy
+
+node scripts/migrate.mjs                       # migrations/*.sql を D1 HTTP API に適用
+node scripts/migrate.mjs --file 0003_...sql    # 1 ファイルだけ適用
+node scripts/seed-admin.mjs <email> <pw> [admin|clinic_owner]  # users への INSERT 文を出力
+```
+
+### 12.2 検証（テストフレームワークはない）
+
+手動: `npx tsc --noEmit && npm run lint && npm run build` ＋ dev サーバでフロー実走。
+データレベルの証明が要るときは scratchpad に使い捨てスクリプトを書き、実 D1 行に対してロジックを再現する。
+
+### 12.3 初回 `wrangler deploy` の前に
+
+1. デプロイ自体の認証: `wrangler login`（OAuth）か、シェルに `CLOUDFLARE_API_TOKEN` を設定
+   （設定済みなら wrangler が自動使用し、`wrangler login` は上書きを拒否する）。
+2. ランタイム秘密を `wrangler secret put` で設定: `CLOUDFLARE_ACCOUNT_ID`,
+   `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_D1_DATABASE_ID`, `OPENAI_API_KEY`, `SUPABASE_URL`,
+   `SUPABASE_ANON_KEY`（必要なら `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_STORAGE_BUCKET`）。
+3. `wrangler deploy`（Dockerfile をビルド → イメージ push → Worker + Container デプロイ）。
+
+---
+
+## 13. 既知の制約・技術的負債
 
 | 項目 | 内容 |
 |---|---|
-| ファイル | `src/proxy.ts`（Next.js 16 では `middleware` は非推奨、`proxy` に改名） |
-| 有効化 | 環境変数 `PREVIEW_BASIC_AUTH="user:password"` が設定されているときのみ。未設定なら素通し |
-| 適用範囲 | `_next/static` / `_next/image` を除く**全経路**（`/api/*`、`/generated/*` を含む） |
-| 実行環境 | Node.js ランタイム（Next.js 16 の proxy 既定。`runtime` 指定は不可） |
-| 比較 | `timingSafeEqual` による定数時間比較 |
-| 付加ヘッダ | `X-Robots-Tag: noindex, nofollow` |
-
-**存在理由**：`/sites/[slug]`（AI 生成・Cloudflare 公開の実行）と `POST /api/uploads`（Supabase Storage への書き込み）が**認証が無い**まま残っています（`/create` と `/sites` は 2026-08-21 に削除済み）。localhost では許容できても公開 URL では許容できないため、暫定的に全体を覆っています。
-
-⚠️ これは**アプリ本来のログインの代替ではありません**。`requireAdmin()` / `requireEditableDocument()` はこのゲートの内側で従来どおり機能します。恒久対応は各エントリポイントへの認可追加（13 章）。
-
-### 9.1 SSRF 対策（`safeFetch.ts`）
-
-管理者が入力した URL をサーバーが fetch するため、**一般論として攻撃者の影響下にある URL** として扱います（管理者はソーシャルエンジニアリングされうるし、この経路がセルフサービス化されれば即座に穴になる）。素朴な `fetch(userUrl)` は `http://localhost:3000/api/...`、`169.254.169.254` のクラウドメタデータ、ブラウザからは決して届かない社内ネットワークを読めてしまいます。
-
-**ガードの順序**：スキーム → ホスト名／IP レンジ → **リダイレクト各ホップの再検査** → レスポンスサイズ → タイムアウト。
-
-| ガード | 内容 |
-|---|---|
-| スキーム | `http:` `https:` 以外を拒否 |
-| ホスト名 | `localhost` / `*.localhost` / `*.local` / `*.internal` |
-| **DNS 解決** | ホスト名を `lookup(all)` し、**解決先が private なら拒否**（ホスト名は IP 直書きと同じくらい簡単に private を指せる） |
-| IPv4 | `0.*` `10.*` `127.*` `169.254.*`（メタデータ含む） `172.16-31.*` `192.168.*` `100.64-127.*`（CGNAT） |
-| IPv6 | `::1` `::` `fc*`/`fd*`（ULA） `fe80*`（リンクローカル）、**`::ffff:` の IPv4 マップ**（v4 チェックをすり抜けるため） |
-| 不明な形式 | **推測せず拒否** |
-| リダイレクト | `redirect: "manual"` で手動追跡、最大 3 ホップ、**各ホップで同じホスト検査**（公開 URL が `169.254.169.254` へ 302 する攻撃を防ぐ） |
-| サイズ | ストリームを読みながら上限で abort（バッファリングしない） |
-| タイムアウト | 10 秒 |
-
-### 9.2 権限
-
-3.1 / 3.2 参照。すべての更新系 Server Action の先頭でチェックし、`saveDocumentAction` は識別子を保存済み行から復元します。
-
-### 9.3 著作権
-
-外部サイトから取り込むのは**デザインの方向性のみ**で、コンテンツの複製ではありません。参考サイトの画像は**モデルに URL として見せるだけで、ダウンロードも保存もしません**。テンプレートのサンプル画像はプレースホルダで、管理者が編集画面で差し替えます。
-
-### 9.4 アクセシビリティ（`color.ts`）
-
-テンプレートの配色は任意の参考サイトから来るため、**読める組み合わせである保証がありません**。ブランドのアクセントはボタンの塗りとしては正しく、白地の本文としては判読不能な明るい黄色やライムであることが多く、取り込み側には参考サイトがどちらの用途で使っていたか知る術がありません。
-
-**モデルに正しく判断させるのではなく、レンダラーが保証付きの派生色を導きます。**
-
-```
-readableOn(color, background, fallback, minRatio = 4.5)
-  1. すでに WCAG コントラスト比 4.5 以上ならそのまま返す
-  2. 背景の相対輝度 > 0.4 なら黒へ、そうでなければ白へ
-  3. 10% 刻みで混色し、4.5 を超えた最初の候補を返す
-  4. 純黒／純白でも届かない（＝背景が中間グレー）ときだけ fallback
-```
-
-**色相は保たれる**ため、結果は依然としてブランドカラーとして読めます。WCAG 相対輝度とコントラスト比は仕様どおりに実装されています。
-
-### 9.5 認証
-
-- パスワード：scrypt（ソルト付き）、定数時間比較
-- セッション：32 バイト乱数、TTL 7 日、`httpOnly` + `SameSite=Lax`
+| コンテナディスク非永続 | `public/_generated/*` は再デプロイ／再起動で消える。生成元 `SiteTemplate` は D1 にあるのでエディタ「保存」で再レンダリング復旧可（§3.4）。恒久対応は出力を R2 等へ移すこと |
+| テストなし | ランナー未導入。検証は手動（§12.2） |
+| stale なコメント | `wrangler.jsonc` / `Dockerfile` / `worker/index.ts` のコメントに実在しないモジュール名（`renderSiteFiles.ts`, `cloudflareDeploy.ts` 等）や誤ったパス `public/generated`（実体は `public/_generated`）が残る。挙動ではなく文言の問題 |
+| `ApplyForm.tsx` | 単一クライアントコンポーネントに約 1,200 行。全ステップの state を保持 |
+| レンダリング 2 系統 | §9.1（React コンポーネント）と §9.2（文字列テンプレート）が別々に「nj-site」を生成する。CSS DNA は共有だがコードは重複気味 |
+| `hours` / `staffMembers` | レガシーフィールド。新フォームは構造化 `schedule` と単一 `director` のみ入力 |
+| 申請の更新パスなし | 送信後の内容修正は不可（設計）。生成サイトのみ編集可 |
 
 ---
 
-## 10. レスポンシブ対応の既知修正
-
-| 問題 | 原因 | 対策 |
-|---|---|---|
-| LINE / 電話ボタンの幅が不一致（210px vs 218px） | 幅が文字数依存（「LINEで相談・予約する」と「お電話で相談・予約する」の 1 文字差） | SP 幅（560px 以下）で縦積み・幅 100%（→ 両方 338px） |
-| ヒーロー文字がヘッダーに重なり次セクションへはみ出す | `hero-full-bleed` で文字側が絶対配置のため親の高さを押し広げられない（上 77px・下 78px 溢れ） | 画像と文字を **CSS Grid の同じマスに重ねる**。行の高さが両者の大きい方になり原理的に溢れない |
-
-修正は大元の `src/lib/render/site.css` に入っています。
-
----
-
-## 11. 運用手順
-
-### 11.1 コマンド
-
-```bash
-npm run dev          # 開発サーバー
-npm run build        # 本番ビルド
-npm run lint         # ESLint
-npm run clean        # rm -rf .next tsconfig.tsbuildinfo
-npx tsc --noEmit     # 型チェック
-```
-
-### 11.2 マイグレーション
-
-```bash
-node scripts/migrate.mjs                              # 全件
-node scripts/migrate.mjs --file 0003_site_documents.sql  # 個別
-```
-
-`.env.local` を自前でパースし、アプリと同じ D1 HTTP API を叩くため **`wrangler login` 不要**です。**再実行安全**：文は構造上冪等（`IF NOT EXISTS` / `INSERT OR IGNORE`）で、冪等にできない `ALTER TABLE ADD COLUMN` だけは `duplicate column` / `already exists` での失敗を許容します。
-
-行コメントを先に除去してから `;` で分割するため、`--` 行に含まれるセミコロンが文を分断しません。
-
-### 11.3 初期管理者
-
-```bash
-node scripts/seed-admin.mjs
-```
-
-### 11.4 導入順序
-
-1. `.env.local` を用意
-2. `node scripts/migrate.mjs`
-3. `node scripts/seed-admin.mjs`
-4. マスタデータ（診療科・サービス・特徴・ターゲット）を登録
-5. **テンプレートを 3〜5 個作る**
-6. プレビュー確認のうえ「販売可」に切替
-
-> テンプレートが 0 件でも生成は動きます（`buildDefaultTemplate()` が標準レイアウトを返す）。1 件だけの場合は AI を呼ばずそれを使います。**自動選択が意味を持つのは 2 件以上から**です。
-
----
-
-## 12. 既知の制約
-
-| # | 制約 | 詳細 |
-|---|---|---|
-| 1 | 2026-08-19 以前のサイトは SiteDocument を持たない | 編集不可。「AI で再生成する」で作り直す。`store.ts` は `design`/`meta` 欠落行にフォールバックを当てて**編集画面で開けるようにする**（唯一直せる場所であるため） |
-| 2 | **同時編集の制御なし** | 後勝ち。`updated_at` による衝突検出は未実装 |
-| 3 | SPA は URL 取り込みが効きにくい | `looksClientRendered` を検出して警告を返す |
-| 4 | ローカルサイトは URL 取り込み不可 | SSRF 防御が `localhost` を拒否するため。代わりに「作成済みサイトから作る」経路がファイルを直接読む |
-| 5 | ヒアリングシート・生成サイトがローカルファイル | 13.2 参照 |
-| 6 | ~~旧フロー `/create` が並存~~ | **解消済み**（2026-08-21 削除）。13.3 参照 |
-| 7 | 自動テストはデザイン検査のみ | `npm run check:design` が**表示の崩れ**を機械的に確認する（2026-08-25 追加、14.章参照）。ロジックの単体テストは依然ゼロ。テストランナーは未導入で、`tsx` と `playwright` のみ入っている |
-| 8 | `hp-templates/` が残存 | `AI_GUIDE.md` `NEXTJS_TAILWIND_GSAP_GUIDE.md` `SITE_SPEC.json` `TEMPLATE_VARIABLES.md` `colors.json` `presets/`。**コードからの参照はゼロ** |
-| 9 | `docs/` が空 | 旧 `USER_ADMIN_GUIDE.md` は削除済み。本書が唯一のドキュメント |
-| 10 | 変更が未コミット | 7 ファイル変更＋2 ファイル未追跡 |
-
----
-
-## 12.1 デザイン検査（2026-08-25 追加）
-
-生成物が**見た目として壊れていないか**を機械で確認する仕組みです。きっかけは、生成済み5サイトのうち3サイトが `images/greeting.jpg` を参照したままファイルを持たず、**クライアントに見せる直前まで誰も気づかなかった**ことです。
-
-### 構成
-
-| 層 | 実装 | 内容 | 費用 |
-|---|---|---|---|
-| 画像スロットの列挙 | `src/lib/site/imagePaths.ts` | ドキュメント上の全画像位置を返す**唯一の定義**。生成（`buildImageJobs`）・書き戻し（`applyImagePaths`）・検査がこれを共有する | — |
-| 静的検査 | `src/lib/site/designCheck.ts` | 画像の実在／コントラスト／見出しの空欄／ブロックの不変条件／文字数／カード枚数と並べ方の整合 | 無料・即時 |
-| 実描画検査 | `src/lib/site/renderCheck.ts` | Playwright で 390px と 1280px に描画して実測。横スクロール／画像切れ／はみ出し／ボタン幅／ヒーローの食い込み | 無料・約10秒/件 |
-| CLI | `scripts/check-design.mts` | `npm run check:design -- --all`。要修正があれば終了コード1 | — |
-| 再描画 | `scripts/render-sites.mts` | `npm run render:sites -- --all`。`site.css`/`main.js` は各サイトへ**コピー**されるため、変更したら必要 | — |
-| 画面 | `components/editor/DesignCheckButton.tsx` | 編集画面のツールバー。**未保存の状態**に対して静的検査だけを実行 | 無料 |
-| 記録 | `HearingSheet.designCheck` | 生成の最後に自動実行し、件数を申請レコードへ記録。一覧にバッジで出る | — |
-
-### 設計上の判断
-
-- **`imagePaths.ts` を分けた理由**：同じ列挙が生成側と書き戻し側に二重にあり、**その差分がBUG-01そのもの**でした。1か所に集約したことで、画像を持つブロック種別を増やすときに片方だけ直す余地が消えています。
-- **判定の重み**：`high` は「そのままでは表示が崩れる」もの（画像切れ・横スクロール・heroの重複）に限ります。配色のコントラストは読みやすさの問題なので `medium` 止まりです。**常に赤い検査は読まれなくなる**ためです。
-- **Playwright はアプリから絶対に import しない**：devDependency であり、`output: "standalone"` の依存追跡に入ってはいけません。`renderCheck.ts` の `import("playwright")` は動的で、呼ぶのは CLI だけです。
-- **演出を切ってから測る**：スクロール演出は要素を `translateX(±40px)` の位置で待たせるため、そのまま測ると「はみ出し」が毎回別の場所に出ました。横スクロールの判定だけは演出込みで測り（それが不具合の実体のため）、残りは演出を無効化してから測ります。
-
-### この仕組みが見つけた不具合
-
-| 内容 | 状態 |
-|---|---|
-| 生成サイト3件のセクション画像が参照切れ（BUG-01） | 検出。生成側は修正済み、既存サイトのファイルは未復旧 |
-| **テンプレート2件がスマートフォンで横スクロールする** | **修正済み**。横方向のスクロール演出で未表示のセクションが右にずれ、幅390pxの画面が417pxになっていた。`.section, .hero { overflow-x: clip }` を追加（`html` に書くとビューポートへ伝播して効かない。`hidden` では区切り装飾の縦のはみ出しまで消える） |
-
----
-
-## 12.2 文字主体テンプレート（2026-08-25 追加）
-
-写真に頼らずに成立するデザインの語彙を足し、それを使ったテンプレートを1件用意しました。
-
-### 追加したデザイントークン
-
-いずれも `.default()` 付き。既存サイトの設定は変わりません（`safeParse` の全体フォールバックに落ちないことを実測で確認済み）。
-
-| トークン | 範囲 | 既定 | 役割 |
-|---|---|---|---|
-| `font.displayScale` | 1.0〜2.2 | 1.0 | **見出しだけ**を拡大。`baseSize` を上げると本文まで大きくなるので別立てにした |
-| `font.headingLetterSpacing` | -0.02〜0.3em | 0 | 和文見出しの字間。**書体からは導けない**ため独立した値 |
-| `layout.rule` | `none`/`hairline`/`accent-bar` | `none` | 見出しの区切り方。既定の太い下線を、細い罫線または左の色帯に置き換える |
-
-CSS 側は `--display-scale` `--heading-tracking` と `<html data-rule>` で受けます。編集画面の「デザイン」パネルからも操作できます。
-
-### 既にあった仕組みを使った部分
-
-**エンジンの改修はほとんど不要でした。**
-
-- `block.cardLayout: "minimal"` — カード画像を一切描かない。`buildImageJobs` も生成対象から外す（`ImageSlot.rendered = false`）
-- `freeText` ブロック — 写真の無い区切り
-- `layout.background` / `decoration` / `sectionDivider` — 既存
-
-追加したのは `.cards-minimal` の作り替え（枠 → 罫線と大きな番号）と `data-rule` の指定群です。
-
-### テンプレート `typographic-template`
-
-`src/lib/site/typographicTemplate.ts`。登録は `npm run seed:template -- typographic [--force]`（AI不使用・無料・再実行可）。
-
-| 項目 | 値 |
-|---|---|
-| 配色 | 墨緑 `#2f3a3f` × 真鍮 `#6f6046` × 生成り `#f5f2ec`。**全ペアが 4.5:1 以上**（最小は白×真鍮の 6.1:1） |
-| 書体 | 見出し Shippori Mincho / 本文 Noto Sans JP |
-| 字送り | `displayScale 1.35` / `headingLetterSpacing 0.12em` / `spacingScale 1.6` |
-| 形 | `radius 0` / `shadow none` / `cardLayout minimal` / `rule hairline` |
-| 動き | `fade` のみ。方向のある演出は文字と競合し、横スクロールの原因にもなるため使わない |
-| **画像枚数** | **7枚**（他の3テンプレートは 23枚） |
-
-### この作業中に見つけて直したこと
-
-| 内容 | 直し方 |
-|---|---|
-| スマートフォンで見出しが「お問い合わせ・ご予 / 約」と語の途中で割れる | 見出しに `word-break: auto-phrase` と `text-wrap: balance`。日本語は原則どこでも改行できるため、文節を見る指定が要る。未対応ブラウザは無視するだけなので代替指定は不要 |
-| `.cards-minimal` の閉じ罫線が、横に4枚並んだうちの**4枚目の下にだけ**出る | `.card:last-child` ではなく一覧そのもの（`.cards-minimal`）に `border-bottom` を引く |
-| テンプレートに `freeText` / `gallery` を置くとサンプル文が空のまま | `sampleCopy.ts` に両方を追加。gallery は**テンプレートが枚数を指定していれば上書きしない** |
-| デザイン検査が `freeText` の空見出しを誤検出 | `BLOCK_DEFINITIONS` の `optional` を見るように変更。型ごとの列挙を増やさない |
-
-### ボタン・メニューの配色を自動補正（同日）
-
-⚠️ **検査自体に誤りが1つありました。** `accentInverse` × `accent` を指摘していましたが、**`--accent-inverse` はスキーマにあるだけで、CSSのどこからも使われていませんでした**。描画されない組み合わせを指摘していたことになります。
-
-対応：
-
-1. `nav.site-nav a:hover` に `color: var(--accent-inverse)` を追加し、トークンを実際に使う値にした
-2. `color.ts` に `readableFill()` を追加。**文字ではなく面のほうを濃くする**（白い文字を灰色にするのは「間違い」に見えるが、青を濃くするのはデザイナーが実際にやる直し方）
-3. `--primary-fill` / `--accent-fill` を導入し、**文字が乗る箇所（メニューバー・電話ボタン）だけ**に適用。`--primary` そのものは触らないので、見出しの罫線やグラデーションは指定どおりの色のまま
-4. 検査は「自動で濃くしました」という**低優先の通知**に変更。読み手に実害が無い以上、要確認にすべきではない
-
-実測: `#4ba3fc`（2.6:1）→ `#3572b0`（5.0:1）。色相は保持。新テンプレートは基準を満たしているため**変更されません**。
-
-### 運用上の注意
-
-⚠️ **Playwright のブラウザは `~/Library/Caches/ms-playwright` にあり、macOS のキャッシュ削除で消えます**（実際に消えました）。描画検査が「ブラウザを起動できませんでした」で失敗したら、次を実行してください。
-
-```bash
-npx playwright install chromium chromium-headless-shell
-```
-
----
-
-## 12.3 1テンプレートから多様なサイトを出す（2026-08-25 追加）
-
-### 何が固定だったか
-
-文章は**もともと柔軟**でした（`generateContentPlan` はテンプレートの実ブロック一覧を読んで書く）。固定だったのは骨格と配色です。同じテンプレートから出たサイトは「言葉だけ違う同じサイト」でした。
-
-### 方式：CSSではなく「選択肢」を渡す
-
-`src/lib/site/composition.ts` が語彙を持ちます。
+## 14. ディレクトリ早見表
 
 ```
-BLOCK_VARIANTS = {
-  hero: full-bleed | split | centered
-  rich: grid | list | minimal | overlap
-}
+src/
+  proxy.ts                     プレビュー用 Basic 認証（旧 middleware.ts）
+  app/
+    page.tsx                   公開ランディング
+    login/ signup/ admin/      認証画面
+    home/ mypage/**            clinic_owner の画面（申請・一覧・サイト編集）
+    admin/(dashboard)/**       admin の画面（users / requests / マスタ / サイト編集）
+    api/uploads/route.ts       写真アップロード → Supabase Storage
+    api/generated/[slug]/[[...path]]/route.ts   生成バンドルの配信
+    preview/<slug>/page.tsx    手組みテンプレートの React 描画
+  lib/
+    d1.ts                      D1 HTTP クライアント（1 リクエスト 1 文）
+    auth.ts authActions.ts     scrypt / session / requireAdmin
+    content.ts contentActions.ts  マスタ CRUD ＋ 生成／編集アクション
+    hearing.ts applicationActions.ts  ヒアリングシート永続化 ＋ 申請アクション
+    openai.ts                  OpenAI REST（chat / images）
+    supabaseStorage.ts         Supabase Storage REST
+    buildSiteFromHearing.ts    ヒアリングシート → 生成バンドル（§8.6）
+    generatedSiteEditor.ts     エディタ用ローダ
+    imageCategories.ts imageFormats.ts
+    generatedSite/
+      types.ts                 SiteTemplate 型
+      normalize.ts             生 JSON → 完全な SiteTemplate（3 ガードレール）
+      render.ts                SiteTemplate → 静的ファイル一式
+      staticAssets.ts          全サイト共通の CSS / JS / SVG
+      color.ts fonts.ts        コントラスト補正・フォント解決
+  components/
+    apply/ApplyForm.tsx        申請ウィザード
+    siteEditor/**              生成サイトのエディタ
+    sections/**                手組みテンプレートの React セクション ＋ registry.ts
+    sections/data/template.json  手組みテンプレートのコンテンツ
+    landing/** ui/** admin/** mypage/** auth/**
+migrations/    0001 auth / 0002 content / 0003 hearings / 0004 sections
+scripts/       migrate.mjs / seed-admin.mjs / export-static.mjs
+worker/        index.ts（Cloudflare Container のフロントドア）
+Dockerfile wrangler.jsonc next.config.ts
 ```
-
-⚠️ **AIにCSSやクラス名を書かせません。** variant は**このファイルが持つ一覧の中の1語**で、しかもその値はすべて、既存テンプレートが `heroLayout` / `cardLayout` として**すでに出荷しているレイアウト**です。今回やったのは「ドキュメント全体の設定だったものを、ブロック単位で上書きできるようにした」だけで、**新しいCSSは1行も足していません**。だから「崩れない」と言えます。
-
-### 正規化（`normalizeComposition`）
-
-`normalizeDesignTokens` と同じ思想です。「モデルの出力は提案であって真実ではない」。**例外を投げません** — 数分と実費を使った生成を、提案の不備で失敗させないためです。
-
-| 入力 | 結果 |
-|---|---|
-| 一覧に無い variant（`wobble`） | 無視 → テンプレート既定 |
-| 存在しない blockId | 捨てる |
-| `cardCount: 99` / `0` | 6 / 2 にクランプ |
-| **全セクションに `grid`**（怠けた回答） | 隣が同じにならないよう次の変種へずらす → `grid → list → grid → minimal` |
-
-### 実効レイアウトの一元化
-
-⚠️ `cardLayout` を読む場所は**必ず `effectiveCardLayout()` を通すこと**。描画・画像生成・デザイン検査の3つが別々に読むと、「カードに写真があるか」で食い違い、BUG-01と同じ種類の事故になります。
-
-### 配色のクリニックごとの揺らぎ
-
-`derivePalette(colors, slug)` が `primary` / `accent` / `light` の**色相のみ**を最大±24°回します。
-
-- **slug から決まる**ので、作り直しても同じ色になります（公開中のページが勝手に模様替えされない）
-- `text` / `background` / 2つの inverse は回しません。ほぼ無彩色であり、回すとページ全体が色被りします
-- 可読性は描画時の `readableOn` / `readableFill` が担保するので、回した結果が読めなくなることはありません
-
-### 人が使う導線
-
-編集画面のブロック設定に「**このセクションのレイアウト**」を追加しました（既定は「テンプレートに合わせる」）。AIの選択を人が上書きできます。
-
-### 意図的に入れなかったもの
-
-**セクションの並べ替えと、AIによる非表示。** 順序はテンプレートが意図して決めた語り口であり、入れ替えは「柔軟」が「崩れ」に変わる境目です。表示・非表示は「クリニックがその事実を入力したか」（`applyFactualVisibility`）で決まっており、モデルの推測より確かです。
-
-### 検証（課金なし）
-
-AIの出力を人手で模し、同一テンプレートから2サイトを実描画しました。
-
-| | hero | 診療科案内 | ご挨拶 | 特徴 | 施設案内 | 主要色 |
-|---|---|---|---|---|---|---|
-| A | split | minimal | list | minimal | grid | `#4bb0fc` |
-| B | centered | grid | minimal | overlap | list | `#4bd0fc` |
-
-両方ともデザイン検査を通過（要修正0）。正規化の4つのルールも上表のとおり実測で確認しました。
-
----
-
-## 12.4 公開トップページとユーザー側の画面（2026-08-25 追加）
-
-### 経路の変更
-
-| 変更前 | 変更後 |
-|---|---|
-| `/` = オーナーのログインフォーム | **`/` = 公開トップページ**（未ログインで閲覧可） |
-| — | **`/login` = オーナーのログイン** |
-
-⚠️ **`redirect("/")` でオーナー画面を守っていた箇所は、すべて `/login` に変更が必要です。** 対象は `src/app/home/layout.tsx` / `home/page.tsx` / `mypage/layout.tsx` の3か所。`logoutAction` は `/`（公開トップ）のままにしてあります — ログアウト直後の人が必ずログインし直したいわけではなく、空のパスワード欄に着地するのは失敗に見えるためです。
-
-権限の境界は curl で全経路を実測し、変化が「未ログイン時の遷移先が `/` → `/login` になったこと」と「`/` が公開になったこと」だけであることを確認済みです。
-
-### なぜ管理画面と分けたか
-
-オーナー画面は `AdminTopBar` / `AdminPageHeader` を**管理画面と共有していました**。同じに見えていたのではなく、**同じものでした**。これが「業務ツールに見える」直接の原因です。
-
-`src/components/mypage/MypageShell.tsx` に専用のものを新設し、`src/app/admin` 配下は一切変更していません。両者は今後別々に育てられます。
-
-### 配色と書体
-
-`src/app/globals.css` の `@theme inline` にトークンを追加しました（Tailwind のユーティリティとして `bg-paper` `text-ink` `font-display` などが使えます）。
-
-| トークン | 値 | 対背景コントラスト |
-|---|---|---|
-| `ink` | `#16201d` | 16.7:1 |
-| `ink-soft` | `#5a6560` | 6.1:1 |
-| `brand` | `#2f5d4e` | 7.5:1 |
-| `canvas` | `#f6f4ef` | — |
-| `line` | `#e2ded5` | — |
-
-見出しは Shippori Mincho（`font-display`）、本文は Noto Sans JP。⚠️ 既存の `--background` / `--foreground` は**変更していません**。管理画面はそのままです。
-
-### スクロール演出
-
-`src/components/ui/Reveal.tsx`。⚠️ **生成サイト用の `site.css` / `main.js` とは完全に別物です。** 混ぜないこと。
-
-内容が永久に隠れないよう2重の保険があります。CSSは `html.js` が付いている時だけ隠し、その class は当のコンポーネントが mount 時に付けます（＝スクリプトが動かない環境では最初から全部見える）。さらに全体が `prefers-reduced-motion: no-preference` の中にあります。
-
-### ⚠️ 実績としてクリニックのサイトを載せないこと
-
-公開トップの「デザインの型」に並ぶのは**テンプレートだけ**です。生成済みサイトは実在の医院のもので、営業ページへの掲載は掲載許諾の問題であり、デザインの判断ではありません。
-
-### 検証用のサーバー
-
-`PREVIEW_BASIC_AUTH` が設定されていると、画面の確認にも認証が要ります。`.claude/launch.json` に **`clinc-hp-nogate`**（ポート3100・認証なし）を追加しました。localhost のみで、トンネルには乗せません。
-
-⚠️ Next.js 16 は**同じディレクトリで2つ目の `next dev` を拒否します**。3100を使うときは3000を止めてください。
-
----
-
-## 12.5 ヒアリングシートを D1 へ移行（2026-08-25）
-
-### なぜ
-
-顧客が入力したデータが、サーバーのローカルディスクにしか無い状態でした。申請を受け取ったインスタンスだけがそれを読み返せる、という構造上の単一マシン依存です。
-
-実害も出ていました。移行前の時点で、**D1 のサイト7件のうち4件はヒアリングシートが存在しませんでした**。片方が DB、片方がファイルである限り、この種のズレは起き続けます。
-
-### テーブル設計
-
-`sites` と同じ考え方です。**申請後に書き換わる項目はカラム、申請フォームの中身は JSON 1列**。
-
-この切り方は見た目の問題ではありません。`updateHearing` の patch 型が列挙している項目 = 可変項目 = カラム、と一致させたことで、**更新が UPDATE 1文**で済みます（旧: 読んで→マージして→書く）。
-
-⚠️ **同じ項目を2か所に持たせないこと。** `toRow` は JSON 側から column 側の項目を削除しています。`previewUrl` の写しが2つあると、片方だけ更新された瞬間に「正しい値」が2つになります。
-
-### ⚠️ この移行の本当の成果：作成の二重起動が原理的に不可能になった
-
-移行前のコード：
-
-```ts
-if (hearing.generationStartedAt) return;                    // 読む
-await updateHearing(slug, { generationStartedAt: ... });     // 書く
-```
-
-**この2行の間に、別のリクエストが同じ判定を通過できました。** 管理者の二度押し、あるいは2人が同時に押すと、同じ slug に対して4分の生成が2本走ります。両方が同じ出力フォルダを削除してから書くため、**課金が二重になり、結果も壊れます**。
-
-`claimGeneration()` が条件付き UPDATE 1文に置き換えました。
-
-```sql
-UPDATE hearings SET generation_started_at = ?, generation_error = NULL
- WHERE slug = ? AND generation_started_at IS NULL
-```
-
-更新件数が 0 なら他が先に取得済み。**5並列で呼んで成功が1件だけになることを実測で確認済みです。**
-
-### マイグレーション上の注意
-
-⚠️ **`hearings` テーブルは、どのマイグレーションにも無いのに既に存在していました**（手作業で作られたもの・0行・`slug` `owner_email` `created_at` `data` のみ）。そのため `CREATE TABLE IF NOT EXISTS` だけでは新しい列が入りません。
-
-0004 は **CREATE + ALTER の併記**にしてあります。新規DBでは ALTER が「duplicate column name」で失敗しますが、`scripts/migrate.mjs` はこれを無視する作りです。両経路が同じスキーマに着地するよう、**CREATE 側にも ALTER で追加できない NOT NULL を置いていません**。
-
-### 移行の実施記録
-
-```bash
-node scripts/migrate.mjs --file 0004_hearings.sql
-npx tsx scripts/import-hearings.mts --dry-run   # 確認
-npx tsx scripts/import-hearings.mts             # 実行（slug で upsert・再実行可）
-```
-
-3件を取り込み、**全項目（22 / 21 / 19 項目）が元の JSON と完全一致**することを突き合わせて確認したうえで、`data/hearings/` を削除しました。Dockerfile の `mkdir` からも外してあります。
-
-### 残っている課題
-
-**`public/generated/`（26MB・172ファイル）は依然としてローカルディスクです。** ヒアリングシートは 20KB。量でいえば全体の 0.1% しか動かせていません。**デプロイ可能にするための本丸はこちらです**（13.2 参照）。
-
----
-
-## 13. 分析所見と改善提言
-
-### 13.1 v1.0 からの訂正
-
-実ソース照合で判明した、v1.0（推定版）の誤りです。
-
-| v1.0 の記述 | 実際 |
-|---|---|
-| 「SiteDocument 保存は 12〜13 往復」 | **3〜4 往復**。`store.ts` は upsert + delete + **100 件チャンクの複数行 INSERT** で「1 ブロック 1 文」を避けている（コメントに「~20 ではなく ~4 往復」と明記） |
-| 「編集フォームのフィールド種別は 4 つ」 | **6 つ**（`text` `textarea` `image` `url` `select` `list`） |
-| 「テンプレート編集は `/admin/templates/[id]/edit`」 | **`/admin/templates/[id]`**（`/edit` は無い） |
-| 「`assignTemplateAction`」 | **`approveRequestAction`** |
-| 「ステータスは『審査待ち』」 | **「承認待ち」** |
-| 「`verify_*.mts` が 10 本残っている」 | **削除済み**。ただしテストは 1 件も無い |
-| 「`docs/USER_ADMIN_GUIDE.md` が陳腐化」 | **ファイルごと削除済み**。`docs/` は空 |
-| 「`hp-templates/template0001〜0006/` が残存」 | 個別テンプレートディレクトリは削除済み。ルートの MD/JSON と `presets/` のみ残存 |
-| SSRF 防御の記述が「ブロックリスト」 | 実際は **DNS 解決チェック＋リダイレクト各ホップ再検査＋IPv4 マップ IPv6＋CGNAT** まで含む、想定よりかなり厳格な実装 |
-| `SiteMeta` の内容が不明 | `logoImage` `snsLinks[]` と 5 項目の SEO を含む |
-| 「著作権上、参考画像は保存しない」 | 正しい。加えて**フォーマット制限と到達確認**まで実装されていた |
-
-### 13.2 【最優先】永続化がローカルファイルシステムに依存している
-
-**事実**：~~ヒアリングシート＝`data/hearings/*.json`~~（2026-08-25 に D1 へ移行・12.5 参照）、生成サイト＝`public/generated/<slug>/`、公開＝そのディレクトリを `wrangler` の子プロセスに渡す。**残る依存は生成サイトのみ**。移行の設計は [DESIGN_STORAGE_R2.md](./DESIGN_STORAGE_R2.md) にまとめてあります（設計のみ・未実装）。
-
-**問題**：**単一マシンでの運用が暗黙の前提**になっています。Vercel / Workers / コンテナ等に載せると、
-
-1. `public/` はビルド成果物であり、実行時に書いても次のデプロイで消える
-2. 複数インスタンスだと、生成したインスタンスと閲覧要求を受けたインスタンスが一致しない
-3. `execFile("npx", ["wrangler", ...])` という前提が本番ホスティングで成立しにくい
-
-ユーザー・マスタデータ・SiteDocument はすでに D1 にあるため、残るのはこの 2 つだけです。
-
-**提言**：生成物とヒアリングシートを Supabase Storage / D1 へ移し、公開は Pages **Direct Upload API** に置き換える。これで実行環境の制約から解放されます。
-
-### 13.3 【高】生成フローが 2 系統並存している
-
-**【2026-08-21 解消済み】** かつて `/create`（承認なし・その場で生成）と `/mypage/apply` → `/admin/requests`（申請・承認型）が同じ `data/hearings/*.json` を共有しており、**申請・承認型で守っているはずの統制を旧フローから迂回できました**。
-
-**対応**：`/create` と、全クリニックを一覧できた `/sites` を削除。あわせて `createHearingAction` と `HearingSheetForm` も削除し、申請の入口は `/mypage/apply`（ログイン必須）だけになりました。
-
-### 13.4 【高】保存のアトミック性が経路によって不揃い
-
-`d1Query()` は 1 文しか送れず、SiteDocument の保存は「sites の upsert」「site_sections の delete」「チャンク insert」に分かれ、**それらをまたぐトランザクションがありません**。
-
-現状の対応状況は経路ごとに異なります。
-
-| 経路 | 補償処理 |
-|---|---|
-| `importFromUrl`（334行目付近） | **あり** — 失敗時に `deleteDocument` でロールバック |
-| `importFromGeneratedSite`（272行目） | **あり** — 同上 |
-| **`saveDocumentAction`（編集の保存）** | **なし** |
-
-編集保存は `DELETE FROM site_sections` の後に `INSERT` が失敗すると、**ブロックが消えたドキュメントが残ります**。ユーザーの編集内容がまるごと失われる、最も実害の大きい失敗です。
-
-なお、取り込み経路の対策をそのまま持ってくることはできません。あちらは**新規ドキュメント**なので `deleteDocument` が正しい巻き戻しになりますが、編集は既存ドキュメントが相手なので、同じことをすればサイトごと消えます。**別の補償が必要**です。
-
-**提言**：(1) D1 のバッチ実行エンドポイントを使う、または `d1Query` に複数文・トランザクション対応を足す（本筋）。(2) 当座の措置として、`saveDocument` の中で削除前に既存ブロック行を読み出しておき、insert 失敗時に書き戻す。
-
-⚠️ **これは仮定ではなく、2026-08-26 に実際に起きました。** 移行 0005 の作業中、insert が 13.14 のバインド変数上限に当たって失敗し、`typographic-template` のブロック 13 件がすべて消えました（`sites` の行は残り、`site_sections` が 0 行）。コード内蔵のテンプレートだったため `scripts/seed-template.mts --force` で復元できましたが、**同じことがクリニックの編集保存で起きれば復元手段はありません**。優先度を上げるべき根拠がひとつ増えました。
-
-### 13.5 【中】生成処理が同期的で長時間
-
-`approveRequestAction` は `generateSite` を**インラインで実行**します（コメントに「管理者がその場で結果を見られるように」と意図が明記）。中身は AI 呼び出し（テンプレ選択・文章・画像 8 枚前後、並列度 3）で、数十秒〜数分かかります。
-
-**問題**：ホスティングの実行時間上限に当たりやすく、リトライ単位が粗く（全部やり直し）、進捗が見えません。
-
-**提言**：ジョブ化する。意図（即座のフィードバック）は、ステータス列＋ポーリングでも満たせます。
-
-### 13.6 【中】`site_sections.id` が主キーとブロック ID を兼ねている
-
-`"<siteId>:<blockId>"` という名前空間化で衝突は解決済みですが、**アプリケーション上の識別子と DB 主キーの兼用**という歪みは残ります。`(site_id, block_id)` の複合ユニーク制約＋独立サロゲートキーが素直です。移行が必要なので急ぎではありません。
-
-### 13.7 【中】セッションの後始末がない
-
-- `login()` が既存セッションを消さないため、ログインのたびに行が増える
-- 期限切れ行を消すのは、**そのトークンでアクセスがあったとき**だけ（`getSession()` 内）
-- 誰もアクセスしない期限切れ行は永久に残る
-
-**提言**：ログイン時に同一ユーザーの期限切れセッションを削除する 1 文でほぼ解決します。
-
-### 13.8 【中】自動テストが 1 件も無い
-
-`verify_*.mts` は掃除されましたが、**テストフレームワーク自体が未導入**です。以下は自動テストの価値が特に高い箇所です。
-
-1. **`safeFetch.assertPublicUrl`** — セキュリティの要。IPv4 マップ IPv6、CGNAT、リダイレクトホップは**表駆動テストが極めて書きやすく**、リグレッションは致命的
-2. **`color.readableOn`** — 入力色→出力色の期待値表にできる
-3. **`normalizeDesignTokens`** — 全フィールドのクランプとフォールバック
-4. **`hoursRowsFromHearing`** — `ラベル：値` の分解（全角・半角コロン、コロンなし）
-5. **`hearingStatus`** — 2 画面で共有される状態遷移
-6. **`store.blockIdFromRow`** — 接頭辞ありと無しの後方互換
-
-### 13.9 【中】認証情報のローテーションを推奨
-
-開発セッション記録（`~/.claude/projects/` に平文保存）を確認したところ、2026-08-09 のセッションで **OpenAI API キー、Cloudflare API トークン、R2 のアクセスキー／シークレットが平文でチャットに貼り付けられています**。
-
-**提言**：該当する鍵をすべてローテーションする。
-
-画像ストレージは Cloudflare R2 を経て、現在は Supabase Storage（`SUPABASE_URL` / `SUPABASE_ANON_KEY`）に戻っています。鍵はサーバー側の `POST /api/uploads` でのみ読まれ、ブラウザに渡る経路はありません。ただし `site-images` バケットは anon ロールに INSERT を許可するポリシーが入っているため、**匿名キーを知る第三者が直接 Supabase へ書き込めます**。書き込みをサーバー経由だけに絞るなら、そのポリシーを外して `SUPABASE_SERVICE_ROLE_KEY` に切り替えること。
-
-### 13.10 【低】Cloudflare Pages のプロジェクト名が衝突しうる
-
-`clinc-hp-<slug>` を 58 文字で単純に切り詰めており、医院名部分が長いと**末尾のユニーク部分が落ちます**。日本語名は `clinic-<suffix>` になるため実害は出にくいものの、英字名の長いクリニックでは衝突の可能性があります。
-
-**提言**：切り詰めるなら末尾のユニーク部分を残す（またはハッシュ付与）。
-
-### 13.11 【低】不要資産の整理
-
-`hp-templates/`（`SITE_SPEC.json` `colors.json` `presets/` 等）はコードから一切参照されていません。`authoringRules.ts` のコメントが示すとおり、内容は既にコードへ移植済みです。
-
-**提言**：`docs/archive/` へ移すか削除し、「仕様ではない」ことを明示する。
-
-### 13.13 【解決済み】ブロックの表示設定が保存されていなかった
-
-移行 0005 以前、`site_sections` の列は `id / sec_id / site_id / content / position / visible / nav_label` の 7 つで、`content` に入るのは `block.data` だけでした。`blockCommon` が持つ **`variant` / `spacing` / `textStyles` / `containerStyles`**、および文書レベルの **`metaTextStyles` / `chromeSpacing`** は、コードが書き、スキーマが受理し、書き込み側が黙って捨てていました。実測：保存済み 74 ブロック中、`variant` を含む行は **0 件**。
-
-実害は 2 つありました。
-
-- `applyComposition` がセクションごとに割り当てたレイアウトは、**次に読み込んだ時点で全部消え**、テンプレート共通の `cardLayout` に戻っていました。同じテンプレートから作った 2 院のサイトが同じ見た目になる、直接の原因です。
-- **ビジュアル編集画面で付けた文字装飾は、保存して開き直すと消えていました。** 誰からも報告されていなかった、進行中のデータ損失です。
-
-**対応**：`site_sections.attrs` と `sites.chrome`（ともに JSON、移行 0005）を追加。書き込み側は `BLOCK_COLUMN_FIELDS` による**除外方式**で、`blockCommon` にフィールドを足すだけで永続化されます。読み込み側は**二段階 `safeParse`** — 壊れた `attrs` はブロックから装飾だけを落とし、ブロック自体は残します（ここで `null` を返すと公開中のページからセクションが 1 つ消えるため）。検証は `scripts/verify-block-attrs.mts`。
-
-### 13.14 【解決済み】D1 のバインド変数上限は 999 ではなく 100
-
-`store.ts` は SQLite の上限を 999 と想定し、ブロックを 100 行ずつまとめて insert していました。**実測した D1 の上限は 100 です**（1〜300 を二分探索で確認）。
-
-つまり `BLOCK_CHUNK_SIZE = 100` は一度も機能しておらず、7 列 × 15 ブロック = 105 で上限を超えます。**15 セクション以上のサイトは保存できませんでした** — テンプレートが最大 13 ブロックだったため、たまたま表面化していなかっただけです。しかも失敗するのは `DELETE` の後なので、13.4 のブロック消失を必ず伴います。
-
-**対応**：`BLOCK_CHUNK_SIZE` を定数ではなく `Math.floor(100 / BLOCK_INSERT_COLUMNS)` として**導出**。今後 insert に列を足しても、上限を静かに超えることはありません。12 / 13 / 40 ブロックで確認済み。
-
-### 13.15 【解決済み】複数ページに対応した
-
-以前は 1 ドキュメント＝ 1 枚の `index.html` で、メニューは `#anchor` のページ内リンクだけでした。クリニックのホームページは通常 6 ページ前後で構成されるため、この形のままでは商品として足りません。
-
-**データの持ち方**：`SiteDocument.pages[]`（`PageDef`）を追加し、`Block.pageId` がそれを指します。⚠️ **ブロックは 1 本の平坦な配列のままです** — ページは「ブロックが指すラベル」であって「ブロックを入れる箱」ではありません。そのため `site_sections.position` は文書全体で 1 本のままで、既存の行は 1 つも動きません。`page_id` が NULL なら旧来どおりトップページです。
-
-**出力はフラット**：トップが `index.html`、`about` は **`about.html`**（`about/index.html` ではない）。理由は 1 つで、レンダラが出すアセット参照がすべて文書相対（`css/site.css` / `js/main.js` / `images/hero.jpg`）だからです。全ページを深さ 0 に置けば、ローカルの `/generated/<slug>/`・編集画面の iframe・Cloudflare Pages のドメイン直下のどこでもそのまま動きます。
-
-却下した案を残しておきます。
-
-| 案 | 却下理由 |
-|---|---|
-| `../` の深さ接頭辞 | `checkImages` が `path.join(outDir, "../images/x.jpg")` を見に行き、**出力ディレクトリの外**を指す |
-| `<base href>` | `<base>` は**フラグメントも解決する**。`/about` で `href="#hours"` が `/#hours` になり、スクロールではなくトップページへ遷移してしまう |
-
-**`normalizePages`**：ページとブロックを必ず描ける組に整えます（`normalizeComposition` と同じ「例外を投げない」思想）。読み込み時と保存時の**両方**で走ります。⚠️ 一番効いているのは「存在しないページを指すブロックをトップに寄せる」規則で、これが無いとそのブロックは**どのページにも出ません**（公開サイトでの静かな消失）。
-
-**`sweepStaleHtml`**：`renderSiteFiles` は出力ディレクトリを消さない設計なので、ページを削除・改名しても古い `.html` が残り、`wrangler pages deploy` がツリーごと上げてしまいます。トップレベルの `*.html` だけを掃除します（`images/`・`css/`・`js/` には触れません）。
-
-**`data-variety` の位置ずれ**：CSS は `main > .section:nth-of-type(4n + 2)` で数えていました。`+2` はヒーローが `.section` を持たない `<section>` だからで、実質「ヒーローを飛ばす」意味です。⚠️ ヒーローの無い下層ページでは全ルールが 1 つずれるため、レンダラが `data-cycle`（0〜3、ページごとにリセット）を出し、CSS はそれを読む形にしました。属性セレクタは擬似クラスと同じ (0,1,0) なので、**詳細度 (0,5,2) / (0,6,2) の関係は変わりません**（ここを外すと要素がずれたまま固まります）。
-
-**検査**：`structure-no-hero` はトップページのみ、`hero-not-first`・singleton 重複・メニュー重複はページごと、`structure-no-contact` は**サイト全体**（お問い合わせ専用ページこそ複数ページ化の狙いなので、全ページに要求すると必ず誤検知になります）。`overflow-nav` の 60 文字予算は「実際に描かれる 1 行」＝そのページのページリンク＋そのページのアンカーで測ります。描画検査は `checkRenderedPages` が **Chromium を 1 回だけ起動して全ページを回します**。
-
-**変わらないもの**：`siteOutputPath().previewUrl` は `index.html` のまま（`hearings.preview_url` として D1 に保存済みのため）。`main.js` は**無変更**（6 機能すべて querySelector ガード済みでページローカル）。1 ページの文書の出力は、`data-cycle` 属性と現在地マークを除いて**以前とバイト単位で同一**であることを確認済みです。
-
-### 13.16 テンプレートごとに構造を変えられるようにした
-
-「どのテンプレートもセクションの順序・カードの形式・枚数まで同じ」という状態の原因は 3 つあり、3 つとも直しました。
-
-**原因 1：両インポータが構成を直書きしていた。** `importFromUrl` も `importFromGeneratedSite` も `applySampleCopy(defaultTemplateBlocks())` を固定で呼んでいたため、参考サイトから取り込むのは配色と書体だけ、骨格は定数でした。`src/lib/site/archetypes.ts` に 4 つの構成（1ページ標準 / 1ページ文字主体 / 複数ページ・クリニック標準 / 1ページ軽量）を置き、管理画面の `<select>` で選べるようにしました。⚠️ アーキタイプのキーは**ドキュメントに保存しません** — 生成された `pages` / `blocks` こそが正で、管理者が編集画面でセクションを 1 つ足した瞬間、保存されたキーは嘘になります。`defaultTemplateBlocks()` と `typographicTemplateBlocks()` は archetypes を呼ぶ形に置き換え、**置き換え前と 1 バイトも変わらないことを `scripts/verify-archetypes.mts` で検査**しています（ブロック ID は HTML アンカーであると同時に生成画像のファイル名なので、ずれると既存テンプレートが存在しない画像を指します）。
-
-**原因 2：`block.variant` が保存されていなかった。** 13.13 を参照。
-
-**原因 3：変種の語彙が hero と rich の 10 値しか無かった。** `hours` / `pricing` / `faq` / `staff` / `news` / `gallery` / `access` / `contact` / `freeText` に変種を追加し、全 30 値になりました。⚠️ **各型の 1 つ目の値は、その型がこれまで描画していた見た目そのもの**です。変種を持たないブロック（＝既存の全サイト）はどのルールにも当たらず、以前と同一の HTML になります。
-
-**クラス名の衝突。** 変種は `<type>-<variant>` のクラスとして出す設計にしたところ、`staff` + `grid` が `staff-grid` になり、**セクションの内側のコンテナのクラス名と衝突**しました（`.staff-grid { display: grid }` が `<section>` 自体にも当たり、セクション全体が 1 列グリッドになった）。`news` + `list` も同様。既知の 2 件を改名するのではなく、語彙全体に `v-` を付けて名前空間を分けています。
-
-**AI に見せないブロックの変種。** `hours` / `faq` / `news` / `staff` / `pricing` は `AUTHORABLE_TYPES` から外れており、モデルには一切渡していません（`HONESTY_RULES`）。変種を選ばせるためにプロンプトを広げると、実際の診療時間や料金を文章生成のリクエストに送ることになります。そこで `normalizeComposition` が**件数から決定的に選びます**（4 行以下の診療時間はカード、3 件以下のお知らせはカード等）。安価で、幻覚が起きません。
-
-**プロンプトは生成する。** 変種の説明は `VARIANT_DESCRIPTIONS` から組み立てます。手書きの一覧は語彙が増えた瞬間に古くなり、**説明されていない変種はモデルが選ばないので、機能が「動かない」ように見えます**。
-
-**ヘッダーとフッターの形**（`design.chrome`）。ヘッダーは `bar` / `stacked` / `minimal`、フッターは `dark` / `light` / `compact` / `band`。フッターの色は `--footer-bg` / `--footer-text` に切り出しました（既定値は従来の直書きと同じ値なので既存サイトは無変化）。⚠️ **`overlay`（ヒーローに重ねる透過ヘッダー）は採用していません。** `nav.site-nav` はヘッダーの兄弟であって子ではなく（CSS だけのハンバーガーが `.nav-toggle:checked ~ nav.site-nav` を必要とするため）、ヘッダーだけを浮かせるとカラーのナビ帯がヒーローの上に取り残されます。両方を浮かせるには包む要素が必要で、それは全サイト全ページのモバイルメニューを壊します。CSS の変種ではなくマークアップと JS の変更が要る話なので、ここには含めません。
-
-### 13.17 【解決済み】描画検査が、ネットワークが「切れる」ではなく「詰まる」と止まっていた
-
-`renderCheck` は `waitUntil: "domcontentloaded"` で待っていました。⚠️ **`<head>` の `<link rel=stylesheet>` はレンダリングをブロックするため、DOMContentLoaded 自体が Google Fonts の応答を待ちます。** ネットワークが**失敗**する環境は問題ありません（即エラーになる）。**詰まる**環境 — 実測で `fonts.googleapis.com` が 15 秒応答なし — では、ページ名も原因も示さない 30 秒のタイムアウトで検査全体が止まります。
-
-**対応**：最初の試行に 12 秒の予算を与え、超えたら**外部リクエストを遮断して再試行**します。フォールバックはシステムフォントで計測するので文字幅がわずかに変わり、その旨を 1 度だけ警告します。この関数はもともと「ネットワークが無い環境ではフォールバックフォントで計測する」ことを受け入れており、同じ判断を「詰まる」場合にも適用しただけです。
-
-### 13.18 【解決済み】AI テンプレートに 3 つのトークンが渡っていなかった
-
-`aiTemplateSchema` に `font.displayScale` / `font.headingLetterSpacing` / `layout.rule` がありませんでした。この 3 つは**「余白と明朝で見せる」テンプレートを成立させている当のトークン**です。URL から取り込んだテンプレートは、参考サイトがどれだけ文字主体でも**原理的にその見た目へ到達できません**でした（見出しは本文と同じ倍率、字間は 0、見出しの区切りは常に太い下線）。`chrome`（ヘッダー／フッターの形）も同様に渡っていませんでした。
-
-**対応**：5 項目をスキーマとプロンプトに追加し、`normalizeDesignTokens` でクランプします。既存テンプレートには影響しません（保存済みの値が既定のまま残る、正しい後方互換の動作）。
-
-### 13.19 【解決済み】既定のデザイントークンが共有オブジェクトとして配られていた
-
-`buildDefaultTemplate()` は `design: DEFAULT_DESIGN_TOKENS` と、**モジュール定数をそのまま参照で**返していました。`loadDocument` のフォールバック（`store.ts`）も同じです。つまり **design を書き換えると、その1回の書き込みがプロセス全体の既定値を汚染**します。
-
-これまでは誰も `doc.design` を書き換えていなかったので表面化していませんでしたが、`applyImagePaths` が `design.layout.backdropImage` を書くようになった時点で到達可能になりました。両方を `structuredClone` に変更しています。`defaultPages()` が定数ではなく関数である理由と同じ話です。
-
-### 13.20 【解決済み】中央寄せの見出しで、罫が演出のあとにずれていた
-
-`.free-text.align-center h2::after` は `translateX(-50%)` で中央に置かれますが、罫を引く演出（`html.js .reveal.is-visible h2::after`）が `transform` を**まるごと** `scaleX(1)` に書き換えるため、演出が終わった瞬間に中央寄せが消え、罫が見出しの中央から右へずれた位置に残っていました。`translateX(-50%) scaleX(...)` と両方書く形に修正。
-
-あわせて、`reveal: "none"`（動きなし）のテンプレートでもこの罫だけは 0.7 秒かけて伸びていた点も直しました。**動きを止めたはずのテンプレートで、唯一動くもの**になっていました。
-
-### 13.21 【解決済み】機能を全部入れたのに、画面が何も変わらなかった
-
-Phase 0〜4 を入れたあと、管理者から「ヘッダーもフッターも素材も以前と同じ。何をしたか分からない」という指摘がありました。**正しい指摘でした。** 実測した取り込み結果：
-
-```
-<html data-ornament="none" data-ambient="float" data-backdrop="none"
-      data-header="bar" data-footer="dark">   ← すべて既定値
-images/ … placeholder.svg のみ
-```
-
-原因は独立に3つありました。
-
-1. **忠実さが同一性を生んでいた** — 上記 6.5「装飾は『写す』のではなく『割り当てる』」を参照
-2. **`ambient="float"` なのに `ornament="none"`** — 常時アニメの規則は `.ornament` 要素だけを動かすので、地紋が無いと**動かす対象が0個**。属性だけが付いた、何も起きないページになっていた。`normalizeDesignTokens` に「地紋が無いなら ambient も無し」を追加し、`decorationFor` は2つを**1組で返す形**にして分けて決められないようにした
-3. **写真を入れる導線が無かった** — 手段は端末で `illustrate-template.mts` を叩くことだけで、管理画面にボタンが無く、必要な slug も画面に出ていなかった
-
-この調査中に見つかった `DEFAULT_DESIGN_TOKENS` の共有参照（13.19）も、同じ検査で踏んだものです。
-
-⚠️ **教訓として残す価値があるのは1つ目です。** Phase 0〜4 の全体を通して「既存のドキュメントを壊さない」を最優先にし、新機能をすべて既定でオフにしました。それ自体は正しく、既存サイトは1バイトも変わっていません。しかし**新規に作るものまで既定のまま**だったため、「能力は入ったが、誰も使っていない」状態になりました。後方互換の既定値と、新規作成時の既定値は、**別に決めるべき**でした。
-
-### 13.22 【解決済み】テンプレートが全部同じだったのは、JSONが1つしか無かったから
-
-「作成するTemplateが全部全く同じ。原因はTemplate作成のJSONが決めている」という指摘を受けて調べたところ、**指摘のほうが正確**でした。装飾を自動割り当てにした 13.21 は、色と装飾しか動かしていませんでした。
-
-実際に全テンプレートで同一だったもの：医院名「サンプルクリニック」・電話・住所（両インポータに直書き）、`sampleCopy.ts` の全文（「ここにキャッチコピーが入ります」「項目1／2／3」「山田 太郎」）、`archetypes.ts` の4構成、`placeholder.svg`。**2つのテンプレートが違うのは色・書体・セクション順だけで、読み手の目が止まるものは1バイトも違いませんでした。**
-
-⚠️ `sampleCopy.ts` を全テンプレート共通にしたのは**当初の意図的な判断**でした（「文章が同じならデザインの違いだけを見比べられる」）。その判断が、テンプレートを増やすほど逆に働いていました。見比べやすさを捨てて、区別できることを取っています。
-
-**対応**：6.4.5 のテンプレートライブラリ。1テンプレート＝1つのJSONで、構成・配色・装飾・架空の医院・文章まで全部そのファイルが持ちます。TypeScript は1行も書かずにテンプレートを増やせます。
-
-### 13.23 【解決済み】AIが書き漏らしたブロックに、テンプレートの文章が残っていた
-
-`applyContentPlan` は `if (!content) continue` で、**モデルが書き漏らしたブロックをそのまま素通り**させます。これまでは残るのが「ここにキャッチコピーが入ります」だったので、見れば placeholder と分かりました。
-
-⚠️ テンプレートが自分の架空の医院を持つようになった時点で、**残るのは「この街の、はじめの相談先でありたい」のような、流暢でもっともらしい、しかしその医院のものではない文章**に変わります。壊れ方が「見れば分かる」から「気づかない」へ悪化しました。
-
-**対応**：書き漏らされたブロックの文章を**空にする** (`clearAuthoredCopy`)。空のヒーロー見出しは `checkDesign` が要修正、空のセクション見出しは要確認として、サイト詳細画面に出ます。**黙って間違っているより、うるさく空のほうがよい**、という判断です。事実系のブロックは `applyFactualContent` がヒアリングシートから無条件に上書きするので、もともと届きません。
-
-### 13.24 【解決済み】装飾の打ち消し規則が、テンプレート固有CSSに詳細度で勝っていた
-
-スタイルキット（6.5.2）を入れたとき、キットの `.ornament { background: … }` が**一切効きませんでした**。原因は自分で足した1行です。
-
-```css
-html[data-ornament="none"] .ornament { background: none; opacity: 1; }   /* (0,2,1) */
-```
-
-キット側は `.ornament { background: … }` の (0,1,0)。`kit.css` を site.css の**後**に読ませても、詳細度が違うので順序では逆転しません。⚠️ **「後に読ませれば勝つ」は同じ詳細度のときだけの話**で、打ち消しを属性セレクタで書いた瞬間に前提が崩れます。
-
-**対応**：打ち消し規則をやめ、既定の塗りを**カスタムプロパティ越し**にしました。
-
-```css
-.ornament { background: var(--ornament-paint, none); opacity: var(--ornament-opacity, 1); }
-html:not([data-ornament="none"]) { --ornament-paint: var(--primary); --ornament-opacity: var(--ornament-strength, 0.35); }
-```
-
-カスタムプロパティは継承なので、`.ornament` そのものの詳細度は (0,1,0) のままです。キットは順序だけで上書きできます。
-
-⚠️ **同じ層の奪い合いは、これでは解けないものが残ります。** 常時アニメの規則は `html:not([data-reveal="none"])[data-ambient="float"] .ornament` の (0,3,1) で、キットが `html:not([data-reveal="none"]) .ornament` (0,2,1) と書いても勝てません。詳細度の競り合いを続けるより、**「`.ornament` を使うキットのテンプレートは `ornament` と `ambient` を両方 `none` にする」**と決めて `verify-templates.mts` に測らせるほうが、はるかに安く確実でした。
-
-### 13.25 【解決済み】ボタンを拡大できるようにしたら、390px で横スクロールが出る道ができた
-
-`--btn-scale` を `.contact-section .btn` の `min-width: 220px` にも掛けると、1.8 倍で 396px になります。560px 以下では `.cta-buttons .btn { width: 100% }` が効いていますが、**`min-width` は `width` に勝つ**ので、390px の画面で横スクロールが出ます。
-
-**対応**：`min-width: min(100%, calc(220px * var(--btn-scale, 1)))`。上限を親幅に丸めます。
-
-⚠️ 実装前に気づけたのは、この作業に入る時点で「390px で横スクロールを出さない」が**規則として書かれていた**からです（6.5.1）。新しい可変トークンを足すときは、**その値が最大になったときの寸法**を必ず一度計算します。
-
-### 13.12 評価できる点
-
-実ソースを読んだ上で、設計上優れている点を記録します。**照合前の想定より、品質はかなり高い**です。
-
-- **テンプレートとサイトの同一化**が、編集画面・レンダラー・プレビューの三重実装を一度に回避している
-- **`renderSiteFiles()` からの AI 完全分離**が、編集のたびに課金される設計を構造的に排除している
-- **ブロックレジストリ 1 枚**がレンダラーと編集フォームを駆動し、レジストリを React フリーに保ってバンドル汚染を避けている
-- **`selectTemplate` の全経路フォールバック**。「テンプレート選択は嗜好品、生成成功は必須」という優先順位が明文化され、実装が一致している
-- **`HONESTY_RULES` をコード側に置いた判断**。管理者が「AI は電話番号を創作しない」を無効化できない構造は、医療系サービスとして正しい
-- **`readableOn()`**。AI に正しく判断させるのではなくアルゴリズムで保証する、という正しいアプローチ
-- **SSRF 防御**が DNS 解決とリダイレクト各ホップまでカバーしており、この規模の社内ツールとしては明らかに水準以上
-- **`saveDocumentAction` の識別子復元**。改竄ペイロードで所有者移転・テンプレート昇格ができない
-- **WordPress ボイラープレート除外**。「日本のクリニックサイトは WordPress が大多数」という現実に実装が向き合っている
-- **ハイドレーション前送信への対応**。原因を突き止めた上で両形式を読む対処になっている
-- **コメントの質**。ほぼすべての非自明な判断に「なぜそうしたか」が書かれており、本書の大半はコードのコメントから直接構成できた

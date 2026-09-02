@@ -1,0 +1,97 @@
+.section {
+  padding-block: var(--nj-section-pad);
+  background: var(--nj-tint);
+}
+
+.inner {
+  max-width: 800px;
+}
+
+.list {
+  display: grid;
+  gap: var(--nj-s3);
+}
+
+.item {
+  background: var(--nj-paper);
+  border: 1px solid var(--nj-line);
+  border-radius: var(--nj-radius-md);
+  overflow: hidden;
+}
+
+.q {
+  display: flex;
+  align-items: center;
+  gap: var(--nj-s3);
+  padding: var(--nj-s4) var(--nj-s5);
+  cursor: pointer;
+  list-style: none;
+  font-family: var(--nj-font-head);
+  font-size: 0.95rem;
+  color: var(--nj-primary-deep);
+}
+
+.q::-webkit-details-marker {
+  display: none;
+}
+
+.qMark,
+.aMark {
+  flex-shrink: 0;
+  width: 1.6rem;
+  height: 1.6rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-family: var(--nj-font-head);
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.qMark {
+  background: var(--nj-primary);
+  color: #fff;
+}
+
+.aMark {
+  background: var(--nj-tint);
+  color: var(--nj-primary);
+}
+
+.qText {
+  flex: 1;
+}
+
+.chev {
+  flex-shrink: 0;
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid var(--nj-primary);
+  border-bottom: 2px solid var(--nj-primary);
+  transform: rotate(45deg);
+  transition: transform 0.25s ease;
+}
+
+.item[open] .chev {
+  transform: rotate(225deg);
+}
+
+.a {
+  display: flex;
+  gap: var(--nj-s3);
+  padding: 0 var(--nj-s5) var(--nj-s5);
+  font-size: 0.9rem;
+  line-height: 1.95;
+  color: var(--nj-ink);
+}
+
+.a p {
+  padding-top: 0.15rem;
+}
+
+@media (max-width: 560px) {
+  .q,
+  .a {
+    padding-inline: var(--nj-s4);
+  }
+}

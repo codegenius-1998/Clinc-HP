@@ -1,0 +1,35 @@
+.section {
+  padding-block: var(--nj-section-pad);
+  background: var(--nj-paper);
+}
+
+.list {
+  border-top: 1px solid var(--nj-line);
+}
+
+.list li {
+  display: flex;
+  gap: var(--nj-s5);
+  align-items: baseline;
+  padding: var(--nj-s4) 0;
+  border-bottom: 1px solid var(--nj-line);
+}
+
+.date {
+  flex-shrink: 0;
+  width: 6.5rem;
+  font-family: var(--nj-font-head);
+  color: var(--nj-primary);
+  font-size: 0.9rem;
+}
+
+.title {
+  font-size: 0.95rem;
+}
+
+@media (max-width: 560px) {
+  .list li {
+    flex-direction: column;
+    gap: var(--nj-s1);
+  }
+}

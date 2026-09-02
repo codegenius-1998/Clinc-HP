@@ -1,8 +1,7 @@
 @import "tailwindcss";
 
-/* Styles for the APP's own screens — the marketing page, the clinic owner's pages and the admin
- * panel. The sites this app generates have their own, entirely separate stylesheet
- * (src/lib/render/site.css); nothing here reaches them and nothing there reaches here. */
+/* Styles for the app's own screens — the marketing page, the clinic owner's pages and the admin
+ * panel. */
 
 :root {
   --background: #f6f9fc;
@@ -41,8 +40,7 @@
  *
  * The reveal animations below park elements a few dozen pixels to the side of where they belong
  * until they scroll into view, and on a 390px phone that is enough to make the page scrollable
- * sideways before the reader has touched anything — the same defect the generated sites had (see the
- * matching note in src/lib/render/site.css), and one no amount of looking at a desktop browser
+ * sideways before the reader has touched anything, and one no amount of looking at a desktop browser
  * reveals. Measured: without the `body` rule the document still scrolls to 398px, because a root-only
  * clip does not stop the overflow propagating out of <body>.
  *
