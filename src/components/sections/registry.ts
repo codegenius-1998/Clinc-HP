@@ -3,7 +3,6 @@ import type { SectionType } from "./data/sections";
 
 import { HeaderBar } from "./Header/Header";
 import { HeroFullBleed } from "./Hero/HeroFullBleed";
-import { HeroSplit } from "./Hero/HeroSplit";
 import { ScheduleTable } from "./Schedule/Schedule";
 import { NewsList } from "./News/News";
 import { ReasonsNumbered } from "./Reasons/Reasons";
@@ -26,7 +25,6 @@ export const REGISTRY: Record<string, ComponentType> = {
   "header:bar": HeaderBar,
 
   "hero:full-bleed": HeroFullBleed,
-  "hero:split": HeroSplit,
 
   "schedule:table": ScheduleTable,
   "news:list": NewsList,

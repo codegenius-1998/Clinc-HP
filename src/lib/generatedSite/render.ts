@@ -111,7 +111,7 @@ function railHtml(t: SiteTemplate): string {
 
 function heroHtml(t: SiteTemplate): string {
   const s = t.sections.hero;
-  const src = s.image.src || "assets/hero-art.svg";
+  const photo = s.image.src; // a real photo → full-bleed background; null → decorative art
   const headline = s.headline.map((l) => `          <span>${emphasise(l)}</span>`).join("\n");
   const bubbles = s.bubbles.length
     ? `
@@ -119,17 +119,26 @@ function heroHtml(t: SiteTemplate): string {
 ${s.bubbles.map((b) => `        <li>${esc(b)}</li>`).join("\n")}
       </ul>`
     : "";
-  return `  <section id="hero" class="hero">
-    ${wash("pink")}
+
+  // Decorations: watercolor washes + botanical line-art for the art hero; a photo scrim otherwise.
+  const backdrop = photo
+    ? `    <div class="hero__photo" aria-hidden="true"><img src="${esc(photo)}" alt="${esc(s.image.alt)}"></div>
+    <span class="hero__scrim" aria-hidden="true"></span>`
+    : `    ${wash("pink")}
     ${wash("blue")}
     ${wash("yellow")}
     ${wash("peach")}
     ${botanical("tl", "bot-sprig")}
-    ${botanical("br", "bot-flower")}
+    ${botanical("br", "bot-flower")}`;
+  const art = photo
+    ? ""
+    : `      <div class="hero__art" aria-hidden="true"><img src="assets/hero-art.svg" alt=""></div>\n`;
+
+  return `  <section id="hero" class="hero${photo ? " hero--photo" : ""}">
+${backdrop}
 
     <div class="container hero__grid">
-      <div class="hero__art" aria-hidden="true"><img src="${esc(src)}" alt=""></div>
-      <div class="hero__copy" data-nj-anim>
+${art}      <div class="hero__copy" data-nj-anim>
         <span class="hero__tagline">${esc(s.tagline)}</span>
         <h1 class="hero__headline">
 ${headline}
@@ -173,13 +182,18 @@ ${sign}
 function medicalHtml(t: SiteTemplate, bg: string): string {
   const s = t.sections.medical;
   const cards = s.items
-    .map(
-      (it) => `        <li class="medical__card" data-nj-anim>
-          <span class="medical__icon" aria-hidden="true">${icon(it.icon)}</span>
+    .map((it) => {
+      const pic = it.image?.src
+        ? `          <div class="medical__photo"><img src="${esc(it.image.src)}" alt="${esc(
+            it.image.alt || it.ja
+          )}"></div>\n`
+        : "";
+      return `        <li class="medical__card${it.image?.src ? " has-photo" : ""}" data-nj-anim>
+${pic}          <span class="medical__icon" aria-hidden="true">${icon(it.icon)}</span>
           <h3 class="medical__ja">${esc(it.ja)}<span class="medical__en">${esc(it.en)}</span></h3>
           <p class="medical__lead">${esc(it.lead)}</p>
-        </li>`
-    )
+        </li>`;
+    })
     .join("\n");
   const conditions = s.conditions.length
     ? `
@@ -405,10 +419,15 @@ ${s.points.map((p) => `            <li>${esc(p)}</li>`).join("\n")}
           .join("")}</div>`
     )
     .join("\n");
+  const exterior = s.exteriorPhoto?.src
+    ? `      <div class="access__exterior"><img src="${esc(s.exteriorPhoto.src)}" alt="${esc(
+        s.exteriorPhoto.alt || "外観"
+      )}"></div>\n`
+    : "";
   return `  <section id="access" class="section ${bg} access nj-reveal">
     <div class="container">
 ${headingBlock(s.heading.ja, s.heading.en)}
-      <div class="access__grid">
+${exterior}      <div class="access__grid">
         <div class="access__info-col">
           <p class="access__address">${esc(t.contact.address)}</p>
 ${points}

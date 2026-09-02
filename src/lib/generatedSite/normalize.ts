@@ -283,10 +283,22 @@ export function normalizeTemplate(raw: unknown, ctx: NormalizeContext | string):
     const ja = str(x.ja);
     if (!ja) return null;
     const icon = str(x.icon, "general");
-    return { icon: MEDICAL_ICONS.has(icon) ? icon : "general", ja, en: str(x.en, "Medical"), lead: str(x.lead) };
+    return {
+      icon: MEDICAL_ICONS.has(icon) ? icon : "general",
+      ja,
+      en: str(x.en, "Medical"),
+      lead: str(x.lead),
+      image: imageSlot(x.image, ja),
+    };
   });
   if (!medicalItems.length) {
-    medicalItems = [{ icon: "general", ja: department || "一般診療", en: "General", lead: "気になる症状のご相談に対応します。まずはお気軽にお越しください。" }];
+    medicalItems = [{
+      icon: "general",
+      ja: department || "一般診療",
+      en: "General",
+      lead: "気になる症状のご相談に対応します。まずはお気軽にお越しください。",
+      image: { src: null, alt: "" },
+    }];
   }
 
   const galleryItems = objArray<SiteTemplate["sections"]["gallery"]["items"][number]>(galleryRaw.items, (x) => {
@@ -482,6 +494,7 @@ export function normalizeTemplate(raw: unknown, ctx: NormalizeContext | string):
       access: {
         heading: heading(accessRaw.heading, "交通案内", "Access"),
         image: imageSlot(accessRaw.image, "周辺地図"),
+        exteriorPhoto: imageSlot(accessRaw.exteriorPhoto, "外観"),
         points: strArray(accessRaw.points),
         info: accessInfo,
       },

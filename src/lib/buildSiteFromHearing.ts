@@ -115,11 +115,15 @@ function hearingToPromptInput(h: HearingSheet): string {
     lineOrReserveUrl: h.line || null,
     department: h.department || null,
     serviceNames: h.serviceNames ?? [],
+    schedule: h.schedule ?? null,
     hours: h.hours || null,
     features: h.features || null,
     featureNames: h.featureNames ?? [],
     targetNames: h.targetNames ?? [],
     freeTextRequest: h.request || null,
+    director: h.director
+      ? { name: h.director.name || null, role: h.director.role || null, greeting: h.director.greeting || null }
+      : null,
     staffMembers: (h.staffMembers ?? []).map((s) => ({
       name: s.name,
       role: s.role || null,
@@ -147,6 +151,41 @@ function galleryPrompt(caption: string, vibe: string): string {
 
 function doctorPrompt(role: string, vibe: string): string {
   return `${IMAGE_BASE} ${vibe} 白衣を着た日本人の${role || "医師"}のポートレート（上半身、やわらかい背景、穏やかな表情）。`;
+}
+
+function heroPrompt(vibe: string): string {
+  return `${IMAGE_BASE} ${vibe} トップページ用の横長の写真。明るい院内または受付まわりを広めに。人物は写さない。左側に文字を重ねる余白を残す。`;
+}
+
+function exteriorPrompt(vibe: string): string {
+  return `${IMAGE_BASE} ${vibe} クリニックの建物外観（エントランスまわり、日中、通行人は写さない）。`;
+}
+
+function medicalPrompt(name: string, vibe: string): string {
+  return `${IMAGE_BASE} ${vibe} 「${name}」の診療に関連する落ち着いた院内カット。人物や患部は写さない。`;
+}
+
+/** Fills one image slot: uploaded URL first, then OpenAI when storage is configured, else null.
+ * Returns `{ src, generated }`; increments are done by the caller. */
+async function fillSlot(
+  slug: string,
+  slot: string,
+  pool: string[],
+  prompt: string,
+  size: ImageSize,
+  allowAi: boolean,
+  warnings: string[],
+  label: string
+): Promise<{ src: string | null; fromUpload: boolean; generated: boolean }> {
+  if (pool.length) return { src: pool.shift()!, fromUpload: true, generated: false };
+  if (!allowAi || !isStorageConfigured()) return { src: null, fromUpload: false, generated: false };
+  try {
+    const src = await generateAndUpload(slug, slot, prompt, size);
+    return { src, fromUpload: false, generated: true };
+  } catch (e) {
+    warnings.push(`${label}の生成に失敗しました（プレースホルダを使用）: ${msg(e)}`);
+    return { src: null, fromUpload: false, generated: false };
+  }
 }
 
 async function generateAndUpload(
@@ -187,24 +226,45 @@ export async function buildSiteFromHearing(hearing: HearingSheet): Promise<Build
   if (hearing.address) template.contact.address = hearing.address;
   if (hearing.line) template.contact.reserveUrl = hearing.line;
 
+  // 診療時間 is published verbatim from the applicant's structured input — no AI rewrite.
+  if (hearing.schedule?.rows?.length) {
+    const sch = template.sections.schedule;
+    if (hearing.schedule.days?.length) sch.days = hearing.schedule.days;
+    sch.rows = hearing.schedule.rows;
+    if (hearing.schedule.notes?.length) sch.notes = hearing.schedule.notes;
+  }
+
+  // 院長紹介 — name/role are facts (verbatim); the greeting message is used as-is when provided.
+  if (hearing.director) {
+    const g = template.sections.greeting;
+    if (hearing.director.name) g.doctorName = hearing.director.name;
+    if (hearing.director.role) g.doctorRole = hearing.director.role;
+    const paras = hearing.director.greeting
+      .split(/\n{2,}/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (paras.length) g.message = paras;
+  }
+
   // 2. photos — prefer the applicant's own uploads, then OpenAI, else leave the placeholder SVG.
   const vibe =
     [hearing.department, hearing.features, ...(hearing.targetNames ?? [])]
       .filter(Boolean)
       .join("、") || "地域のかかりつけクリニック";
 
+  // interior/atmosphere → gallery + hero + medical cards. exterior → access exterior + hero backup.
   const uploadPool = [
     ...(hearing.uploadedImages?.interior ?? []),
     ...(hearing.uploadedImages?.atmosphere ?? []),
-    ...(hearing.uploadedImages?.exterior ?? []),
   ];
+  const exteriorPool = [...(hearing.uploadedImages?.exterior ?? [])];
   let imagesFromUploads = 0;
   let imagesGenerated = 0;
 
-  // 2a. greeting portrait
-  const staffPhoto = hearing.staffMembers?.find((s) => s.photoUrl)?.photoUrl;
-  if (staffPhoto) {
-    template.sections.greeting.image.src = staffPhoto;
+  // 2a. greeting portrait — 院長紹介 photo first, then (legacy) staff photo, then AI, then placeholder
+  const directorPhoto = hearing.director?.photoUrl || hearing.staffMembers?.find((s) => s.photoUrl)?.photoUrl;
+  if (directorPhoto) {
+    template.sections.greeting.image.src = directorPhoto;
     imagesFromUploads++;
   } else if (isStorageConfigured()) {
     try {
@@ -238,6 +298,65 @@ export async function buildSiteFromHearing(hearing: HearingSheet): Promise<Build
       imagesGenerated++;
     } catch (e) {
       warnings.push(`院内写真「${item.caption}」の生成に失敗しました（プレースホルダを使用）: ${msg(e)}`);
+    }
+  }
+
+  // 2c. hero background photo — uploaded > interior pool > AI > decorative art (null)
+  if (hearing.heroImageUrl) {
+    template.sections.hero.image.src = hearing.heroImageUrl;
+    imagesFromUploads++;
+  } else {
+    const r = await fillSlot(
+      hearing.slug,
+      "hero",
+      uploadPool,
+      heroPrompt(vibe),
+      "1536x1024",
+      true,
+      warnings,
+      "トップ画像"
+    );
+    if (r.src) template.sections.hero.image.src = r.src;
+    if (r.fromUpload) imagesFromUploads++;
+    if (r.generated) imagesGenerated++;
+  }
+
+  // 2d. access exterior photo — exterior upload > AI > none
+  {
+    const r = await fillSlot(
+      hearing.slug,
+      "exterior",
+      exteriorPool,
+      exteriorPrompt(vibe),
+      "1536x1024",
+      true,
+      warnings,
+      "外観写真"
+    );
+    if (r.src) template.sections.access.exteriorPhoto.src = r.src;
+    if (r.fromUpload) imagesFromUploads++;
+    if (r.generated) imagesGenerated++;
+  }
+
+  // 2e. medical card photos — remaining uploads first, then AI for at most the first 2 cards
+  const MEDICAL_IMG_AI_MAX = 2;
+  let medicalAiUsed = 0;
+  for (const item of template.sections.medical.items) {
+    const r = await fillSlot(
+      hearing.slug,
+      `medical-${medicalAiUsed + 1}`,
+      uploadPool,
+      medicalPrompt(item.ja, vibe),
+      "1536x1024",
+      medicalAiUsed < MEDICAL_IMG_AI_MAX,
+      warnings,
+      `診療案内「${item.ja}」の写真`
+    );
+    if (r.src) item.image.src = r.src;
+    if (r.fromUpload) imagesFromUploads++;
+    if (r.generated) {
+      imagesGenerated++;
+      medicalAiUsed++;
     }
   }
 

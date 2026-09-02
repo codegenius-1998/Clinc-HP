@@ -18,12 +18,43 @@ const cardClassName = "rounded-2xl border border-slate-200 bg-white p-6 shadow-s
 
 const initialState: ApplicationFormState = { error: null };
 
-const STEP_TITLES = ["基本情報", "写真", "診療科", "特徴", "ターゲット", "診療時間", "スタッフ紹介", "料金表", "ご要望", "申請"];
+const STEP_TITLES = [
+  "基本情報",
+  "写真",
+  "診療科",
+  "特徴",
+  "ターゲット",
+  "診療時間",
+  "院長紹介",
+  "料金表",
+  "よくあるご質問",
+  "お知らせ",
+  "ご要望",
+  "申請",
+];
 
-const STAFF_ROLE_OPTIONS = ["院長", "副院長", "医師", "看護師", "薬剤師", "受付・事務", "スタッフ"];
+const DIRECTOR_ROLE_OPTIONS = ["院長", "副院長", "理事長", "医師"];
 
-type StaffMemberInput = { name: string; comment: string; role: string; photo: PickedImage | null; photoUrlDraft: string };
+/** One line under each photo category explaining where it is used on the generated site. */
+const CATEGORY_USAGE: Record<ImageCategoryKey, string> = {
+  exterior: "建物の外観。アクセス欄・トップページ背景に使われます。",
+  interior: "待合・受付・診察室など。院内ギャラリーに並びます。",
+  atmosphere: "診療の雰囲気。診療案内カードや院内ギャラリーに使われます。",
+};
+
+// --- 診療時間 (structured, same shape as the generated site's schedule JSON) ---
+const SCHEDULE_DAYS = ["月", "火", "水", "木", "金", "土", "日"] as const;
+const SCHEDULE_MARKS = ["●", "▲", "／"] as const;
+const MARK_LABEL: Record<string, string> = { "●": "診療", "▲": "午前のみ", "／": "休診" };
+function nextMark(m: string): string {
+  const i = SCHEDULE_MARKS.indexOf(m as (typeof SCHEDULE_MARKS)[number]);
+  return SCHEDULE_MARKS[(i + 1) % SCHEDULE_MARKS.length];
+}
+
+type ScheduleRowInput = { label: string; marks: string[] };
 type PriceItemInput = { name: string; price: string; note: string };
+type FaqInput = { question: string; answer: string };
+type NewsInput = { date: string; title: string };
 
 function emptyImagesByCategory(): Record<ImageCategoryKey, PickedImage[]> {
   const entries = IMAGE_CATEGORIES.map((c) => [c.key, [] as PickedImage[]] as const);
@@ -52,10 +83,23 @@ export function ApplyForm({
   const [selectedServiceIds, setSelectedServiceIds] = useState<Set<string>>(new Set());
   const [selectedFeatureIds, setSelectedFeatureIds] = useState<Set<string>>(new Set());
   const [selectedTargetIds, setSelectedTargetIds] = useState<Set<string>>(new Set());
-  const [hours, setHours] = useState("");
   const [request, setRequest] = useState("");
-  const [staffMembers, setStaffMembers] = useState<StaffMemberInput[]>([]);
+  const [directorName, setDirectorName] = useState("");
+  const [directorRole, setDirectorRole] = useState("院長");
+  const [directorGreeting, setDirectorGreeting] = useState("");
+  const [directorPhoto, setDirectorPhoto] = useState<PickedImage | null>(null);
+  const [directorPhotoUrlDraft, setDirectorPhotoUrlDraft] = useState("");
   const [priceItems, setPriceItems] = useState<PriceItemInput[]>([]);
+  const [faqItems, setFaqItems] = useState<FaqInput[]>([]);
+  const [newsItems, setNewsItems] = useState<NewsInput[]>([]);
+  const [heroImage, setHeroImage] = useState<PickedImage | null>(null);
+  const [heroImageUrlDraft, setHeroImageUrlDraft] = useState("");
+
+  const [scheduleRows, setScheduleRows] = useState<ScheduleRowInput[]>([
+    { label: "9:00 - 12:30", marks: ["●", "●", "●", "●", "●", "▲", "／"] },
+    { label: "14:00 - 18:00", marks: ["●", "●", "●", "●", "●", "／", "／"] },
+  ]);
+  const [scheduleNotes, setScheduleNotes] = useState<string[]>([]);
 
   const [imagesByCategory, setImagesByCategory] = useState<Record<ImageCategoryKey, PickedImage[]>>(emptyImagesByCategory);
   const [categoryUrlDraft, setCategoryUrlDraft] = useState<Record<ImageCategoryKey, string>>(
@@ -102,58 +146,93 @@ export function ApplyForm({
     });
   }
 
-  function addStaffMember() {
-    setStaffMembers((prev) => [...prev, { name: "", comment: "", role: "", photo: null, photoUrlDraft: "" }]);
+  // --- 診療時間 ---
+  function addScheduleRow() {
+    setScheduleRows((prev) => [...prev, { label: "", marks: SCHEDULE_DAYS.map(() => "●") }]);
   }
-
-  function updateStaffMember(index: number, field: "name" | "comment" | "role", value: string) {
-    setStaffMembers((prev) => prev.map((m, i) => (i === index ? { ...m, [field]: value } : m)));
+  function updateScheduleLabel(rowIdx: number, value: string) {
+    setScheduleRows((prev) => prev.map((r, i) => (i === rowIdx ? { ...r, label: value } : r)));
   }
-
-  function removeStaffMember(index: number) {
-    setStaffMembers((prev) => {
-      const removed = prev[index];
-      if (removed?.photo?.kind === "file") URL.revokeObjectURL(removed.photo.previewUrl);
-      return prev.filter((_, i) => i !== index);
-    });
-  }
-
-  function setStaffPhoto(index: number, file: File | null) {
-    setStaffMembers((prev) =>
-      prev.map((m, i) => {
-        if (i !== index) return m;
-        if (m.photo?.kind === "file") URL.revokeObjectURL(m.photo.previewUrl);
-        return { ...m, photo: file ? { kind: "file", file, previewUrl: URL.createObjectURL(file) } : null };
-      })
+  function cycleScheduleMark(rowIdx: number, dayIdx: number) {
+    setScheduleRows((prev) =>
+      prev.map((r, i) =>
+        i === rowIdx ? { ...r, marks: r.marks.map((m, j) => (j === dayIdx ? nextMark(m) : m)) } : r
+      )
     );
   }
-
-  function updateStaffPhotoUrlDraft(index: number, value: string) {
-    setStaffMembers((prev) => prev.map((m, i) => (i === index ? { ...m, photoUrlDraft: value } : m)));
+  function removeScheduleRow(rowIdx: number) {
+    setScheduleRows((prev) => prev.filter((_, i) => i !== rowIdx));
   }
-
-  function registerStaffPhotoUrl(index: number) {
-    setStaffMembers((prev) =>
-      prev.map((m, i) => {
-        if (i !== index) return m;
-        const url = m.photoUrlDraft.trim();
-        if (!url) return m;
-        if (m.photo?.kind === "file") URL.revokeObjectURL(m.photo.previewUrl);
-        return { ...m, photo: { kind: "url", url }, photoUrlDraft: "" };
-      })
-    );
+  function addScheduleNote() {
+    setScheduleNotes((prev) => [...prev, ""]);
+  }
+  function updateScheduleNote(idx: number, value: string) {
+    setScheduleNotes((prev) => prev.map((n, i) => (i === idx ? value : n)));
+  }
+  function removeScheduleNote(idx: number) {
+    setScheduleNotes((prev) => prev.filter((_, i) => i !== idx));
   }
 
   function addPriceItem() {
     setPriceItems((prev) => [...prev, { name: "", price: "", note: "" }]);
   }
-
   function updatePriceItem(index: number, field: keyof PriceItemInput, value: string) {
     setPriceItems((prev) => prev.map((p, i) => (i === index ? { ...p, [field]: value } : p)));
   }
-
   function removePriceItem(index: number) {
     setPriceItems((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function addFaqItem() {
+    setFaqItems((prev) => [...prev, { question: "", answer: "" }]);
+  }
+  function updateFaqItem(index: number, field: keyof FaqInput, value: string) {
+    setFaqItems((prev) => prev.map((f, i) => (i === index ? { ...f, [field]: value } : f)));
+  }
+  function removeFaqItem(index: number) {
+    setFaqItems((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function addNewsItem() {
+    setNewsItems((prev) => [...prev, { date: "", title: "" }]);
+  }
+  function updateNewsItem(index: number, field: keyof NewsInput, value: string) {
+    setNewsItems((prev) => prev.map((n, i) => (i === index ? { ...n, [field]: value } : n)));
+  }
+  function removeNewsItem(index: number) {
+    setNewsItems((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function setHeroImageFile(file: File | null) {
+    setHeroImage((prev) => {
+      if (prev?.kind === "file") URL.revokeObjectURL(prev.previewUrl);
+      return file ? { kind: "file", file, previewUrl: URL.createObjectURL(file) } : null;
+    });
+  }
+  function registerHeroImageUrl() {
+    const url = heroImageUrlDraft.trim();
+    if (!url) return;
+    setHeroImage((prev) => {
+      if (prev?.kind === "file") URL.revokeObjectURL(prev.previewUrl);
+      return { kind: "url", url };
+    });
+    setHeroImageUrlDraft("");
+  }
+
+  function setDirectorPhotoFile(file: File | null) {
+    setDirectorPhoto((prev) => {
+      if (prev?.kind === "file") URL.revokeObjectURL(prev.previewUrl);
+      return file ? { kind: "file", file, previewUrl: URL.createObjectURL(file) } : null;
+    });
+  }
+  function registerDirectorPhotoUrl() {
+    const url = directorPhotoUrlDraft.trim();
+    if (!url) return;
+    setDirectorPhoto((prev) => {
+      if (prev?.kind === "file") URL.revokeObjectURL(prev.previewUrl);
+      return { kind: "url", url };
+    });
+    setDirectorPhotoUrlDraft("");
   }
 
   async function uploadOne(category: string, file: File): Promise<string> {
@@ -191,20 +270,42 @@ export function ApplyForm({
     const formData = new FormData(e.currentTarget);
     setUploadError(null);
 
+    // Structured 診療時間 — same shape as the generated site's `sections.schedule`.
+    const cleanRows = scheduleRows
+      .map((r) => ({ label: r.label.trim(), marks: r.marks }))
+      .filter((r) => r.label.length > 0 || r.marks.some((m) => m !== "／"));
+    formData.append(
+      "schedule",
+      JSON.stringify({
+        days: [...SCHEDULE_DAYS],
+        rows: cleanRows,
+        notes: scheduleNotes.map((n) => n.trim()).filter(Boolean),
+      })
+    );
+
     for (const category of IMAGE_CATEGORIES) {
       for (const img of imagesByCategory[category.key]) {
         if (img.kind === "url") formData.append(`imageUrls_${category.key}`, img.url);
       }
     }
+    if (heroImage?.kind === "url") formData.append("imageUrls_hero", heroImage.url);
+    if (directorPhoto?.kind === "url") formData.append("directorPhotoUrl", directorPhoto.url);
 
     const categoriesNeedingUpload = IMAGE_CATEGORIES.filter((c) =>
       imagesByCategory[c.key].some((img) => img.kind === "file")
     );
-    const anyStaffFileUpload = staffMembers.some((m) => m.photo?.kind === "file");
+    const heroNeedsUpload = heroImage?.kind === "file";
+    const directorNeedsUpload = directorPhoto?.kind === "file";
 
-    if (categoriesNeedingUpload.length > 0 || anyStaffFileUpload) {
+    if (categoriesNeedingUpload.length > 0 || heroNeedsUpload || directorNeedsUpload) {
       setUploading(true);
       try {
+        if (heroImage?.kind === "file") {
+          formData.append("imageUrls_hero", await uploadOne("hero", heroImage.file));
+        }
+        if (directorPhoto?.kind === "file") {
+          formData.append("directorPhotoUrl", await uploadOne("director", directorPhoto.file));
+        }
         for (const category of categoriesNeedingUpload) {
           const files = imagesByCategory[category.key].filter(
             (img): img is Extract<PickedImage, { kind: "file" }> => img.kind === "file"
@@ -220,28 +321,12 @@ export function ApplyForm({
           }
           (data.urls as string[]).forEach((url) => formData.append(`imageUrls_${category.key}`, url));
         }
-
-        // One staffPhotoUrl per staff row, in order, so the server action can zip it back up against
-        // staffName/staffComment/staffRole by index.
-        for (const member of staffMembers) {
-          if (member.photo?.kind === "file") {
-            formData.append("staffPhotoUrl", await uploadOne("staff", member.photo.file));
-          } else {
-            formData.append("staffPhotoUrl", member.photo?.kind === "url" ? member.photo.url : "");
-          }
-        }
       } catch (err) {
         setUploadError(err instanceof Error ? err.message : "画像のアップロードに失敗しました。");
         setUploading(false);
         return;
       }
       setUploading(false);
-    } else {
-      // Nothing needs uploading, but staffPhotoUrl still needs one entry per row (URL-registered
-      // photo, or empty) to keep index alignment with staffName/staffComment/staffRole.
-      for (const member of staffMembers) {
-        formData.append("staffPhotoUrl", member.photo?.kind === "url" ? member.photo.url : "");
-      }
     }
 
     startTransition(() => {
@@ -356,6 +441,9 @@ export function ApplyForm({
               <div key={category.key} className="border-t border-slate-100 pt-5 first:border-t-0 first:pt-0">
                 <label className="block">
                   <span className="text-[13px] font-medium text-slate-700">{category.label}</span>
+                  <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-400">
+                    {CATEGORY_USAGE[category.key]}
+                  </span>
                   <input
                     type="file"
                     accept="image/*"
@@ -408,6 +496,58 @@ export function ApplyForm({
                 )}
               </div>
             ))}
+
+            <div className="border-t border-slate-100 pt-5">
+              <p className="text-[13px] font-medium text-slate-700">トップページの大きな画像（任意）</p>
+              <p className="mt-0.5 text-[11px] leading-relaxed text-slate-400">
+                1枚だけ。トップの背景として大きく表示されます。未指定なら装飾イラストになります。
+              </p>
+              {heroImage ? (
+                <div className="mt-2 flex items-center gap-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={previewSrc(heroImage)}
+                    alt=""
+                    className="h-20 w-32 rounded-lg border border-slate-200 object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setHeroImageFile(null)}
+                    className="rounded-full border border-slate-200 px-3 py-1.5 text-[12px] text-slate-600 hover:bg-slate-50"
+                  >
+                    画像を削除
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      setHeroImageFile(e.target.files?.[0] ?? null);
+                      e.target.value = "";
+                    }}
+                    className="mt-2 block w-full text-[13px] text-slate-700 file:mr-3 file:rounded-full file:border-0 file:bg-sky-600 file:px-4 file:py-2 file:text-[13px] file:text-white"
+                  />
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      type="url"
+                      placeholder="画像URLを入力して登録"
+                      value={heroImageUrlDraft}
+                      onChange={(e) => setHeroImageUrlDraft(e.target.value)}
+                      className={`${inputClassName} mt-0`}
+                    />
+                    <button
+                      type="button"
+                      onClick={registerHeroImageUrl}
+                      className="mt-0 shrink-0 rounded-lg border border-sky-200 px-4 py-2 text-[13px] font-medium text-sky-700 hover:bg-sky-50"
+                    >
+                      URLから登録
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -507,141 +647,206 @@ export function ApplyForm({
       <div style={stepStyle(5)} className="space-y-6">
         <div className={cardClassName}>
           <p className="text-[13px] font-medium text-slate-700">診療時間（任意）</p>
-          <p className="mt-1 text-[12px] leading-relaxed text-slate-400">記載の通りそのまま掲載します（AIによる書き換えはしません）。</p>
-          <textarea
-            name="hours"
-            placeholder={"例:\n月〜金 9:00-13:00 / 15:00-19:00\n土 9:00-13:00\n日・祝 休診"}
-            value={hours}
-            onChange={(e) => setHours(e.target.value)}
-            rows={4}
-            className={inputClassName}
-          />
-        </div>
-      </div>
-
-      {/* Step 6: スタッフ紹介 */}
-      <div style={stepStyle(6)} className="space-y-6">
-        <div className={cardClassName}>
-          <p className="text-[13px] font-medium text-slate-700">スタッフ紹介（任意）</p>
           <p className="mt-1 text-[12px] leading-relaxed text-slate-400">
-            実在するスタッフがいる場合のみ入力してください。人数分だけカードが生成されます。未入力の場合、スタッフ紹介セクションは非表示になります。
+            時間帯ごとに、曜日のマークを押して切り替えてください（記載どおりそのまま掲載します）。
+          </p>
+          <p className="mt-2 text-[11px] text-slate-500">
+            <span className="font-medium text-slate-700">●</span> 診療
+            <span className="font-medium text-slate-700">▲</span> 午前のみ
+            <span className="font-medium text-slate-700">／</span> 休診
           </p>
 
-          {staffMembers.length > 0 && (
-            <ul className="mt-4 space-y-4">
-              {staffMembers.map((member, i) => (
-                <li key={i} className="rounded-lg border border-slate-200 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="grid flex-1 gap-3 sm:grid-cols-2">
-                      <label className="block">
-                        <span className="text-[12px] font-medium text-slate-700">氏名</span>
-                        <input
-                          type="text"
-                          name="staffName"
-                          placeholder="山田 花子"
-                          value={member.name}
-                          onChange={(e) => updateStaffMember(i, "name", e.target.value)}
-                          className={inputClassName}
-                        />
-                      </label>
-                      <label className="block">
-                        <span className="text-[12px] font-medium text-slate-700">役割</span>
-                        <select
-                          name="staffRole"
-                          value={member.role}
-                          onChange={(e) => updateStaffMember(i, "role", e.target.value)}
-                          className={inputClassName}
+          <ul className="mt-4 space-y-4">
+            {scheduleRows.map((row, ri) => (
+              <li key={ri} className="rounded-lg border border-slate-200 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <label className="block">
+                      <span className="text-[12px] font-medium text-slate-700">時間帯</span>
+                      <input
+                        type="text"
+                        placeholder="例: 9:00 - 12:30"
+                        value={row.label}
+                        onChange={(e) => updateScheduleLabel(ri, e.target.value)}
+                        className={inputClassName}
+                      />
+                    </label>
+                    <div className="mt-3 grid grid-cols-7 gap-1.5">
+                      {SCHEDULE_DAYS.map((day, di) => (
+                        <button
+                          key={day}
+                          type="button"
+                          onClick={() => cycleScheduleMark(ri, di)}
+                          aria-label={`${day}曜: ${MARK_LABEL[row.marks[di]] ?? "診療"}（押して切替）`}
+                          className="flex flex-col items-center gap-0.5 rounded-md border border-slate-200 py-1.5 hover:border-sky-300 hover:bg-sky-50"
                         >
-                          <option value="">未設定</option>
-                          {STAFF_ROLE_OPTIONS.map((role) => (
-                            <option key={role} value={role}>
-                              {role}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="block sm:col-span-2">
-                        <span className="text-[12px] font-medium text-slate-700">コメント</span>
-                        <input
-                          type="text"
-                          name="staffComment"
-                          placeholder="簡単な自己紹介・担当業務など"
-                          value={member.comment}
-                          onChange={(e) => updateStaffMember(i, "comment", e.target.value)}
-                          className={inputClassName}
-                        />
-                      </label>
-                      <label className="block sm:col-span-2">
-                        <span className="text-[12px] font-medium text-slate-700">写真（任意）</span>
-                        <p className="text-[11px] text-slate-400">未指定の場合はAIが生成します。</p>
-                        {member.photo ? (
-                          <div className="mt-2 flex items-center gap-3">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={previewSrc(member.photo)}
-                              alt=""
-                              className="h-16 w-16 rounded-lg border border-slate-200 object-cover"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setStaffPhoto(i, null)}
-                              className="rounded-full border border-slate-200 px-3 py-1.5 text-[12px] text-slate-600 hover:bg-slate-50"
-                            >
-                              写真を削除
-                            </button>
-                          </div>
-                        ) : (
-                          <>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={(e) => {
-                                setStaffPhoto(i, e.target.files?.[0] ?? null);
-                                e.target.value = "";
-                              }}
-                              className="mt-2 block w-full text-[13px] text-slate-700 file:mr-3 file:rounded-full file:border-0 file:bg-sky-600 file:px-4 file:py-2 file:text-[13px] file:text-white"
-                            />
-                            <div className="mt-2 flex gap-2">
-                              <input
-                                type="url"
-                                placeholder="画像URLを入力して登録"
-                                value={member.photoUrlDraft}
-                                onChange={(e) => updateStaffPhotoUrlDraft(i, e.target.value)}
-                                className={`${inputClassName} mt-0`}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => registerStaffPhotoUrl(i)}
-                                className="mt-0 shrink-0 rounded-lg border border-sky-200 px-4 py-2 text-[13px] font-medium text-sky-700 hover:bg-sky-50"
-                              >
-                                URLから登録
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </label>
+                          <span className="text-[10px] text-slate-400">{day}</span>
+                          <span
+                            className={`text-[15px] leading-none ${
+                              row.marks[di] === "／" ? "text-slate-300" : row.marks[di] === "▲" ? "text-amber-500" : "text-sky-600"
+                            }`}
+                          >
+                            {row.marks[di]}
+                          </span>
+                        </button>
+                      ))}
                     </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeScheduleRow(ri)}
+                    className="mt-6 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 text-[13px] text-slate-500 hover:bg-slate-50"
+                    aria-label="この時間帯を削除"
+                  >
+                    ×
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            onClick={addScheduleRow}
+            className="mt-3 rounded-full border border-sky-200 px-4 py-2 text-[13px] font-medium text-sky-700 hover:bg-sky-50"
+          >
+            + 時間帯を追加
+          </button>
+
+          <div className="mt-6">
+            <p className="text-[12px] font-medium text-slate-700">補足（任意）</p>
+            <p className="mt-0.5 text-[11px] text-slate-400">休診日や受付終了時間などの注記。</p>
+            {scheduleNotes.length > 0 && (
+              <ul className="mt-2 space-y-2">
+                {scheduleNotes.map((note, i) => (
+                  <li key={i} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="例: 木曜午後・日曜・祝日は休診"
+                      value={note}
+                      onChange={(e) => updateScheduleNote(i, e.target.value)}
+                      className={`${inputClassName} mt-0`}
+                    />
                     <button
                       type="button"
-                      onClick={() => removeStaffMember(i)}
-                      className="mt-6 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 text-[13px] text-slate-500 hover:bg-slate-50"
-                      aria-label="このスタッフを削除"
+                      onClick={() => removeScheduleNote(i)}
+                      className="shrink-0 rounded p-2 text-[13px] text-slate-400 hover:bg-slate-100 hover:text-red-600"
+                      aria-label="削除"
                     >
                       ×
                     </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <button
+              type="button"
+              onClick={addScheduleNote}
+              className="mt-2 rounded-full border border-sky-200 px-4 py-2 text-[13px] font-medium text-sky-700 hover:bg-sky-50"
+            >
+              + 補足を追加
+            </button>
+          </div>
+        </div>
+      </div>
 
-          <button
-            type="button"
-            onClick={addStaffMember}
-            className="mt-4 rounded-full border border-sky-200 px-4 py-2 text-[13px] font-medium text-sky-700 hover:bg-sky-50"
-          >
-            + スタッフを追加
-          </button>
+      {/* Step 6: 院長紹介 */}
+      <div style={stepStyle(6)} className="space-y-6">
+        <div className={cardClassName}>
+          <p className="text-[13px] font-medium text-slate-700">院長紹介（任意）</p>
+          <p className="mt-1 text-[12px] leading-relaxed text-slate-400">
+            サイトの「当院について（ごあいさつ）」に使います。ごあいさつ文が未入力の場合はAIが作成します。
+          </p>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <label className="block">
+              <span className="text-[13px] font-medium text-slate-700">院長名</span>
+              <input
+                type="text"
+                name="directorName"
+                placeholder="山田 太郎"
+                value={directorName}
+                onChange={(e) => setDirectorName(e.target.value)}
+                className={inputClassName}
+              />
+            </label>
+            <label className="block">
+              <span className="text-[13px] font-medium text-slate-700">肩書き</span>
+              <input
+                type="text"
+                name="directorRole"
+                list="director-role-options"
+                placeholder="院長"
+                value={directorRole}
+                onChange={(e) => setDirectorRole(e.target.value)}
+                className={inputClassName}
+              />
+              <datalist id="director-role-options">
+                {DIRECTOR_ROLE_OPTIONS.map((r) => (
+                  <option key={r} value={r} />
+                ))}
+              </datalist>
+            </label>
+          </div>
+          <label className="mt-4 block">
+            <span className="text-[13px] font-medium text-slate-700">ごあいさつ文</span>
+            <textarea
+              name="directorGreeting"
+              placeholder={"例:\n地域のみなさまが気軽に相談できる診療所を目指しています。\n\n小さな不調こそ、早めにご相談ください。"}
+              value={directorGreeting}
+              onChange={(e) => setDirectorGreeting(e.target.value)}
+              rows={5}
+              className={inputClassName}
+            />
+            <span className="mt-1 block text-[11px] text-slate-400">空行で段落が分かれます。</span>
+          </label>
+          <div className="mt-4">
+            <p className="text-[13px] font-medium text-slate-700">院長写真（任意）</p>
+            <p className="mt-0.5 text-[11px] text-slate-400">未指定の場合はAIが生成します。</p>
+            {directorPhoto ? (
+              <div className="mt-2 flex items-center gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={previewSrc(directorPhoto)}
+                  alt=""
+                  className="h-20 w-16 rounded-lg border border-slate-200 object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() => setDirectorPhotoFile(null)}
+                  className="rounded-full border border-slate-200 px-3 py-1.5 text-[12px] text-slate-600 hover:bg-slate-50"
+                >
+                  写真を削除
+                </button>
+              </div>
+            ) : (
+              <>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    setDirectorPhotoFile(e.target.files?.[0] ?? null);
+                    e.target.value = "";
+                  }}
+                  className="mt-2 block w-full text-[13px] text-slate-700 file:mr-3 file:rounded-full file:border-0 file:bg-sky-600 file:px-4 file:py-2 file:text-[13px] file:text-white"
+                />
+                <div className="mt-2 flex gap-2">
+                  <input
+                    type="url"
+                    placeholder="画像URLを入力して登録"
+                    value={directorPhotoUrlDraft}
+                    onChange={(e) => setDirectorPhotoUrlDraft(e.target.value)}
+                    className={`${inputClassName} mt-0`}
+                  />
+                  <button
+                    type="button"
+                    onClick={registerDirectorPhotoUrl}
+                    className="mt-0 shrink-0 rounded-lg border border-sky-200 px-4 py-2 text-[13px] font-medium text-sky-700 hover:bg-sky-50"
+                  >
+                    URLから登録
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -717,9 +922,130 @@ export function ApplyForm({
         </div>
       </div>
 
-      {/* Step 8: 確認・申請 */}
-      {/* Step 8: ご要望 */}
+      {/* Step 8: よくあるご質問 */}
       <div style={stepStyle(8)} className="space-y-6">
+        <div className={cardClassName}>
+          <p className="text-[13px] font-medium text-slate-700">よくあるご質問（任意）</p>
+          <p className="mt-1 text-[12px] leading-relaxed text-slate-400">
+            サイトの「よくあるご質問」に載せる Q&amp;A です。未入力の場合はAIが一般的な内容を生成します。
+          </p>
+
+          {faqItems.length > 0 && (
+            <ul className="mt-4 space-y-4">
+              {faqItems.map((item, i) => (
+                <li key={i} className="rounded-lg border border-slate-200 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 space-y-3">
+                      <label className="block">
+                        <span className="text-[12px] font-medium text-slate-700">質問</span>
+                        <input
+                          type="text"
+                          name="faqQuestion"
+                          placeholder="例: 予約は必要ですか？"
+                          value={item.question}
+                          onChange={(e) => updateFaqItem(i, "question", e.target.value)}
+                          className={inputClassName}
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-[12px] font-medium text-slate-700">回答</span>
+                        <textarea
+                          name="faqAnswer"
+                          placeholder="例: ご予約をおすすめしていますが、当日の受付も可能です。"
+                          value={item.answer}
+                          onChange={(e) => updateFaqItem(i, "answer", e.target.value)}
+                          rows={2}
+                          className={inputClassName}
+                        />
+                      </label>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeFaqItem(i)}
+                      className="mt-6 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 text-[13px] text-slate-500 hover:bg-slate-50"
+                      aria-label="この質問を削除"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <button
+            type="button"
+            onClick={addFaqItem}
+            className="mt-4 rounded-full border border-sky-200 px-4 py-2 text-[13px] font-medium text-sky-700 hover:bg-sky-50"
+          >
+            + 質問を追加
+          </button>
+        </div>
+      </div>
+
+      {/* Step 9: お知らせ */}
+      <div style={stepStyle(9)} className="space-y-6">
+        <div className={cardClassName}>
+          <p className="text-[13px] font-medium text-slate-700">お知らせ（任意）</p>
+          <p className="mt-1 text-[12px] leading-relaxed text-slate-400">
+            サイトの「お知らせ」に載せる項目です。未入力の場合はAIが一般的な内容を生成します。
+          </p>
+
+          {newsItems.length > 0 && (
+            <ul className="mt-4 space-y-4">
+              {newsItems.map((item, i) => (
+                <li key={i} className="rounded-lg border border-slate-200 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="grid flex-1 gap-3 sm:grid-cols-[10rem_1fr]">
+                      <label className="block">
+                        <span className="text-[12px] font-medium text-slate-700">日付</span>
+                        <input
+                          type="text"
+                          name="newsDate"
+                          placeholder="2026.08.01"
+                          value={item.date}
+                          onChange={(e) => updateNewsItem(i, "date", e.target.value)}
+                          className={inputClassName}
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-[12px] font-medium text-slate-700">見出し</span>
+                        <input
+                          type="text"
+                          name="newsTitle"
+                          placeholder="例: 夏季休診のお知らせ"
+                          value={item.title}
+                          onChange={(e) => updateNewsItem(i, "title", e.target.value)}
+                          className={inputClassName}
+                        />
+                      </label>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeNewsItem(i)}
+                      className="mt-6 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 text-[13px] text-slate-500 hover:bg-slate-50"
+                      aria-label="このお知らせを削除"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <button
+            type="button"
+            onClick={addNewsItem}
+            className="mt-4 rounded-full border border-sky-200 px-4 py-2 text-[13px] font-medium text-sky-700 hover:bg-sky-50"
+          >
+            + お知らせを追加
+          </button>
+        </div>
+      </div>
+
+      {/* Step 10: ご要望 */}
+      <div style={stepStyle(10)} className="space-y-6">
         <div className={cardClassName}>
           <p className="text-[13px] font-medium text-slate-700">ご要望（任意）</p>
           <p className="mt-1 text-[12px] leading-relaxed text-slate-400">
@@ -737,8 +1063,8 @@ export function ApplyForm({
         </div>
       </div>
 
-      {/* Step 9: 申請 */}
-      <div style={stepStyle(9)} className="space-y-6">
+      {/* Step 11: 申請 */}
+      <div style={stepStyle(11)} className="space-y-6">
         <div className={cardClassName}>
           <p className="text-[13px] font-medium text-slate-700">この内容で申請します</p>
           <dl className="mt-4 space-y-3 text-[13px]">
@@ -778,12 +1104,20 @@ export function ApplyForm({
             </div>
             <div className="flex justify-between gap-4">
               <dt className="shrink-0 text-slate-400">診療時間</dt>
-              <dd className="whitespace-pre-line text-right text-slate-800">{hours || "（なし）"}</dd>
+              <dd className="text-right text-slate-800">
+                {scheduleRows.filter((r) => r.label.trim()).length > 0
+                  ? `${scheduleRows.filter((r) => r.label.trim()).length}行`
+                  : "（なし）"}
+              </dd>
             </div>
             <div className="flex justify-between gap-4">
-              <dt className="shrink-0 text-slate-400">スタッフ紹介</dt>
+              <dt className="shrink-0 text-slate-400">院長紹介</dt>
               <dd className="text-right text-slate-800">
-                {staffMembers.filter((m) => m.name.trim()).map((m) => m.name).join("・") || "（なし）"}
+                {directorName.trim() || directorGreeting.trim() || directorPhoto
+                  ? [directorName.trim() && `${directorName.trim()}（${directorRole.trim() || "院長"}）`, directorPhoto && "写真あり"]
+                      .filter(Boolean)
+                      .join(" ") || "入力あり"
+                  : "（なし）"}
               </dd>
             </div>
             <div className="flex justify-between gap-4">
@@ -793,6 +1127,26 @@ export function ApplyForm({
                   ? `${priceItems.filter((p) => p.name.trim()).length}件`
                   : "（なし）"}
               </dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="shrink-0 text-slate-400">よくあるご質問</dt>
+              <dd className="text-right text-slate-800">
+                {faqItems.filter((f) => f.question.trim() && f.answer.trim()).length > 0
+                  ? `${faqItems.filter((f) => f.question.trim() && f.answer.trim()).length}件`
+                  : "（なし）"}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="shrink-0 text-slate-400">お知らせ</dt>
+              <dd className="text-right text-slate-800">
+                {newsItems.filter((n) => n.title.trim()).length > 0
+                  ? `${newsItems.filter((n) => n.title.trim()).length}件`
+                  : "（なし）"}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="shrink-0 text-slate-400">トップ画像</dt>
+              <dd className="text-right text-slate-800">{heroImage ? "あり" : "（なし）"}</dd>
             </div>
             <div className="flex justify-between gap-4">
               <dt className="shrink-0 text-slate-400">ご要望</dt>

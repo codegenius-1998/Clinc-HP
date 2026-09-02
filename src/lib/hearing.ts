@@ -1,6 +1,14 @@
 import { d1Query } from "./d1";
 import type { ImageCategoryKey } from "./imageCategories";
-import type { SiteTemplate } from "./generatedSite/types";
+import type { SiteTemplate, ScheduleRow } from "./generatedSite/types";
+
+/** Structured clinic hours — the same shape as the generated site's `sections.schedule`
+ * (minus presentational fields). Filled in on /mypage/apply's 診療時間 step. */
+export type ScheduleInput = { days: string[]; rows: ScheduleRow[]; notes: string[] };
+
+/** 院長（ドクター）紹介 — feeds the generated site's `sections.greeting` (name / role / message /
+ * portrait). Filled in on /mypage/apply's 院長紹介 step. */
+export type DirectorInput = { name: string; role: string; greeting: string; photoUrl?: string };
 
 /** A site-build application (ヒアリングシート) as submitted from /mypage/apply.
  *
@@ -19,11 +27,16 @@ export type HearingSheet = {
   /** Snapshot of the service names selected on /mypage/apply's "診療科・サービス" step (see
    * src/lib/content.ts). `department` above is derived from these at submit time. */
   serviceNames?: string[];
-  hours: string;
+  /** Legacy free-text hours. New submissions use `schedule` instead; kept for old records. */
+  hours?: string;
+  /** Structured 診療時間 grid — supersedes `hours`. Applied verbatim to the generated site. */
+  schedule?: ScheduleInput;
   features: string;
   /** Snapshot of the feature names selected on /mypage/apply's "特徴" step. */
   featureNames?: string[];
   request: string;
+  /** 院長紹介。generated site の greeting セクションの元データ。 */
+  director?: DirectorInput;
   staffMembers?: { name: string; comment: string; role?: string; photoUrl?: string }[];
   faqs?: { question: string; answer: string }[];
   news?: { date: string; title: string }[];
@@ -33,6 +46,8 @@ export type HearingSheet = {
   createdAt: string;
   /** category -> public Supabase Storage URLs of user-uploaded photos. */
   uploadedImages?: Partial<Record<ImageCategoryKey, string[]>>;
+  /** Optional single "top page" image the applicant uploaded — used as the hero background photo. */
+  heroImageUrl?: string;
   /** Set once an admin has generated a static site from this sheet (see
    * src/lib/buildSiteFromHearing.ts). The bundle lives at public/_generated/<slug>/ and is served
    * under /api/generated/<slug>/. Regenerating overwrites the bundle and this field; the site editor

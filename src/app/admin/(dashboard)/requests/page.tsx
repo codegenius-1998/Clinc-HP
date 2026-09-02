@@ -43,20 +43,25 @@ export default async function AdminRequestsPage() {
                 <td className="px-4 py-3 text-slate-500">{hearing.ownerEmail ?? "—"}</td>
                 <td className="px-4 py-3 text-slate-400">{formatDate(hearing.createdAt)}</td>
                 <td className="px-4 py-3">
-                  <div className="flex flex-col items-end gap-1.5">
-                    <GenerateSiteButton
-                      slug={hearing.slug}
-                      previewUrl={hearing.generatedSite ? `/api/generated/${hearing.slug}/` : undefined}
-                    />
-                    {hearing.generatedSite && (
-                      <Link
-                        href={`/admin/requests/${hearing.slug}/edit`}
-                        className="text-[13px] text-slate-600 underline underline-offset-4 hover:text-slate-900"
-                      >
-                        編集
-                      </Link>
-                    )}
-                  </div>
+                <div className="flex flex-row items-center gap-1.5">
+                  <GenerateSiteButton
+                    slug={hearing.slug}
+                    previewUrl={
+                      hearing.generatedSite
+                        ? `/api/generated/${hearing.slug}/`
+                        : undefined
+                    }
+                  />
+
+                  {hearing.generatedSite && (
+                    <Link
+                      href={`/admin/requests/${hearing.slug}/edit`}
+                      className="text-[13px] text-slate-600 underline underline-offset-4 hover:text-slate-900"
+                    >
+                      編集
+                    </Link>
+                  )}
+                </div>
                 </td>
                 <td className="px-4 py-3 text-right">
                   <ConfirmDeleteButton

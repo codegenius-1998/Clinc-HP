@@ -406,6 +406,18 @@ body {
 .nj-site .rail a:hover { filter: brightness(1.06); }
 
 @media (max-width: 1080px) {
+  /* 医院名が長くてもハンバーガーを画面外に押し出さない：ブランドを縮められるようにして折り返す */
+  .nj-site .site-header__inner { gap: var(--nj-s3); }
+  .nj-site .brand { flex-shrink: 1; min-width: 0; }
+  .nj-site .brand__name { min-width: 0; }
+  .nj-site .brand__ja {
+    font-size: 0.95rem;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: auto-phrase;
+  }
+  .nj-site .brand__en { white-space: normal; }
+
   .nj-site .nav {
     position: fixed;
     inset: 0 0 auto 0;
@@ -413,7 +425,9 @@ body {
     flex-direction: column;
     align-items: stretch;
     gap: 0;
-    padding: 84px var(--nj-gutter) var(--nj-s6);
+    /* block padding is added only when open — max-height:0 can't compress padding with
+       box-sizing:border-box, which would leave the first link peeking out when closed */
+    padding: 0 var(--nj-gutter);
     background: var(--nj-paper);
     max-height: 0;
     overflow: hidden;
@@ -423,7 +437,7 @@ body {
   .nj-site .nav a { padding: var(--nj-s4) 0; border-bottom: 1px solid var(--nj-line); }
   .nj-site .burger { display: block; }
   .nj-site .header-cta { display: none; }
-  .nj-site .nav-toggle:checked ~ .nav { max-height: 90vh; overflow-y: auto; }
+  .nj-site .nav-toggle:checked ~ .nav { max-height: 90vh; overflow-y: auto; padding-block: 84px var(--nj-s6); }
   .nj-site .nav-toggle:checked ~ .burger span { background: transparent; }
   .nj-site .nav-toggle:checked ~ .burger span::before { top: 0; transform: rotate(45deg); }
   .nj-site .nav-toggle:checked ~ .burger span::after { top: 0; transform: rotate(-45deg); }
@@ -561,6 +575,40 @@ body {
   .nj-site .bubbles li:nth-child(4),
   .nj-site .bubbles li:nth-child(5) { transform: none; }
 }
+
+/* --- 実写背景ヒーロー（sections.hero.image に src がある場合） --- */
+.nj-site .hero--photo { background: var(--nj-ink); }
+.nj-site .hero__photo {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+.nj-site .hero__photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.nj-site .hero__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--nj-paper) 92%, transparent) 0%,
+    color-mix(in srgb, var(--nj-paper) 78%, transparent) 42%,
+    color-mix(in srgb, var(--nj-paper) 30%, transparent) 100%
+  );
+  pointer-events: none;
+}
+.nj-site .hero--photo .hero__grid { z-index: 2; }
+.nj-site .hero--photo .hero__copy { z-index: 2; }
+.nj-site .hero--photo .bubbles { z-index: 2; }
+@media (max-width: 860px) {
+  .nj-site .hero--photo .hero__scrim {
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--nj-paper) 90%, transparent) 0%,
+      color-mix(in srgb, var(--nj-paper) 82%, transparent) 100%
+    );
+  }
+}
 `,
   "greeting.css": `/* greeting — 院長のことば。ポートレート（プレースホルダ）+ 署名 */
 .nj-site .greeting__grid {
@@ -633,6 +681,19 @@ body {
   width: 4px;
   border-radius: 4px;
   background: color-mix(in srgb, var(--nj-primary) 55%, var(--nj-accent));
+}
+.nj-site .medical__photo {
+  aspect-ratio: 16 / 10;
+  margin-bottom: var(--nj-s4);
+  border-radius: var(--nj-radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--nj-line);
+  background: color-mix(in srgb, var(--nj-wash-blue) 40%, #fff);
+}
+.nj-site .medical__photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.nj-site .medical__card.has-photo .medical__icon {
+  width: 38px;
+  height: 38px;
 }
 .nj-site .medical__icon {
   display: grid;
@@ -1044,8 +1105,19 @@ body {
 .nj-site .access__map svg,
 .nj-site .access__map img { width: 100%; height: 100%; object-fit: cover; }
 
+/* 建物外観の実写（sections.access.exteriorPhoto に src がある場合、地図の上に全幅で） */
+.nj-site .access__exterior {
+  aspect-ratio: 16 / 9;
+  margin-bottom: var(--nj-s6);
+  border-radius: var(--nj-radius-md);
+  overflow: hidden;
+  border: 1px solid var(--nj-line);
+}
+.nj-site .access__exterior img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
 @media (max-width: 760px) {
   .nj-site .access__grid { grid-template-columns: 1fr; gap: var(--nj-s6); }
+  .nj-site .access__exterior { aspect-ratio: 4 / 3; }
 }
 `,
   "contact.css": `/* contact — 淡色の地に、水彩がかった白カード。予約と電話を並べる */

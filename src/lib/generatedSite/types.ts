@@ -82,7 +82,7 @@ export type CustomBlock = TextBlock | ImageBlock | GridBlock;
 export const CUSTOM_BLOCK_KINDS = ["text", "image", "grid"] as const;
 export type CustomBlockKind = (typeof CUSTOM_BLOCK_KINDS)[number];
 
-export type MedicalItem = { icon: string; ja: string; en: string; lead: string };
+export type MedicalItem = { icon: string; ja: string; en: string; lead: string; image: ImageSlot };
 export type GalleryItem = { image: ImageSlot; caption: string };
 export type ScheduleRow = { label: string; marks: (string | null)[] };
 export type FeeGroup = { group: string; items: { name: string; price: string; note?: string }[] };
@@ -127,7 +127,10 @@ export type Sections = {
   news: { heading: Heading; items: NewsItem[] };
   access: {
     heading: Heading;
+    /** Schematic map image. */
     image: ImageSlot;
+    /** Optional real photo of the building exterior, shown above the map. */
+    exteriorPhoto: ImageSlot;
     points: string[];
     info: AccessInfo[];
   };

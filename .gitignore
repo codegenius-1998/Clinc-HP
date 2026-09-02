@@ -30,6 +30,9 @@ next-env.d.ts
 # AI-generated site output
 /public/generated/
 
+# scratch / throwaway working files
+/scratchpad/
+
 # static export bundles for client delivery (regenerate with `npm run export`)
 # — remove this line if you want the deliverables committed
 /public/_generated/

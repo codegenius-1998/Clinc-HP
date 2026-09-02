@@ -161,7 +161,10 @@
 
     var y = 0;
     if (id !== "top") {
-      var top = el.getBoundingClientRect().top + (window.pageYOffset || 0);
+      // offsetTop チェーンで測る。reveal 用の transform:translateY に影響されない
+      // （getBoundingClientRect はトランスフォーム込みなので、出現前だとズレる）
+      var top = 0, node = el;
+      while (node) { top += node.offsetTop; node = node.offsetParent; }
       y = Math.max(0, Math.round(top - headerHeight() - 8));
     }
     var smooth = !reduce && "scrollBehavior" in document.documentElement.style;

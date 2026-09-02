@@ -59,9 +59,11 @@ export function SectionFields({ id, template, onChange, slug }: Props) {
             onChange={(bubbles) => set("hero", { bubbles: bubbles.slice(0, 6) })}
           />
           <ImageField
-            label="ヒーロー画像（既定は装飾イラスト）"
+            label="トップ背景画像（任意・未指定なら装飾イラスト）"
             src={S.hero.image.src}
             slug={slug}
+            aiKind="exterior"
+            aiHint={`${template.brand.name} トップページ 明るい院内 ${vibe}`}
             onChange={(src) => set("hero", { image: { ...S.hero.image, src } })}
           />
         </>
@@ -134,6 +136,20 @@ export function SectionFields({ id, template, onChange, slug }: Props) {
                     set("medical", { items: S.medical.items.map((x, j) => (j === i ? { ...x, lead } : x)) })
                   }
                 />
+                <ImageField
+                  label="カード写真（任意）"
+                  src={it.image?.src ?? null}
+                  slug={slug}
+                  aiKind="interior"
+                  aiHint={`${it.ja} ${vibe}`}
+                  onChange={(src) =>
+                    set("medical", {
+                      items: S.medical.items.map((x, j) =>
+                        j === i ? { ...x, image: { ...(x.image ?? { alt: "" }), src } } : x
+                      ),
+                    })
+                  }
+                />
                 <button
                   type="button"
                   className="self-end text-[12px] text-slate-400 hover:text-red-600"
@@ -148,7 +164,10 @@ export function SectionFields({ id, template, onChange, slug }: Props) {
               className="self-start rounded-md border border-dashed border-slate-300 px-2 py-1 text-[12px] text-slate-500 hover:border-slate-400"
               onClick={() =>
                 set("medical", {
-                  items: [...S.medical.items, { icon: "general", ja: "", en: "Medical", lead: "" }],
+                  items: [
+                    ...S.medical.items,
+                    { icon: "general", ja: "", en: "Medical", lead: "", image: { src: null, alt: "" } },
+                  ],
                 })
               }
             >
@@ -556,11 +575,19 @@ export function SectionFields({ id, template, onChange, slug }: Props) {
             ＋ 案内行を追加
           </button>
           <ImageField
-            label="地図画像"
-            src={S.access.image.src}
+            label="外観写真（任意・地図の上に表示）"
+            src={S.access.exteriorPhoto?.src ?? null}
             slug={slug}
             aiKind="exterior"
             aiHint={`${template.brand.name} 外観 ${vibe}`}
+            onChange={(src) =>
+              set("access", { exteriorPhoto: { ...(S.access.exteriorPhoto ?? { alt: "外観" }), src } })
+            }
+          />
+          <ImageField
+            label="地図画像（模式図・任意）"
+            src={S.access.image.src}
+            slug={slug}
             onChange={(src) => set("access", { image: { ...S.access.image, src } })}
           />
         </>
